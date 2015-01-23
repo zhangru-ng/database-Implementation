@@ -29,7 +29,7 @@ int Record :: SuckNextRecord (Schema *mySchema, FILE *textFile) {
 		exit(1);
 	}
 
-	char *recSpace = new (std::nothrow) char[PAGE_SIZE];
+	char *recSpace = new (std::nothrow) char[PAGE_SIZE];     //** (std::nothrow) indicate that new operation shall not throw an exception on failure, but return a null pointer instead
 	if (recSpace == NULL)
 	{
 		cout << "ERROR : Not enough memory. EXIT !!!\n";
@@ -162,7 +162,8 @@ void Record :: Consume (Record *fromMe) {
 void Record :: Copy (Record *copyMe) {
 	// this is a deep copy, so allocate the bits and move them over!
 	delete [] bits;
-	bits = new (std::nothrow) char[((int *) copyMe->bits)[0]];
+	bits = new (std::nothrow) char[((int *) copyMe->bits)[0]];	//** First sizeof(int) bytes in bits: length of the record in bytes
+
 	if (bits == NULL)
 	{
 		cout << "ERROR : Not enough memory. EXIT !!!\n";
@@ -308,7 +309,7 @@ void Record :: MergeRecords (Record *left, Record *right, int numAttsLeft, int n
 		((int *) bits)[i + 1] = curPos;	
 
 		// and copy over the bits
-		memmove (&(bits[curPos]), &(rec_bits[((int *) rec_bits)[attsToKeep[i] + 1]]), attLen);
+		memmove (&(bits[curPos]), &(rec_bits[((int *) rec_bits)[attsToKeep[i] + 1]]), attLen); //** void * memmove ( void * destination, const void * source, size_t num ); (allow overlap contrast to memcpy)
 
 		// note that we are moving along in the record
 		curPos += attLen;
