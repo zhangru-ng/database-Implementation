@@ -201,11 +201,11 @@ void CNF :: Print () {
 void AddLitToFile (int &numFieldsInLiteral, FILE *outRecFile, FILE *outSchemaFile, char *value, Type myType) {
 
         // first write out the new record field
-        fprintf (outRecFile, "%s|", value);
+        fprintf (outRecFile, "%s|", value);	         //write "<value>|" to outRecFile
 
         // now write out the new schema field
         if (myType == Int) {
-                fprintf (outSchemaFile, "att%d Int\n", numFieldsInLiteral);
+                fprintf (outSchemaFile, "att%d Int\n", numFieldsInLiteral);		//write "att<field> <Type>"
         } else if (myType == Double) {
                 fprintf (outSchemaFile, "att%d Double\n", numFieldsInLiteral);
         } else if (myType == String) {
@@ -226,7 +226,7 @@ void CNF :: GrowFromParseTree (struct AndList *parseTree, Schema *leftSchema,
 
 	CNF &cnf = *this;
 
-	// as kind of a hack, the literal record is built up insiide of a text file,
+	// as kind of a hack, the literal record is built up inside of a text file,
 	// where it will be read in from subsequently
 	FILE *outRecFile = fopen ("sdafdsfFFDSDA", "w");
 
