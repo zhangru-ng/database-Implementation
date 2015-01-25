@@ -14,14 +14,14 @@ class Comparison {
 	friend class ComparisonEngine;
 	friend class CNF;
 
-	Target operand1;
+	Target operand1;   //{Left, Right, Literal};
 	int whichAtt1;
 	Target operand2;
 	int whichAtt2;
 
-	Type attType;
+	Type attType;	   //{Int, Double, String}
 
-	CompOperator op;
+	CompOperator op;   //{LessThan, GreaterThan, Equals}
 
 public:
 
