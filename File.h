@@ -35,7 +35,7 @@ public:
 	int GetFirst (Record *firstOne);
 
 	// this appends the record to the end of a page.  The return value
-	// is a one on success and a aero if there is no more space
+	// is a one on success and a zero if there is no more space
 	// note that the record is consumed so it will have no value after
 	int Append (Record *addMe);
 
