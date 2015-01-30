@@ -15,7 +15,7 @@
 // stub file .. replace it with your own DBFile.cc
 
 DBFile::DBFile () {
-
+	curPageIndex = 0;
 }
 
 
@@ -23,10 +23,13 @@ void enumToString(fType f_type, char *type){
 	switch(f_type){
 		case heap:
 			strcpy(type, "heap");
+			break;
 		case sorted:
 			strcpy(type, "sorted");
+			break;
 		case tree:
 			strcpy(type, "tree");
+			break;
 	}
 }
 //The following function is used to actually create the file. The first
@@ -50,7 +53,7 @@ int DBFile::Create (char *f_path, fType f_type, void *startup) {
 		return 0;
 	}
 	enumToString(f_type, type);
-	fputs(type, fp);
+	fprintf(fp, "%s", type);
 	fclose(fp);	
 	return 1;
 }
@@ -75,7 +78,13 @@ int DBFile::Open (char *f_path) {
 		cerr << "Can't open associated file for" << f_path << "\n";
 		return 0;
 	}
-	fgets(type, 6, fp);
+	fscanf(fp,"%s",type);
+	/***********************
+	 * switch(type){
+	 * case "heap": break;
+	 * case "sorted": break;
+	 * case "tree": break;
+	 * *********************/ 
 	fclose(fp);	
 	return 1;
 }
@@ -98,15 +107,17 @@ void DBFile::Load (Schema &f_schema, char *loadpath) {
 	if(tableFile == NULL){
 		cerr << "Can't open table file for" << loadpath << "\n";
 	}
-    while (rec.SuckNextRecord (&f_schema, tableFile) == 1) {
+     while (rec.SuckNextRecord (&f_schema, tableFile) == 1) {
 		counter++;
 		if (counter % 10000 == 0) {
 			 cerr << counter << "\n";
 		}
-		//if(page is full)
-		curPage.Append(&rec);		   
+		if( curPage.Append(&rec) == 0){
+			curFile.AddPage(&curPage, curFile.GetLength());  //length increase 2 each time
+			curPage.EmptyItOut();
+		}		   
     }
-    curFile.AddPage(&curPage, curPageIndex);
+    curFile.AddPage(&curPage, curFile.GetLength());//may be add one more page if the records just fit into a full page
 
 }
 
@@ -124,9 +135,14 @@ void DBFile::MoveFirst () {
 //new record to the end of the file. This function should actually 
 //consume addMe, so that after addMe has been put into the file, it 
 //cannot be used again
-void DBFile::Add (Record &rec) {
-	curPage.Append(&rec);	
-	rec.~Record ();//may be problem
+void DBFile::Add (Record &addMe) {
+	if( curPage.Append(&addMe) != 0){
+		curFile.AddPage(&curPage, curFile.GetLength());  //length increase 2 each time, add duplicate page
+	}else{
+		curPage.EmptyItOut();
+		curPage.Append(&addMe);
+		curFile.AddPage(&curPage, curFile.GetLength());
+	}	
 }
 
 //There are two functions that allow for record retrieval from a DBFile 
@@ -135,15 +151,15 @@ void DBFile::Add (Record &rec) {
 //current location of the pointer. After the function call returns, the 
 //porinter into the file is incremented, the return value is zero if and 
 //only if there is not a valid record returned from the function call
-int DBFile::GetNext (Record &fetchme) {
-	 
-	 curFile.GetPage(&curPage, curPageIndex);
-     if(curPage.GetFirst(&fetchme) != 0){
-		 return 1;
-	 }
-	 else{
-		 return 0;
+int DBFile::GetNext (Record &fetchme) {	 
+	 while(curPageIndex + 1 < curFile.GetLength()){
+		 curFile.GetPage(&curPage, curPageIndex);
+		 if(curPage.GetFirst(&fetchme) != 0){
+			return 1;
+		 }
+		 curPageIndex++;	 
      }	
+     return 0;
 }
 
 //The next version also accepts a selection predicate(CNF). It returns 
@@ -152,11 +168,14 @@ int DBFile::GetNext (Record &fetchme) {
 //created when the parse tree for the CNF is processed
 int DBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 	ComparisonEngine comp;
-	curFile.GetPage(&curPage, curPageIndex);	
-    while(curPage.GetFirst(&fetchme) != 0){
-	    if(comp.Compare (&fetchme, &literal, &CNF)){
-			return 1;
-		}
+	while(curPageIndex + 1 < curFile.GetLength()){
+		curFile.GetPage(&curPage, curPageIndex);	
+		while(curPage.GetFirst(&fetchme) != 0){
+			if(comp.Compare(&fetchme, &literal, &cnf)){
+				return 1;
+			}				
+		 }	
+		 curPageIndex++; 	
 	}
 	return 0;
 }
