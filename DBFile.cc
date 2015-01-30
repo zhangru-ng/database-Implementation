@@ -151,4 +151,13 @@ int DBFile::GetNext (Record &fetchme) {
 //The literal record is used to check the selection predicate, and is 
 //created when the parse tree for the CNF is processed
 int DBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
+	ComparisonEngine comp;
+	curFile.GetPage(&curPage, curPageIndex);	
+    while(curPage.GetFirst(&fetchme) != 0){
+	    if(comp.Compare (&fetchme, &literal, &CNF)){
+			return 1;
+		}
+	}
+	return 0;
 }
+
