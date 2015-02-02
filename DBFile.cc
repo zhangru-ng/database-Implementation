@@ -104,6 +104,7 @@ void DBFile::Load (Schema &f_schema, char *loadpath) {
 	FILE *tableFile = fopen (loadpath, "r");
 	Record rec;
 	int counter = 0;
+	curPageIndex = curFile.GetLength() - 2;
 	if(tableFile == NULL){
 		cerr << "Can't open table file for" << loadpath << "\n";
 	}
@@ -113,11 +114,12 @@ void DBFile::Load (Schema &f_schema, char *loadpath) {
 			 cerr << counter << "\n";
 		}
 		if( curPage.Append(&rec) == 0){
-			curFile.AddPage(&curPage, curFile.GetLength());  //length increase 2 each time
+			curFile.AddPage(&curPage, curPageIndex);  
 			curPage.EmptyItOut();
+			curPageIndex++;
 		}		   
     }
-    curFile.AddPage(&curPage, curFile.GetLength());//may be add one more page if the records just fit into a full page
+    curFile.AddPage(&curPage, curPageIndex);
 
 }
 
@@ -136,12 +138,14 @@ void DBFile::MoveFirst () {
 //consume addMe, so that after addMe has been put into the file, it 
 //cannot be used again
 void DBFile::Add (Record &addMe) {
+	curPageIndex = curFile.GetLength() - 2;
 	if( curPage.Append(&addMe) != 0){
-		curFile.AddPage(&curPage, curFile.GetLength());  //length increase 2 each time, add duplicate page
+		curFile.AddPage(&curPage, curPageIndex);  
 	}else{
 		curPage.EmptyItOut();
+		curPageIndex++;
 		curPage.Append(&addMe);
-		curFile.AddPage(&curPage, curFile.GetLength());
+		curFile.AddPage(&curPage, curPageIndex);
 	}	
 }
 
