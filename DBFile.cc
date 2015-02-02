@@ -12,13 +12,11 @@
 #include <iostream>
 #include <string.h>
 
-// stub file .. replace it with your own DBFile.cc
-
 DBFile::DBFile () {
 	curPageIndex = 0;
 }
 
-
+//convert enum to string to wrtie into a txt file
 void enumToString(fType f_type, char *type){
 	switch(f_type){
 		case heap:
@@ -32,6 +30,7 @@ void enumToString(fType f_type, char *type){
 			break;
 	}
 }
+
 //The following function is used to actually create the file. The first
 //parameter is a text string that tells where the binary data is 
 //physically to be located. If there is meta-data(type of file, etc),
@@ -79,7 +78,7 @@ int DBFile::Open (char *f_path) {
 		return 0;
 	}
 	fscanf(fp,"%s",type);
-	/***********************
+	/***********************deal with different type of file
 	 * switch(type){
 	 * case "heap": break;
 	 * case "sorted": break;
@@ -92,8 +91,13 @@ int DBFile::Open (char *f_path) {
 //Simply close the file. The return value is a one on success and a zero 
 //on failure
 int DBFile::Close () {
-	curFile.Close ();
-	return 1;
+	int f_flag;
+	f_flag = curFile.Close ();
+	if(f_flag >= 0){
+		return 1;
+	}else{
+		return 0;
+	}
 }
 
 //This function bulk the DBFile instance from a text file, appending new
@@ -102,24 +106,28 @@ int DBFile::Close () {
 //bulk load
 void DBFile::Load (Schema &f_schema, char *loadpath) {
 	FILE *tableFile = fopen (loadpath, "r");
-	Record rec;
-	int counter = 0;
-	curPageIndex = curFile.GetLength() - 2;
+	Record tempRec;
+	Page tempPage;
+	int tempIndex = 0, counter = 0;
 	if(tableFile == NULL){
 		cerr << "Can't open table file for" << loadpath << "\n";
 	}
-     while (rec.SuckNextRecord (&f_schema, tableFile) == 1) {
+     while (tempRec.SuckNextRecord (&f_schema, tableFile) == 1) {
 		counter++;
 		if (counter % 10000 == 0) {
 			 cerr << counter << "\n";
 		}
-		if( curPage.Append(&rec) == 0){
-			curFile.AddPage(&curPage, curPageIndex);  
-			curPage.EmptyItOut();
-			curPageIndex++;
+		if( tempPage.Append(&tempRec) == 0){
+			//if the page is full, create a new page
+			curFile.AddPage(&tempPage, tempIndex);  
+			tempPage.EmptyItOut();
+			//again add the record that failed because page is full
+			tempPage.Append(&tempRec);
+			tempIndex++;
 		}		   
     }
-    curFile.AddPage(&curPage, curPageIndex);
+    //the records don't fill a full page, add the page directly
+    curFile.AddPage(&tempPage, tempIndex);
 
 }
 
@@ -128,8 +136,12 @@ void DBFile::Load (Schema &f_schema, char *loadpath) {
 //can move in response to record retrievals.The following function 
 //forces the pointer to correspond to the first record in the file
 void DBFile::MoveFirst () {
-	 curPageIndex = 0;
-	 curFile.GetPage(&curPage, curPageIndex);
+	curPageIndex = 0;
+	if(curFile.GetLength() > 0){//if the file is not empty
+		curFile.GetPage(&curPage, curPageIndex);
+	}else{ //if the file is empty, cause "read past the end of the file"
+		curPage.EmptyItOut();
+	}
 }
 
 //In order to add records to the file, the following function is uesd. 
@@ -138,14 +150,20 @@ void DBFile::MoveFirst () {
 //consume addMe, so that after addMe has been put into the file, it 
 //cannot be used again
 void DBFile::Add (Record &addMe) {
-	curPageIndex = curFile.GetLength() - 2;
-	if( curPage.Append(&addMe) != 0){
-		curFile.AddPage(&curPage, curPageIndex);  
+	Page tempPage;
+	int tempIndex;
+	//if the file is not empty, file length-2 is the last page while the 
+	//length is 0 for empty file
+	tempIndex = curFile.GetLength() > 0 ? curFile.GetLength() - 2 : 0;
+	curFile.GetPage(&tempPage, tempIndex);
+	if( tempPage.Append(&addMe) != 0){//if the page is not full
+		curFile.AddPage(&tempPage, tempIndex);  
 	}else{
-		curPage.EmptyItOut();
-		curPageIndex++;
-		curPage.Append(&addMe);
-		curFile.AddPage(&curPage, curPageIndex);
+		tempPage.EmptyItOut();
+		//again add the record that failed because page is full
+		tempPage.Append(&addMe);
+		tempIndex++;		
+		curFile.AddPage(&tempPage, tempIndex);
 	}	
 }
 
@@ -157,11 +175,17 @@ void DBFile::Add (Record &addMe) {
 //only if there is not a valid record returned from the function call
 int DBFile::GetNext (Record &fetchme) {	 
 	 while(curPageIndex + 1 < curFile.GetLength()){
-		 curFile.GetPage(&curPage, curPageIndex);
+		 //GetFirst consume fetchme in curPage
 		 if(curPage.GetFirst(&fetchme) != 0){
 			return 1;
 		 }
-		 curPageIndex++;	 
+		 if(curPageIndex + 2 < curFile.GetLength()){
+			curPage.EmptyItOut();
+			curFile.GetPage(&curPage, curPageIndex+1); 
+			curPageIndex++;
+		 }else{
+			break;
+		 }
      }	
      return 0;
 }
@@ -172,14 +196,19 @@ int DBFile::GetNext (Record &fetchme) {
 //created when the parse tree for the CNF is processed
 int DBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 	ComparisonEngine comp;
-	while(curPageIndex + 1 < curFile.GetLength()){
-		curFile.GetPage(&curPage, curPageIndex);	
+	while(curPageIndex + 1 < curFile.GetLength()){	
 		while(curPage.GetFirst(&fetchme) != 0){
 			if(comp.Compare(&fetchme, &literal, &cnf)){
 				return 1;
 			}				
 		 }	
-		 curPageIndex++; 	
+		 if(curPageIndex + 2 < curFile.GetLength()){
+			curPage.EmptyItOut();
+			curFile.GetPage(&curPage, curPageIndex+1); 
+			curPageIndex++;
+		 }else{
+			break;
+		 }
 	}
 	return 0;
 }
