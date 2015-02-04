@@ -40,7 +40,7 @@ void enumToString(fType f_type, char *type){
 int DBFile::Create (char *f_path, fType f_type, void *startup) {
 	FILE * fp;
 	char s[200],type[8];
-		
+	
 	//create the binary DBfile
 	curFile.Open (0, f_path);
 	
@@ -91,13 +91,14 @@ int DBFile::Open (char *f_path) {
 //Simply close the file. The return value is a one on success and a zero 
 //on failure
 int DBFile::Close () {
-	int f_flag;
+	off_t f_flag;
 	f_flag = curFile.Close ();
-	if(f_flag >= 0){
-		return 1;
-	}else{
+	if(f_flag < 0){
 		return 0;
+	}else{
+		return 1;
 	}
+	
 }
 
 //This function bulk the DBFile instance from a text file, appending new
@@ -128,7 +129,6 @@ void DBFile::Load (Schema &f_schema, char *loadpath) {
     }
     //the records don't fill a full page, add the page directly
     curFile.AddPage(&tempPage, tempIndex);
-
 }
 
 //Each DBfile instance has a pointer to the current record in the file. 
@@ -151,17 +151,30 @@ void DBFile::MoveFirst () {
 //cannot be used again
 void DBFile::Add (Record &addMe) {
 	Page tempPage;
-	int tempIndex;
-	//if the file is not empty, file length-2 is the last page while the 
-	//length is 0 for empty file
-	tempIndex = curFile.GetLength() > 0 ? curFile.GetLength() - 2 : 0;
-	curFile.GetPage(&tempPage, tempIndex);
-	if( tempPage.Append(&addMe) != 0){//if the page is not full
+	int tempIndex;	 
+	//length is 0 for empty file, GetPage(&tempPage, 0) will lead to 
+	//read over bound of file	
+	if(curFile.GetLength() == 0){
+		tempIndex = 0;      
+	}
+	//if the file is not empty, file length-2 is the last page
+	else if(curFile.GetLength() > 0){
+		tempIndex = curFile.GetLength() - 2;
+		curFile.GetPage(&tempPage, tempIndex);		
+	}
+	else{ //length less than 0, something wrong with current file
+		cerr << "File length less than 0 in DBFile add\n";
+		exit (1);
+	}
+	if( tempPage.Append(&addMe) ){//if the page is not full
 		curFile.AddPage(&tempPage, tempIndex);  
 	}else{
 		tempPage.EmptyItOut();
 		//again add the record that failed because page is full
-		tempPage.Append(&addMe);
+		if( !tempPage.Append(&addMe) ){
+			cerr << "Can't add record to DBFile\n";
+			exit (1);
+		}
 		tempIndex++;		
 		curFile.AddPage(&tempPage, tempIndex);
 	}	
@@ -173,10 +186,11 @@ void DBFile::Add (Record &addMe) {
 //current location of the pointer. After the function call returns, the 
 //porinter into the file is incremented, the return value is zero if and 
 //only if there is not a valid record returned from the function call
-int DBFile::GetNext (Record &fetchme) {	 
-	 while(curPageIndex + 1 < curFile.GetLength()){
+int DBFile::GetNext (Record &fetchme) {	 //first time call this function,
+										//MoveFirst is needed 
+		while(curPageIndex + 1 < curFile.GetLength()){
 		 //GetFirst consume fetchme in curPage
-		 if(curPage.GetFirst(&fetchme) != 0){
+		 if( curPage.GetFirst(&fetchme)){//fetch record successfully
 			return 1;
 		 }
 		 if(curPageIndex + 2 < curFile.GetLength()){
@@ -194,10 +208,11 @@ int DBFile::GetNext (Record &fetchme) {
 //the next record in the file that is accepted by the selection predicte
 //The literal record is used to check the selection predicate, and is 
 //created when the parse tree for the CNF is processed
-int DBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
+int DBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {//first time call this function,
+																//MoveFirst is needed 
 	ComparisonEngine comp;
 	while(curPageIndex + 1 < curFile.GetLength()){	
-		while(curPage.GetFirst(&fetchme) != 0){
+		while( curPage.GetFirst(&fetchme) ){//fetch record successfully
 			if(comp.Compare(&fetchme, &literal, &cnf)){
 				return 1;
 			}				
@@ -213,3 +228,7 @@ int DBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 	return 0;
 }
 
+
+off_t DBFile::GetLength(){
+	return curFile.GetLength(); 
+}
