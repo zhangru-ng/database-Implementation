@@ -30,5 +30,7 @@ public:
 	int GetNext (Record &fetchme);
 	int GetNext (Record &fetchme, CNF &cnf, Record &literal);
 
+	off_t GetLength ();//add for test
+
 };
 #endif
