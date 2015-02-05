@@ -7,14 +7,16 @@ class DBFileTest : public ::testing::Test {
 	protected:
 	virtual void SetUp() {
 		dbfile.Create("testFile.bin",heap,0);
+		f_schema = ("source/catalog", "lineitem");
+		strcpy(tbl_dir, "/cise/tmp/dbi_sp11/DATA/10M/lineitem.tbl");
 	}
 
 	virtual void TearDown() {
 		dbfile.Close();
 	}
 	DBFile dbfile;	
-	Schema f_schema("source/catalog", "lineitem");
-	char tbl_dir[256] = "/cise/tmp/dbi_sp11/DATA/10M/lineitem.tbl";
+	Schema f_schema;
+	char tbl_dir[256]; 
 	Record tempRec1, tempRec2;
 };
 
@@ -24,9 +26,18 @@ TEST_F(DBFileTest, CreateFile) {
 	fclose(fp);	
 }
 
-TEST_F(DBFileTest, CreateFile) {
+TEST_F(DBFileTest, OpenFile) {
 	int f_flag = dbfile.Open("testFile.bin");
 	EXPECT_EQ( 1 , f_flag );	
+}
+
+TEST_F(DBFileTest, CloseFile) {
+	int f_flag = dbfile.Close();
+	EXPECT_EQ(1 , f_flag);   //close created file
+	dbfile.Open("testFile.bin");
+	f_flag = dbfile.Close(); //close open file
+	EXPECT_EQ(1 , f_flag);	
+	dbfile.Create("testFile.bin",heap,0);	//avoid close twice, may be not necessary
 }
 
 TEST_F(DBFileTest, CreateHeapTypeHeader) {
@@ -86,24 +97,7 @@ TEST(DBFileDeathTest, OpenNonExistFile) {
 	EXPECT_DEATH(dbfile.Open("nonexist.bin"), "BAD!  Open did not work for nonexist.bin");	
 }
 
-TEST(DBFileTest, CloseCreatedFile) {
-	DBFile dbfile;
-	int f_flag = 0;
-	
-	dbfile.Create("testFile.bin",heap,0);
-	f_flag = dbfile.Close();
-	EXPECT_EQ(1 , f_flag);		
-	
-}
 
-TEST(DBFileTest, CloseOpenFile) {
-	DBFile dbfile;
-	int f_flag = 0;
-	
-	dbfile.Create("testFile.bin",heap,0);
-	dbfile.Close();
-	dbfile.Open("testFile.bin");
-	f_flag = dbfile.Close();
-	EXPECT_EQ(1 , f_flag);			
-}
+
+
 
