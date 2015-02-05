@@ -12,10 +12,11 @@ typedef enum {heap, sorted, tree} fType;
 
 
 class DBFile {
-private:
+friend class DBFileTest;
+private:    
 	File curFile;
 	Page curPage;		
-        int curPageIndex;
+    int curPageIndex;
 public:
 	DBFile (); 
 
@@ -30,7 +31,6 @@ public:
 	int GetNext (Record &fetchme);
 	int GetNext (Record &fetchme, CNF &cnf, Record &literal);
 
-	off_t GetLength ();//add for test
 
 };
 #endif

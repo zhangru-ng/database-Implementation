@@ -228,7 +228,3 @@ int DBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {//first time c
 	return 0;
 }
 
-
-off_t DBFile::GetLength(){
-	return curFile.GetLength(); 
-}
