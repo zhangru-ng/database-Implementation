@@ -157,6 +157,8 @@ void Page :: FromBinary (char *bits) {
 }
 
 File :: File () {
+	myFilDes = 0;
+	curLength = 0; 
 }
 
 File :: ~File () {
