@@ -7,12 +7,18 @@
 #include "File.h"
 #include "Comparison.h"
 #include "ComparisonEngine.h"
+#include "gtest/gtest.h"
 
 typedef enum {heap, sorted, tree} fType;
 
 
 class DBFile {
+
 friend class DBFileTest;
+FRIEND_TEST(DBFileTest, LoadFile);
+FRIEND_TEST(DBFileTest, MoveFirst);
+FRIEND_TEST(DBFileTest, AddRecord);
+
 private:    
 	File curFile;
 	Page curPage;		
