@@ -31,6 +31,17 @@ void enumToString(fType f_type, char *type){
 	}
 }
 
+void GetHeaderFilePath(char *s, const char *f_path){
+	char *temp = NULL;
+	strcpy(s, f_path);
+	if( (temp = strstr(s,".bin")) == NULL){
+		strcpy(s ,"header");
+	}else{
+		strcpy(temp ,".header\0");
+	}	
+}
+	
+
 //The following function is used to actually create the file. The first
 //parameter is a text string that tells where the binary data is 
 //physically to be located. If there is meta-data(type of file, etc),
@@ -45,8 +56,8 @@ int DBFile::Create (char *f_path, fType f_type, void *startup) {
 	curFile.Open (0, f_path);
 	
 	//create the associated text file
-	strcpy(s, f_path);
-	strcat(s,".header");
+	GetHeaderFilePath(s, f_path);
+
 	if(	(fp= fopen (s,"w")) == NULL){
 		cerr << "Can't create associated file for" << f_path << "\n";
 		return 0;
@@ -71,8 +82,8 @@ int DBFile::Open (char *f_path) {
 	curFile.Open (1, f_path);
 	
 	//open the exist associate file
-	strcpy(s, f_path);
-	strcat(s,".header");
+	GetHeaderFilePath(s, f_path);
+	
 	if(	(fp= fopen (s,"r")) == NULL){
 		cerr << "Can't open associated file for" << f_path << "\n";
 		return 0;
@@ -115,9 +126,9 @@ void DBFile::Load (Schema &f_schema, char *loadpath) {
 	}
      while (tempRec.SuckNextRecord (&f_schema, tableFile) == 1) {
 		counter++;
-		if (counter % 10000 == 0) {
-			 cerr << counter << "\n";
-		}
+		/*if (counter % 10000 == 0) {
+			 cerr << counter << "\n";	//output for debug
+		}*/
 		if( tempPage.Append(&tempRec) == 0){
 			//if the page is full, create a new page
 			curFile.AddPage(&tempPage, tempIndex);  
