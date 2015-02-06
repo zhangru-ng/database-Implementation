@@ -31,6 +31,8 @@ void enumToString(fType f_type, char *type){
 	}
 }
 
+//if there is ".bin" in file name, remove ".bin" and all character after 
+//it, add ".header". if there is no ".bin", add ".header" directly
 void GetHeaderFilePath(char *s, const char *f_path){
 	char *temp = NULL;
 	strcpy(s, f_path);
@@ -89,21 +91,24 @@ int DBFile::Open (char *f_path) {
 		return 0;
 	}
 	fscanf(fp,"%s",type);
+	fclose(fp);	
+	if( strcmp(type, "heap") != 0){
+		cerr << "This is not a heap file\n";
+		return 0;
+	}
 	/***********************deal with different type of file
 	 * switch(type){
 	 * case "heap": break;
 	 * case "sorted": break;
 	 * case "tree": break;
-	 * *********************/ 
-	fclose(fp);	
+	 * *********************/ 	
 	return 1;
 }
 
 //Simply close the file. The return value is a one on success and a zero 
 //on failure
 int DBFile::Close () {
-	off_t f_flag;
-	f_flag = curFile.Close ();
+	off_t f_flag = curFile.Close ();
 	if(f_flag < 0){
 		return 0;
 	}else{
@@ -120,21 +125,19 @@ void DBFile::Load (Schema &f_schema, char *loadpath) {
 	FILE *tableFile = fopen (loadpath, "r");
 	Record tempRec;
 	Page tempPage;
-	int tempIndex = 0, counter = 0;
+	int tempIndex = 0;
 	if(tableFile == NULL){
 		cerr << "Can't open table file for" << loadpath << "\n";
 	}
      while (tempRec.SuckNextRecord (&f_schema, tableFile) == 1) {
-		counter++;
-		/*if (counter % 10000 == 0) {
-			 cerr << counter << "\n";	//output for debug
-		}*/
 		if( tempPage.Append(&tempRec) == 0){
 			//if the page is full, create a new page
 			curFile.AddPage(&tempPage, tempIndex);  
 			tempPage.EmptyItOut();
-			//again add the record that failed because page is full
-			tempPage.Append(&tempRec);
+			if( tempPage.Append(&tempRec) == 0 ){ //if fail again, record larger than page
+				cerr << "Can't load " << loadpath << ", a record larger than page" << "\n";
+				exit(1);
+			}
 			tempIndex++;
 		}		   
     }
@@ -177,13 +180,13 @@ void DBFile::Add (Record &addMe) {
 		cerr << "File length less than 0 in DBFile add\n";
 		exit (1);
 	}
-	if( tempPage.Append(&addMe) ){//if the page is not full
+	if( tempPage.Append(&addMe) ){//if the page is not full 
 		curFile.AddPage(&tempPage, tempIndex);  
-	}else{
-		tempPage.EmptyItOut();
-		//again add the record that failed because page is full
-		if( !tempPage.Append(&addMe) ){
-			cerr << "Can't add record to DBFile\n";
+	}else{ //Page is full or record larger than page
+		//clean the page and add the record that failed before
+		tempPage.EmptyItOut();		
+		if( !tempPage.Append(&addMe) ){ 
+			cerr << "This record is larger than a DBFile page\n";
 			exit (1);
 		}
 		tempIndex++;		
@@ -198,7 +201,7 @@ void DBFile::Add (Record &addMe) {
 //porinter into the file is incremented, the return value is zero if and 
 //only if there is not a valid record returned from the function call
 int DBFile::GetNext (Record &fetchme) {	 //first time call this function,
-										//MoveFirst is needed 
+										//MoveFirst() is needed 
 		while(curPageIndex + 1 < curFile.GetLength()){
 		 //GetFirst consume fetchme in curPage
 		 if( curPage.GetFirst(&fetchme)){//fetch record successfully
@@ -220,7 +223,7 @@ int DBFile::GetNext (Record &fetchme) {	 //first time call this function,
 //The literal record is used to check the selection predicate, and is 
 //created when the parse tree for the CNF is processed
 int DBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {//first time call this function,
-																//MoveFirst is needed 
+																//MoveFirst() is needed 
 	ComparisonEngine comp;
 	while(curPageIndex + 1 < curFile.GetLength()){	
 		while( curPage.GetFirst(&fetchme) ){//fetch record successfully

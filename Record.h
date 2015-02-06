@@ -28,9 +28,11 @@ class Record {
 friend class ComparisonEngine;
 friend class Page;
 friend class DBFileTest;
-FRIEND_TEST(DBFileTest, GetNext);
+FRIEND_TEST(DBFileTest, AddRecord);
+FRIEND_TEST(DBFileTest, GetNextRecord);
 
 private:
+	FRIEND_TEST(DBFileDeathTest, AddRecordLTPage);
 	char *bits;
 	char* GetBits ();
 	void SetBits (char *bits);
