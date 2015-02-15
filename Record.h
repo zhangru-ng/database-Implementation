@@ -40,7 +40,9 @@ private:
 
 public:
 	Record ();
+ 	Record (const Record &copyme);
 	~Record();
+	Record & operator = (const Record &other);
 
 	// suck the contents of the record fromMe into this; note that after
 	// this call, fromMe will no longer have anything inside of it
@@ -70,6 +72,9 @@ public:
 	// prints the contents of the record; this requires
 	// that the schema also be given so that the record can be interpreted
 	void Print (Schema *mySchema);
+
+	//return the size of this record
+	int Size();
 };
 
 #endif

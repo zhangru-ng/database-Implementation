@@ -10,6 +10,28 @@ Record :: Record () {
 	bits = NULL;
 }
 
+//copy constructor
+Record :: Record (const Record &copyme) {
+	bits = NULL;
+	int b_len; 
+	if(copyme.bits != NULL){
+		b_len= ((int *) copyme.bits)[0];
+		this -> CopyBits(copyme.bits , b_len);
+	}
+}
+
+Record & Record :: operator = (const Record &other){
+	int b_len; 
+    if (this != &other){ 
+		bits = NULL;
+		if(other.bits != NULL) {
+			b_len= ((int *) other.bits)[0];
+			this -> CopyBits(other.bits , b_len);
+		}
+    }
+    return *this;
+}
+
 Record :: ~Record () {
 	if (bits != NULL) {
 		delete [] bits;
@@ -362,5 +384,14 @@ void Record :: Print (Schema *mySchema) {
 	cout << "\n";
 }
 
-
+//added by Rui 2015-02-15
+//return the size of this record
+int Record :: Size(){
+	if(bits == NULL){
+		return 0;
+	}else{
+		return ((int *) bits)[0];
+	}
+	
+}
 
