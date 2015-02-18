@@ -125,41 +125,33 @@ cout << "curLen > runlen" << "\n" << endl;
 void BigQ::SecondPhase(Pipe &out, vector<Run> &runs){	
 	Page tempPage;
 	Record minRec;
-	Sorter sorter(sortorder);
+	//Sorter sorter(sortorder);
 	int minID = 0;
 	int runCount = 0;
 
 	int test_counter = 0;
-
+	priority_queue<Record, vector<Record>, Sorter>pqueue(Sorter(sortorder));
 	vector<Run>::iterator it;
-
-	//initial mincRec to be the first record of first run
-	minRec = runs[0].GetRecord();
-	//while there ara runs not exhausted 
-	//minRec.Print(&mySchema);
-	while(runCount < runNum){
-		//traverse all runs
-		for (it=runs.begin(); it!=runs.end(); ++it){
-			//if the run is not exhausted
-			if(it->isExhaust()){
-    			//if current record less than min record
-    			if(sorter(minRec, it->GetRecord()) < 0){
-					minRec = it->GetRecord();
-					minID = it->GetRunID();					
-				}				
-    		}
-		}
-		//insert the smallest record to out pipe
-		out.Insert(&minRec);
-		test_counter++;
-		cout << "\t!@#!#" << test_counter <<endl;
-		//if the run is exhausted
-		if(!runs[minID].GetNext()){
-			runs[minID].setExhaust();
-			//count the exhausted runs
-			runCount++;
-		}
+	struct QueueMember tempQM;
+	struct QueueMember *pQM;
+	for (it=runs.begin(); it!=runs.end(); ++it){
+		tempQM.runID = it->GetRunID();
+		tempQM.rec = it->GetRecord();
+		pqueue.push(tempQM);
 	}
+
+	 while (! pqueue.empty()) {
+      	pQM = &(pqueue.top());
+      	minID = pQM->runID;
+      	out.Insert(pQM);
+      	pqueue.pop();
+     	if(runs[minID].GetNext()){
+			tempQM.runID = minID;
+			tempQM.rec = it->GetRecord();//may use pointer?
+			pqueue.push(tempQM);
+		}
+    }
+
 }
 
  Run::Run(int ID, int beg, int rl, File *rf){

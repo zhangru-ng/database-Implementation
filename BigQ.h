@@ -12,6 +12,11 @@
 
 using namespace std;
 
+sturct QueueMember{
+	int runID;
+	Record rec;
+};
+
 class Run{
 private:
   int runID;
