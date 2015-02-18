@@ -1,5 +1,6 @@
 #include "BigQ.h"
 
+
 BigQ::BigQ (Pipe &in, Pipe &out, OrderMaker &sorder, int rl) {
 
 	// read data from in pipe sort them into runlen pages
@@ -14,6 +15,7 @@ BigQ::BigQ (Pipe &in, Pipe &out, OrderMaker &sorder, int rl) {
 //	pthread_create (&workthread, NULL, TPM_MergeSort, (void *)&input);	
 
     // finally shut down the out pipe	
+    out.ShutDown ();
 }
 
 BigQ::~BigQ () {
@@ -25,8 +27,10 @@ void BigQ::TPM_MergeSort(Pipe &in, Pipe &out){//two phase multiway merge sort
 	runsFile.Open(0, filename);
 	vector<Run> runs;
 	FirstPhase(in, runs);
+
 	SecondPhase(out, runs);
-	out.ShutDown ();
+
+
 	runsFile.Close();
 }
 
@@ -39,7 +43,7 @@ void BigQ::WriteRunToFile(vector<Record> &oneRunRecords){
 	Page tempPage;
 	Record tempRec;
 	int tempIndex;
-//	Schema mySchema ("catalog", "nation");
+
 	if(runsFile.GetLength() == 0){
 		tempIndex = 0;      
 	}
@@ -47,7 +51,6 @@ void BigQ::WriteRunToFile(vector<Record> &oneRunRecords){
 	//write two oneRunRecords to the same page
 	else if(runsFile.GetLength() > 0){
 		tempIndex = runsFile.GetLength() - 1;
-		//runsFile.GetPage(&tempPage, tempIndex);		 **this cause out of bound get page
 	}
 	else{ //length less than 0, something wrong with current file
 		cerr << "File length less than 0 in DBFile add\n";
@@ -56,7 +59,6 @@ void BigQ::WriteRunToFile(vector<Record> &oneRunRecords){
 
 	while (oneRunRecords.size() > 0) {//while there are records in this oneRunRecords
 		tempRec = oneRunRecords.back();
-//		tempRec.Print(&mySchema);
 		if( tempPage.Append(&tempRec) == 1){
 			oneRunRecords.pop_back();
 		}else{
@@ -77,32 +79,30 @@ void BigQ::FirstPhase(Pipe &in, vector<Run> &runs){
 	int curLen = 0;
 	int curSize = 0;
 	Record tempRec;
-
+	runNum = 0;
 	vector<Record> oneRunRecords;
 	
-
 	while(in.Remove(&tempRec)){
 		//check if a single record larger than a page
-		if(tempRec.Size() > PAGE_SIZE){ 
+		if(tempRec.Size() > PAGE_SIZE - sizeof(int)){ 
 			cerr << "record larger than a page in TPMMS first phase\n";
 			exit(1);
 		}
 
 		//the sum of record size is larger than oneRunRecords size
 		curSize += tempRec.Size();
-//cout << "cur size" << curSize << "\n" << endl;
-		if(curSize > PAGE_SIZE){ 
+
+		if(curSize > PAGE_SIZE - sizeof(int)){ //Page class initially allocate size of int to store curSizeInBytes 
 			curLen++;			
 			curSize = tempRec.Size();
 		}
 	
-		//current length greater than oneRunRecords length, the current oneRunRecords is full
-		if(curLen > runlen){
+		//current length equal to oneRunRecords length, the current oneRunRecords is full
+		if(curLen == runlen){
 			//sort the current run
 			SortInRun(oneRunRecords);
 			//write the sorted run to temporary file
 			WriteRunToFile(oneRunRecords);
-cout << "curLen > runlen" << "\n" << endl;
 			runs.push_back(Run(runNum, runNum * runlen, runlen, &runsFile));
 			oneRunRecords.clear();
 			curLen = 0;
@@ -123,35 +123,29 @@ cout << "curLen > runlen" << "\n" << endl;
 
 //Second phase of TPMMS
 void BigQ::SecondPhase(Pipe &out, vector<Run> &runs){	
-	Page tempPage;
-	Record minRec;
-	//Sorter sorter(sortorder);
 	int minID = 0;
-	int runCount = 0;
 
-	int test_counter = 0;
-	priority_queue<Record, vector<Record>, Sorter>pqueue(Sorter(sortorder));
+	QueueMember tempQM;
 	vector<Run>::iterator it;
-	struct QueueMember tempQM;
-	struct QueueMember *pQM;
+	priority_queue<QueueMember, vector<QueueMember>, Sorter>pqueue(sorter);
+
+	//get the first record from each run
 	for (it=runs.begin(); it!=runs.end(); ++it){
 		tempQM.runID = it->GetRunID();
-		tempQM.rec = it->GetRecord();
+		it->GetNext(tempQM.rec);
 		pqueue.push(tempQM);
 	}
 
-	 while (! pqueue.empty()) {
-      	pQM = &(pqueue.top());
-      	minID = pQM->runID;
-      	out.Insert(pQM);
+	while (! pqueue.empty()) {
+     	tempQM = pqueue.top();
+     	minID = tempQM.runID;
+      	out.Insert(&tempQM.rec);
       	pqueue.pop();
-     	if(runs[minID].GetNext()){
+     	if(runs[minID].GetNext(tempQM.rec)){
 			tempQM.runID = minID;
-			tempQM.rec = it->GetRecord();//may use pointer?
 			pqueue.push(tempQM);
-		}
-    }
-
+ 		}
+	}	
 }
 
  Run::Run(int ID, int beg, int rl, File *rf){
@@ -160,9 +154,7 @@ void BigQ::SecondPhase(Pipe &out, vector<Run> &runs){
   	runBegIndex = beg;
   	runCurIndex = beg;
   	runsFile = rf;
-  	exhaust = 1;
   	runsFile->GetPage(&curPage, runBegIndex);
-  	this->GetNext();
  }
 
  Run::Run(const Run &r){
@@ -170,10 +162,8 @@ void BigQ::SecondPhase(Pipe &out, vector<Run> &runs){
  	curRunLen = r.curRunLen;
   	runBegIndex = r.runBegIndex;
   	runCurIndex = r.runCurIndex;
-  	exhaust = r.exhaust;
   	runsFile = r.runsFile;
-  	runsFile->GetPage(&curPage, runBegIndex);
-  	this->GetNext();
+  	runsFile->GetPage(&curPage, runCurIndex);
  }
 
  Run::~Run(){ 	
@@ -184,10 +174,8 @@ void BigQ::SecondPhase(Pipe &out, vector<Run> &runs){
  	curRunLen = r.curRunLen;
   	runBegIndex = r.runBegIndex;
   	runCurIndex = r.runCurIndex;
-  	exhaust = r.exhaust;
   	runsFile = r.runsFile;
-  	runsFile->GetPage(&curPage, runBegIndex);
-  	this->GetNext();
+  	runsFile->GetPage(&curPage, runCurIndex);
   	return *this;
  }
 
@@ -195,16 +183,13 @@ int Run::GetRunID(){
 	return runID;
 }
 
-Record Run::GetRecord(){
-	return curRec;
-}
-
-int Run::GetNext(){
+int Run::GetNext(Record &curRec){
  	while(runCurIndex < runBegIndex + curRunLen){
  		if(curPage.GetFirst(&curRec)){
  			return 1;
  		}else{
  			if(++runCurIndex < runBegIndex + curRunLen){
+ 				curPage.EmptyItOut();
  				runsFile->GetPage(&curPage, runCurIndex); 
  			}else{
  				break;
@@ -214,10 +199,3 @@ int Run::GetNext(){
  	return 0;
  }
 
- void Run::setExhaust(){
- 	exhaust = 0;
- }
-
- bool Run::isExhaust(){
- 	return exhaust;
- }
