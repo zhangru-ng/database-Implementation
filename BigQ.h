@@ -14,44 +14,49 @@
 
 using namespace std;
 
+//struct to store priority queue member
 typedef struct _QueueMember{
-  int runID;
-  Record rec;
+  int runID;        //run ID which the record from 
+  Record rec;       
 }QueueMember;
 
 class Run{
 private:
-  int runID;
-  int curRunLen;
-  int runBegIndex;
-  int runCurIndex;
-  File *runsFile;
-  Page curPage;
+  int runID;            //Id of this run
+  int curRunLen;        //length of this run 
+  int runBegIndex;      //begin page index of this run in runsFile
+  int runCurIndex;      //current page index of this run in runsFile
+  File *runsFile;       //point to the temporary file storing runs
+  Page curPage;         //current page being read
 public:
   Run(int ID, int beg, int rl, File *rf);
   Run(const Run &r);
   ~Run();  
   Run & operator = (const Run r);
+  //get the ID of this run
   int GetRunID();
+  //get the next record of this run 
   int GetNext(Record &curRec);
 };
 
+//Record compare class
 class Sorter {
 private:
   OrderMaker &sortorder;
   ComparisonEngine comp;
 public:
   Sorter(OrderMaker s) : sortorder(s),comp() {}
-  
+  //compare operator for phase one vecter<Record>
   bool operator()(Record r1, Record r2){   
-    if(comp.Compare (&r1, &r2, &sortorder) < 0){
+    if(comp.Compare (&r1, &r2, &sortorder) > 0){
       return true;
     }else{
       return false;
     }      
   }
+  //compare operator for phase two priority queue
   bool operator()(QueueMember &qm1, QueueMember &qm2){   
-    if(comp.Compare (&(qm1.rec), &(qm2.rec), &sortorder) < 0){
+    if(comp.Compare (&(qm1.rec), &(qm2.rec), &sortorder) > 0){
       return true;
     }else{
       return false;
@@ -61,16 +66,24 @@ public:
 
 class BigQ {
 private:
-  OrderMaker sortorder;
+  Pipe &in;
+  Pipe &out;
+  OrderMaker &sortorder;
   File runsFile;
-  int runNum;
   int runlen;
-
-  void TPM_MergeSort(Pipe &in, Pipe &out);
+  pthread_t workthread;
+  //bootstrap wrapper function
+  static void* workerthread_wrapper (void* arg);
+  //two phase multiway merge sort main function
+  void * TPM_MergeSort();
+  //sort one run record in first phase
   void SortInRun(vector<Record> &oneRunRecords);
-  void WriteRunToFile(vector<Record> &oneRunRecords);
-  void FirstPhase(Pipe &in, vector<Run> &runs);
-  void SecondPhase(Pipe &out, vector<Run> &runs);
+  //write one run to temporary file
+  void WriteRunToFile(vector<Record> &oneRunRecords);  
+  //First phase of TPMMS
+  void FirstPhase(vector<Run> &runs);
+  //Second phase of TPMMS
+  void SecondPhase(vector<Run> &runs);
 public:
 
   BigQ (Pipe &in, Pipe &out, OrderMaker &sortorder, int runlen);

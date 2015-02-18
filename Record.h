@@ -13,6 +13,7 @@
 #include "File.h"
 #include "Comparison.h"
 #include "ComparisonEngine.h"
+
 #include "gtest/gtest.h"
 
 
@@ -28,6 +29,7 @@ class Record {
 friend class ComparisonEngine;
 friend class Page;
 friend class DBFileTest;
+
 FRIEND_TEST(DBFileTest, AddRecord);
 FRIEND_TEST(DBFileTest, GetNextRecord);
 

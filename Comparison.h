@@ -14,17 +14,17 @@ class Comparison {
 	friend class ComparisonEngine;
 	friend class CNF;
 
-	Target operand1;   //{Left, Right, Literal};
-	int whichAtt1;
+	Target operand1;		//Left, Right or Literal
+	int whichAtt1;			//the index of attribute1 in the schema
 	Target operand2;
-	int whichAtt2;
+	int whichAtt2;			//the index of attribute2 in the schema
 
-	Type attType;	   //{Int, Double, String}
+	Type attType;			//Int, Double, String
 
-	CompOperator op;   //{LessThan, GreaterThan, Equals}
+	CompOperator op;		//LessThan, GreaterThan, Equals
 
 public:
-
+	//empty constructor
 	Comparison();
 
 	//copy constructor
@@ -43,10 +43,10 @@ class OrderMaker {
 	friend class ComparisonEngine;
 	friend class CNF;
 
-	int numAtts;
+	int numAtts;		//the number of attributes in the ordermaker(schema)
 
-	int whichAtts[MAX_ANDS];
-	Type whichTypes[MAX_ANDS];
+	int whichAtts[MAX_ANDS];   //the array of index of attributes in the ordermaker(schema)
+	Type whichTypes[MAX_ANDS]; //the array of type of attributes in the ordermaker(schema)
 
 public:
 	

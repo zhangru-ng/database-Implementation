@@ -1,37 +1,32 @@
 #include "BigQ.h"
 
 
-BigQ::BigQ (Pipe &in, Pipe &out, OrderMaker &sorder, int rl) {
-
-	// read data from in pipe sort them into runlen pages
-	
-    // construct priority queue over sorted runs and dump sorted data 
- 	// into the out pipe
- 	sortorder = sorder;
- 	runlen = rl;
- 	runNum = 0;
- 	TPM_MergeSort(in, out);
-//	pthread_t workthread;
-//	pthread_create (&workthread, NULL, TPM_MergeSort, (void *)&input);	
-
-    // finally shut down the out pipe	
-    out.ShutDown ();
+BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl), workthread(){
+	//create own worker thread for this BigQ
+ 	pthread_create (&workthread, NULL, &workerthread_wrapper, this);	  
 }
 
 BigQ::~BigQ () {
 }
+//C++ class member functions have a hidden this parameter passed in, 
+//use a static class method (which has no this parameter) to bootstrap the class
+void* BigQ::workerthread_wrapper (void* arg) {
+    ((BigQ*)arg)->TPM_MergeSort();
+
+}
 
 //two phase multiway merge sort
-void BigQ::TPM_MergeSort(Pipe &in, Pipe &out){//two phase multiway merge sort
-	char filename[256]="dbfile/tempfile";
+void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
+	char filename[256]="dbfile/tempfile.bin";
 	runsFile.Open(0, filename);
 	vector<Run> runs;
-	FirstPhase(in, runs);
-
-	SecondPhase(out, runs);
-
-
+	//First Phase of TPMMS
+	FirstPhase(runs);
+	//Second Phase of TPMMS
+	SecondPhase(runs);
 	runsFile.Close();
+	out.ShutDown ();
+	pthread_exit(NULL);
 }
 
 void BigQ::SortInRun(vector<Record> &oneRunRecords){
@@ -39,6 +34,7 @@ void BigQ::SortInRun(vector<Record> &oneRunRecords){
 	sort(oneRunRecords.begin(), oneRunRecords.end(), runSorter);
 }
 
+//write one run to temporary file
 void BigQ::WriteRunToFile(vector<Record> &oneRunRecords){	
 	Page tempPage;
 	Record tempRec;
@@ -75,11 +71,11 @@ void BigQ::WriteRunToFile(vector<Record> &oneRunRecords){
 }
 
 //First phase of TPMMS
-void BigQ::FirstPhase(Pipe &in, vector<Run> &runs){ 
+void BigQ::FirstPhase(vector<Run> &runs){ 
 	int curLen = 0;
 	int curSize = 0;
+	int runNum = 0;
 	Record tempRec;
-	runNum = 0;
 	vector<Record> oneRunRecords;
 	
 	while(in.Remove(&tempRec)){
@@ -103,11 +99,16 @@ void BigQ::FirstPhase(Pipe &in, vector<Run> &runs){
 			SortInRun(oneRunRecords);
 			//write the sorted run to temporary file
 			WriteRunToFile(oneRunRecords);
+			//add a new run to vector<Run> runs
 			runs.push_back(Run(runNum, runNum * runlen, runlen, &runsFile));
+			//clear the current run which has written to file
 			oneRunRecords.clear();
+			//clear current run counter
 			curLen = 0;
+			//run number plus 1
 			runNum++;
 		}
+		//add the record to this run
 		oneRunRecords.push_back(tempRec);
 	}
 	//the size of last oneRunRecords may be less than one run
@@ -122,11 +123,13 @@ void BigQ::FirstPhase(Pipe &in, vector<Run> &runs){
 }
 
 //Second phase of TPMMS
-void BigQ::SecondPhase(Pipe &out, vector<Run> &runs){	
+void BigQ::SecondPhase(vector<Run> &runs){	
 	int minID = 0;
-
+	Sorter sorter(sortorder);
 	QueueMember tempQM;
 	vector<Run>::iterator it;
+
+	//priority queue of first record of each run
 	priority_queue<QueueMember, vector<QueueMember>, Sorter>pqueue(sorter);
 
 	//get the first record from each run
@@ -137,12 +140,18 @@ void BigQ::SecondPhase(Pipe &out, vector<Run> &runs){
 	}
 
 	while (! pqueue.empty()) {
+		//get the minimal record
      	tempQM = pqueue.top();
+     	//store the run ID of the smallest record
      	minID = tempQM.runID;
+     	//insert the smallest record to output pipe
       	out.Insert(&tempQM.rec);
+      	//pop the minimal record
       	pqueue.pop();
+      	//if there are more record in the run which has just extracted the minimal record
      	if(runs[minID].GetNext(tempQM.rec)){
 			tempQM.runID = minID;
+			//push the next record of this run in queue
 			pqueue.push(tempQM);
  		}
 	}	
@@ -150,13 +159,14 @@ void BigQ::SecondPhase(Pipe &out, vector<Run> &runs){
 
  Run::Run(int ID, int beg, int rl, File *rf){
  	runID = ID;
- 	curRunLen = rl;
   	runBegIndex = beg;
   	runCurIndex = beg;
+  	curRunLen = rl;
   	runsFile = rf;
   	runsFile->GetPage(&curPage, runBegIndex);
  }
 
+//Copy constructer
  Run::Run(const Run &r){
  	runID = r.runID;
  	curRunLen = r.curRunLen;
@@ -166,6 +176,7 @@ void BigQ::SecondPhase(Pipe &out, vector<Run> &runs){
   	runsFile->GetPage(&curPage, runCurIndex);
  }
 
+//"=" operator
  Run::~Run(){ 	
  }
 
@@ -179,10 +190,12 @@ void BigQ::SecondPhase(Pipe &out, vector<Run> &runs){
   	return *this;
  }
 
+//get the ID of this run
 int Run::GetRunID(){
 	return runID;
 }
 
+//get the next record of this run 
 int Run::GetNext(Record &curRec){
  	while(runCurIndex < runBegIndex + curRunLen){
  		if(curPage.GetFirst(&curRec)){

@@ -47,7 +47,7 @@ void Pipe :: Insert (Record *insertMe) {
 	// next, see if there is space in the pipe for more data; if
 	// there is, then do the insertion
 	if (lastSlot - firstSlot < totSpace) {
-		buffered [lastSlot % totSpace].Consume (insertMe);
+		buffered [lastSlot % totSpace].Consume (insertMe);  //suck the contents of the record insertMe into this
 
 	// if there is not, then we need to wait until the consumer
 	// frees up some space in the pipeline
