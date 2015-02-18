@@ -10,7 +10,7 @@ Comparison::Comparison()
 {
 }
 
-
+//copy consturctor
 Comparison::Comparison(const Comparison &copy_me)
 {
 	operand1 = copy_me.operand1;
@@ -23,9 +23,12 @@ Comparison::Comparison(const Comparison &copy_me)
 	op = copy_me.op;
 }
 
-
+//print the coparison outcome to screen
 void Comparison :: Print () {
-
+/*
+ *	in Defs.h: enum Target {Left, Right, Literal};
+ *	in Defs.h: enum CompOperator {LessThan, GreaterThan, Equals};
+*/
 	cout << "Att " << whichAtt1 << " from ";
 
 	if (operand1 == Left)
@@ -61,10 +64,12 @@ void Comparison :: Print () {
 	else
 		cout << "(String)";
 }
-
-
-
-
+/*
+ *	members of OrderMaker:
+ *	int numAtts;
+ *	int whichAtts[MAX_ANDS];
+ *	Type whichTypes[MAX_ANDS];
+*/
 OrderMaker :: OrderMaker() {
 	numAtts = 0;
 }
@@ -77,7 +82,7 @@ OrderMaker :: OrderMaker(Schema *schema) {
 
 	for (int i = 0; i < n; i++) {
 		if (atts[i].myType == Int) {
-			whichAtts[numAtts] = i;
+			whichAtts[numAtts] = i;			//the index of attribute in the schema
 			whichTypes[numAtts] = Int;
 			numAtts++;
 		}
@@ -118,7 +123,6 @@ void OrderMaker :: Print () {
 }
 
 
-
 int CNF :: GetSortOrders (OrderMaker &left, OrderMaker &right) {
 
 	// initialize the size of the OrderMakers
@@ -143,7 +147,7 @@ int CNF :: GetSortOrders (OrderMaker &left, OrderMaker &right) {
 		// now verify that it operates over atts from both tables
 		if (!((orList[i][0].operand1 == Left && orList[i][0].operand2 == Right) ||
 		      (orList[i][0].operand2 == Left && orList[i][0].operand1 == Right))) {
-			continue;		
+			//continue;		
 		}
 
 		// since we are here, we have found a join attribute!!!
@@ -175,7 +179,6 @@ int CNF :: GetSortOrders (OrderMaker &left, OrderMaker &right) {
 	}
 	
 	return left.numAtts;
-
 }
 
 
@@ -201,11 +204,11 @@ void CNF :: Print () {
 void AddLitToFile (int &numFieldsInLiteral, FILE *outRecFile, FILE *outSchemaFile, char *value, Type myType) {
 
         // first write out the new record field
-        fprintf (outRecFile, "%s|", value);	         //write "<value>|" to outRecFile
+        fprintf (outRecFile, "%s|", value);
 
         // now write out the new schema field
         if (myType == Int) {
-                fprintf (outSchemaFile, "att%d Int\n", numFieldsInLiteral);		//write "att<field> <Type>"
+                fprintf (outSchemaFile, "att%d Int\n", numFieldsInLiteral);
         } else if (myType == Double) {
                 fprintf (outSchemaFile, "att%d Double\n", numFieldsInLiteral);
         } else if (myType == String) {
@@ -226,7 +229,7 @@ void CNF :: GrowFromParseTree (struct AndList *parseTree, Schema *leftSchema,
 
 	CNF &cnf = *this;
 
-	// as kind of a hack, the literal record is built up inside of a text file,
+	// as kind of a hack, the literal record is built up insiide of a text file,
 	// where it will be read in from subsequently
 	FILE *outRecFile = fopen ("sdafdsfFFDSDA", "w");
 
