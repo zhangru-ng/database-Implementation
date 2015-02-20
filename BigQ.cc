@@ -2,24 +2,32 @@
 
 
 BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl),runNum(0), workthread(){
-	//create own worker thread for this BigQ
- 	pthread_create (&workthread, NULL, &workerthread_wrapper, this);	  
+	//prevent memory leak(_dl_allocate_tls), if workerthread is detached
+	/*pthread_attr_t attr;
+	pthread_attr_init(&attr);
+   	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);*/
+   	//create own worker thread for this BigQ	
+ 	pthread_create (&workthread, NULL, &workerthread_wrapper, this);
+ 	
+ 	//pthread_attr_destroy(&attr);
+ 	//prevent memory leak(_dl_allocate_tls), if workerthread is joinable
+ 	pthread_join (workthread, NULL); 
 }
 
 BigQ::~BigQ () {
-	if(remove(runsFileName)){
-		cerr << "can't delete" << runsFileName;
-	}
+	
 }
 //C++ class member functions have a hidden this parameter passed in, 
 //use a static class method (which has no this parameter) to bootstrap the class
 void* BigQ::workerthread_wrapper (void* arg) {
     ((BigQ*)arg)->TPM_MergeSort();
-
 }
 
 //two phase multiway merge sort
 void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
+	double start, end;
+	double cpu_time_used;
+	start = clock(); 				
 	runsFileName="/cise/tmp/rui/tempfile.bin";
 	runsFile.Open(0, runsFileName);
 	vector<Run> runs;
@@ -28,8 +36,14 @@ void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
 	//Second Phase of TPMMS
 	SecondPhase(runs);
 	out.ShutDown ();	
-	runsFile.Close();	
-	pthread_exit(NULL);
+	end = clock();
+	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+	runsFile.Close();
+	cout << "TPMMS spent totally " << cpu_time_used << " senconds cpu time" << endl;		
+	if(remove(runsFileName)){
+		cerr << "can't delete" << runsFileName;
+	}
+	//pthread_exit(NULL);
 }
 
 void BigQ::SortInRun(vector<Record> &oneRunRecords){
@@ -59,7 +73,7 @@ void BigQ::WriteRunToFile(vector<Record> &oneRunRecords, int &beg, int &len){
 	beg = tempIndex;
 
 	while (recIndex < oneRunRecords.size()) {//while there are records in this oneRunRecords
-		tempRec = oneRunRecords[recIndex];
+		tempRec.Consume(&oneRunRecords[recIndex]);
 		if( tempPage.Append(&tempRec) == 1){
 			recIndex++;
 		}else{
@@ -115,11 +129,11 @@ void BigQ::FirstPhase(vector<Run> &runs){
 			//clear current run counter
 			curLen = 0;
 			//run number plus 1
-			runNum++;
+			runNum++;			
 		}
 		//add the record to this run
 		oneRunRecords.push_back(tempRec);
-	}
+	}   
 	//the size of last oneRunRecords may be less than one run
 	if(oneRunRecords.size() > 0){
 		SortInRun(oneRunRecords);
@@ -127,31 +141,22 @@ void BigQ::FirstPhase(vector<Run> &runs){
 		//add as a run, the last page count as one page, current run length plus 1
 		curLen++;
 		runs.push_back(Run(runNum, beg, len, &runsFile));
-		runNum++;
+		runNum++;		
 	}
 }
 
 //Second phase of TPMMS
 void BigQ::SecondPhase(vector<Run> &runs){	
-	int start1, start2, end1, end2;
-	double cpu_time_used1, cpu_time_used2;
-	//when the total run number is small, use std::priority_queue
-	//if(runNum < 1000){
-		start1 = clock(); 		
-		PriorityQueue(runs);
-		//LinearScan(runs);
-		end1 = clock();
-		cpu_time_used1 = ((double) (end1 - start1)) / CLOCKS_PER_SEC;
-	//}
-	//when the run number is big, use linear scan
-	//else{
-	/*	start2 = clock(); 
-		LinearScan(runs);
-		end2 = clock();
-		cpu_time_used2 = ((double) (end2 - start2)) / CLOCKS_PER_SEC;*/
-	//}	
+	double start, end;
+	double cpu_time_used;
+	
+	start = clock(); 		
+	PriorityQueue(runs);
+	//LinearScan(runs);
+	end = clock();
+	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 	//may use multi pass merge for lager run number
-	cout << "priority_queue:" << cpu_time_used1 << endl;
+	cout << "second phase spent " << cpu_time_used << " seconds cpu time" << endl;
 	//cout << "LinearScan:" << cpu_time_used2 << endl;
 }
 
@@ -223,10 +228,10 @@ void BigQ::PriorityQueue(vector<Run> &runs){
      	tempQM = pqueue.top();
      	//store the run ID of the smallest record
      	minID = tempQM.runID;
-   /*  count++;
+     	count++;
      	if(count % 100000 == 0){
-     		cout << "Insert " << count << " records to output pipe" << endl;
-     	}*/
+     		cout << "BigQ: sorted " << count << " records" << endl;
+     	}
      	//insert the smallest record to output pipe
       	out.Insert(&tempQM.rec);
       	//pop the minimal record
