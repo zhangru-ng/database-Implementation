@@ -57,6 +57,8 @@ char *region = "region";
 char *lineitem = "lineitem"; 
 
 relation *s, *p, *ps, *n, *li, *r, *o, *c;
+//added by rui, prevent memory leak
+Schema *ssc, *psc, *pssc, *nsc, *lisc, *rsc, *osc, *csc;
 
 void setup (char *catalog_path, char *dbfile_dir, char *tpch_dir) {
 	cout << " \n** IMPORTANT: MAKE SURE THE INFORMATION BELOW IS CORRECT **\n";
@@ -65,14 +67,24 @@ void setup (char *catalog_path, char *dbfile_dir, char *tpch_dir) {
 	cout << " heap files dir: \t" << dbfile_dir << endl;
 	cout << " \n\n";
 
-	s = new relation (supplier, new Schema (catalog_path, supplier), dbfile_dir);
-	ps = new relation (partsupp, new Schema (catalog_path, partsupp), dbfile_dir);
-	p = new relation (part, new Schema (catalog_path, part), dbfile_dir);
-	n = new relation (nation, new Schema (catalog_path, nation), dbfile_dir);
-	li = new relation (lineitem, new Schema (catalog_path, lineitem), dbfile_dir);
-	r = new relation (region, new Schema (catalog_path, region), dbfile_dir);
-	o = new relation (orders, new Schema (catalog_path, orders), dbfile_dir);
-	c = new relation (customer, new Schema (catalog_path, customer), dbfile_dir);
+//added by rui, prevent memory leak
+	ssc = new Schema (catalog_path, supplier);
+	pssc = new Schema (catalog_path, partsupp);
+	psc = new Schema (catalog_path, part); 
+	nsc = new Schema (catalog_path, nation);
+	lisc = new Schema (catalog_path, lineitem);
+	rsc= new Schema (catalog_path, region);
+	osc = new Schema (catalog_path, orders);
+	csc = new Schema (catalog_path, customer);
+
+	s = new relation (supplier, ssc, dbfile_dir);
+	ps = new relation (partsupp, pssc, dbfile_dir);
+	p = new relation (part, psc, dbfile_dir);
+	n = new relation (nation, nsc, dbfile_dir);
+	li = new relation (lineitem, lisc, dbfile_dir);
+	r = new relation (region, rsc, dbfile_dir);
+	o = new relation (orders, osc, dbfile_dir);
+	c = new relation (customer, csc, dbfile_dir);
 }
 
 void cleanup () {
@@ -84,6 +96,16 @@ void cleanup () {
 	delete r;
 	delete o; 
 	delete c;
+
+	//added by rui, prevent memory leak
+	delete ssc;
+	delete psc;
+	delete pssc; 
+	delete nsc;
+	delete lisc;
+	delete rsc;
+	delete osc;
+	delete csc;
 }
 
 #endif

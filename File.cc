@@ -220,6 +220,7 @@ void File :: AddPage (Page *addMe, off_t whichPage) {
 		exit(1);
 	}
 
+	memset(bits, 0, PAGE_SIZE); //prevent memory leak
 	addMe->ToBinary (bits);
 	lseek (myFilDes, PAGE_SIZE * whichPage, SEEK_SET);
 	write (myFilDes, bits, PAGE_SIZE);

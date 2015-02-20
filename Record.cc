@@ -23,6 +23,7 @@ Record :: Record (const Record &copyme) {
 Record & Record :: operator = (const Record &other){
 	int b_len; 
     if (this != &other){ 
+    	delete [] bits;
 		bits = NULL;
 		if(other.bits != NULL) {
 			b_len= ((int *) other.bits)[0];
