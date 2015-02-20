@@ -90,9 +90,7 @@ private:
 
   void PriorityQueue(vector<Run> &runs);
   void LinearScan(vector<Run> &runs);
-  void TwoPassMerge(vector<Run> &runs);
-  void MergeOnePass(vector<Run> &runs, vector<Run> &newRuns, int mergeBeg, int mergeEnd, int num, File *mergeFile);
-
+  
 public:
 
   BigQ (Pipe &in, Pipe &out, OrderMaker &sortorder, int runlen);
