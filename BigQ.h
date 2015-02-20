@@ -10,6 +10,7 @@
 #include "File.h"
 #include "Record.h"
 #include "Schema.h"
+#include <time.h>
 
 
 using namespace std;
@@ -48,7 +49,7 @@ public:
   Sorter(OrderMaker s) : sortorder(s),comp() {}
   //compare operator for phase one vecter<Record>
   bool operator()(Record r1, Record r2){   
-    if(comp.Compare (&r1, &r2, &sortorder) > 0){
+    if(comp.Compare (&r1, &r2, &sortorder) < 0){
       return true;
     }else{
       return false;
@@ -69,8 +70,10 @@ private:
   Pipe &in;
   Pipe &out;
   OrderMaker &sortorder;
+  char* runsFileName;
   File runsFile;
   int runlen;
+  int runNum;
   pthread_t workthread;
   //bootstrap wrapper function
   static void* workerthread_wrapper (void* arg);
@@ -78,12 +81,18 @@ private:
   void * TPM_MergeSort();
   //sort one run record in first phase
   void SortInRun(vector<Record> &oneRunRecords);
-  //write one run to temporary file
-  void WriteRunToFile(vector<Record> &oneRunRecords);  
+  //write one run to temporary file, store the begin and length of current run
+  void WriteRunToFile(vector<Record> &oneRunRecords, int &beg, int &len, File *rFile);  
   //First phase of TPMMS
   void FirstPhase(vector<Run> &runs);
   //Second phase of TPMMS
   void SecondPhase(vector<Run> &runs);
+
+  void PriorityQueue(vector<Run> &runs);
+  void LinearScan(vector<Run> &runs);
+  void TwoPassMerge(vector<Run> &runs);
+  void MergeOnePass(vector<Run> &runs, vector<Run> &newRuns, int mergeBeg, int mergeEnd, int num, File *mergeFile);
+
 public:
 
   BigQ (Pipe &in, Pipe &out, OrderMaker &sortorder, int runlen);
