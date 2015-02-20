@@ -1,7 +1,6 @@
 #include "Schema.h"
 #include <string.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <iostream>
 
 int Schema :: Find (char *attName) {
@@ -133,7 +132,7 @@ Schema :: Schema (char *fName, char *relName) {
 
 Schema :: ~Schema () {
 	delete [] myAtts;
-	delete fileName;
+	free(fileName);
 	myAtts = 0;
 }
 

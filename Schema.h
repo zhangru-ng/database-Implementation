@@ -3,6 +3,7 @@
 #define SCHEMA_H
 
 #include <stdio.h>
+#include <stdlib.h>
 #include "Record.h"
 #include "Schema.h"
 #include "File.h"
@@ -14,7 +15,7 @@ struct Attribute {
 	char *name;
 	Type myType;
 	~Attribute(){
-   		delete name;
+   		free(name);
 	}
 };
 
