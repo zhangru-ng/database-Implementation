@@ -123,18 +123,13 @@ void DBFile::Load (Schema &f_schema, char *loadpath) {
 	Record tempRec;
 	Page tempPage;
 	int tempIndex = 0;
-	int recnum = 0;
 	if(tableFile == NULL){
 		cerr << "Can't open table file for" << loadpath << "\n";
 	}
      while (tempRec.SuckNextRecord (&f_schema, tableFile) == 1) {
-		 recnum++;
 		if( tempPage.Append(&tempRec) == 0){
 			//if the page is full, create a new page
 			curFile.AddPage(&tempPage, tempIndex);  
-
-			cout << "page index:" << tempIndex <<"\t num: " << recnum << endl;
-			recnum = 0;
 			tempPage.EmptyItOut();
 			if( tempPage.Append(&tempRec) == 0 ){ //if fail again, record larger than page
 				cerr << "Can't load " << loadpath << ", a record larger than page" << "\n";

@@ -1,25 +1,25 @@
-#ifndef TEST_H
-#define TEST_H
+#ifndef A2TEST_H
+#define A2TEST_H
 #include <stdio.h>
 #include <iostream>
 #include <stdlib.h>
 #include "Pipe.h"
 #include "DBFile.h"
 #include "Record.h"
+#include <fstream>
 
 using namespace std;
 
 // make sure that the information below is correct
 
 char *catalog_path = "catalog"; 
-char *tpch_dir ="/cise/homes/rui/Desktop/testfile/100M_table/"; // dir where dbgen tpch files (extension *.tbl) can be found
+char *tpch_dir ="/cise/homes/rui/Desktop/testfile/10M_table/"; // dir where dbgen tpch files (extension *.tbl) can be found
 char *dbfile_dir = "dbfile/"; 
 
 
 extern "C" {
 	int yyparse(void);   // defined in y.tab.c
 }
-
 extern struct AndList *final;
 
 typedef struct {
@@ -59,8 +59,8 @@ public:
 		cnf_pred.GrowFromParseTree (final, schema (), literal); // constructs CNF predicate
 	}
 	void get_sort_order (OrderMaker &sortorder) {
-		cout << "\n specify sort ordering (when done press ctrl-D):\n\t ";
-  		if (yyparse() != 0) {
+		cout << "\n specify sort ordering (when done press ctrl-D):\n\t ";		
+		if (yyparse() != 0) {
 			cout << "Can't parse your sort CNF.\n";
 			exit (1);
 		}

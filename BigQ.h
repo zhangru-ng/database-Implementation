@@ -66,6 +66,11 @@ public:
 };
 
 class BigQ {
+  
+friend class BigQTest;
+FRIEND_TEST(BigQTest, SortInRun);
+FRIEND_TEST(BigQTest, WriteRunToFile);
+
 private:
   Pipe &in;
   Pipe &out;
@@ -82,17 +87,16 @@ private:
   //sort one run record in first phase
   void SortInRun(vector<Record> &oneRunRecords);
   //write one run to temporary file, store the begin and length of current run
-  void WriteRunToFile(vector<Record> &oneRunRecords, int &beg, int &len, File *rFile);  
+  void WriteRunToFile(vector<Record> &oneRunRecords, int &beg, int &len);  
   //First phase of TPMMS
   void FirstPhase(vector<Run> &runs);
   //Second phase of TPMMS
   void SecondPhase(vector<Run> &runs);
 
   void PriorityQueue(vector<Run> &runs);
-  void LinearScan(vector<Run> &runs);
-  
-public:
+  void LinearScan(vector<Run> &runs);  
 
+public:
   BigQ (Pipe &in, Pipe &out, OrderMaker &sortorder, int runlen);
   ~BigQ ();  
 };

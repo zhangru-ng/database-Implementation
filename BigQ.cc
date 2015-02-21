@@ -2,16 +2,17 @@
 
 
 BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl),runNum(0), workthread(){
+	if(runlen > 0){
 	//prevent memory leak(_dl_allocate_tls), if workerthread is detached
 	/*pthread_attr_t attr;
 	pthread_attr_init(&attr);
    	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);*/
    	//create own worker thread for this BigQ	
- 	pthread_create (&workthread, NULL, &workerthread_wrapper, this);
- 	
+ 		pthread_create (&workthread, NULL, &workerthread_wrapper, this); 	
  	//pthread_attr_destroy(&attr);
  	//prevent memory leak(_dl_allocate_tls), if workerthread is joinable
- 	pthread_join (workthread, NULL); 
+ 		pthread_join (workthread, NULL); 
+ 	}
 }
 
 BigQ::~BigQ () {
@@ -39,7 +40,7 @@ void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
 	end = clock();
 	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 	runsFile.Close();
-	cout << "TPMMS spent totally " << cpu_time_used << " senconds cpu time" << endl;		
+	//cout << "TPMMS spent totally " << cpu_time_used << " senconds cpu time" << endl;		
 	if(remove(runsFileName)){
 		cerr << "can't delete" << runsFileName;
 	}
@@ -147,16 +148,15 @@ void BigQ::FirstPhase(vector<Run> &runs){
 
 //Second phase of TPMMS
 void BigQ::SecondPhase(vector<Run> &runs){	
-	double start, end;
-	double cpu_time_used;
+//	double start, end;
+//	double cpu_time_used;
 	
-	start = clock(); 		
+//	start = clock(); 		
 	PriorityQueue(runs);
-	//LinearScan(runs);
-	end = clock();
-	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-	//may use multi pass merge for lager run number
-	cout << "second phase spent " << cpu_time_used << " seconds cpu time" << endl;
+	//LinearScan(runs);  //Linear scan is much slower than priority queue when run number large
+//	end = clock();
+//	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+	//cout << "second phase spent " << cpu_time_used << " seconds cpu time" << endl;
 	//cout << "LinearScan:" << cpu_time_used2 << endl;
 }
 

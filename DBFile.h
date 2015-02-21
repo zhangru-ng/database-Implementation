@@ -14,15 +14,15 @@ typedef enum {heap, sorted, tree} fType;
 
 class DBFile {
 
-friend class DBFileTest;
-FRIEND_TEST(DBFileTest, LoadFile);
-FRIEND_TEST(DBFileTest, MoveFirst);
-FRIEND_TEST(DBFileTest, AddRecord);
+friend class HeapFileTest;
+FRIEND_TEST(HeapFileTest, LoadFile);
+FRIEND_TEST(HeapFileTest, MoveFirst);
+FRIEND_TEST(HeapFileTest, AddRecord);
 
 private:    
 	File curFile;
 	Page curPage;		
-    int curPageIndex;
+    	int curPageIndex;
 public:
 	DBFile (); 
 

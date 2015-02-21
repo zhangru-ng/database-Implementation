@@ -2,6 +2,7 @@
 #include "BigQ.h"
 #include <pthread.h>
 
+
 void *producer (void *arg) {
 
 	Pipe *myPipe = (Pipe *) arg;
@@ -61,9 +62,12 @@ void *consumer (void *arg) {
 			}
 		}
 		if (t->print) {
+			if(last == NULL){
+				cerr << "last=NULL";
+			}
 			last->Print (rel->schema ());
 		}
-		i++;
+		i++;	
 	}
 
 	cout << " consumer: removed " << i << " recs from the pipe\n";
@@ -83,9 +87,9 @@ void *consumer (void *arg) {
 
 
 void test1 (int option, int runlen) {
-
+	
 	// sort order for records
-	OrderMaker sortorder;
+	OrderMaker sortorder;	
 	rel->get_sort_order (sortorder);
 
 	int buffsz = 100; // pipe cache size
@@ -150,3 +154,4 @@ int main (int argc, char *argv[]) {
 
 	cleanup ();
 }
+
