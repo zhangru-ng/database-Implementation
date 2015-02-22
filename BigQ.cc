@@ -12,7 +12,12 @@ BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortor
  	//pthread_attr_destroy(&attr);
  	//prevent memory leak(_dl_allocate_tls), if workerthread is joinable
  		pthread_join (workthread, NULL); 
- 	}
+ 	}else if(runlen == 0){//resever for test private member functions
+		return;
+	}else{
+		cerr << "run length should greater than 0";
+		exit(1);
+	}
 }
 
 BigQ::~BigQ () {
