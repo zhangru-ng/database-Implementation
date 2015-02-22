@@ -4,7 +4,6 @@
 #include <assert.h>
 #include "DBFile.h"
 #include "BigQ.h"
-#include "Pipe.h"
 #include "gtest/gtest.h"
 
 extern "C" {
@@ -16,14 +15,15 @@ extern struct AndList *final;
 char tbl_dir[256] = "/cise/tmp/dbi_sp11/DATA/10M/lineitem.tbl"; 
 char tbl_name[50] = "lineitem";
 char catalog_path[100] = "catalog";
-char testFile_path[100] = "dbfile/testFile.bin";
-char headFile_path[100] = "dbfile/testFile.header";
+char cnf_dir[100] = "filterCNF/";
+char testFile_path[100] = "/cise/tmp/rui/testFile.bin";
+char headFile_path[100] = "/cise/tmp/rui/testFile.header";
 
 /*
  * Heap file unit test
- * Rui 2015.02.06	
+ * Written by Rui 2015.02.06	
  */ 
- /*
+ 
 class HeapFileTest : public ::testing::Test {
 protected:
 	virtual void SetUp() {
@@ -35,8 +35,34 @@ protected:
 		remove(testFile_path);
 		remove(headFile_path);
 	}
-	DBFile dbfile;		
+	DBFile dbfile;	
+	ComparisonEngine comp;	
+	CNF cnf_pred;
+	Record literal;
 };
+
+void initCNF(CNF &cnf_pred, Record &literal, char* cnf_name, char* tbl_name){
+	char cnf_file[100];
+	sprintf (cnf_file, "%s%s", cnf_dir , cnf_name);
+	FILE *fp = fopen(cnf_file, "r");
+	// make sure it is valid:
+	if (!fp) {
+		cout << "Can't open" << cnf_file << endl;
+		exit(1);
+	}
+	// set lex to read from it instead of defaulting to STDIN:
+	yyin = fp;
+	// parse through the input until there is no more:
+	do {
+		if(yyparse()){
+			cerr << "Can't parse test filter CNF";
+			exit(1);
+		}
+	} while (!feof(yyin));
+	Schema lisc(catalog_path, tbl_name);
+	cnf_pred.GrowFromParseTree (final, &lisc, literal); // constructs CNF predicate
+	fclose(fp);
+}
 
 TEST_F(HeapFileTest, CreateFile) {
 	FILE * fp = fopen(testFile_path,"r");
@@ -119,6 +145,90 @@ TEST_F(HeapFileTest, AddRecord) {
 //	delete[] tempBits;
 }
 
+TEST_F(HeapFileTest, GetNextFilterInt) {
+	int err;
+	Record tempRec;
+
+	Schema f_schema(catalog_path, tbl_name);
+	initCNF(cnf_pred, literal, "cnf1", tbl_name);
+	dbfile.Load (f_schema, tbl_dir);
+	dbfile.MoveFirst();
+	
+	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
+		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
+				err++;
+		}		
+	}
+	EXPECT_EQ( 0 , err );	
+}
+
+TEST_F(HeapFileTest, GetNextFilterDouble) {
+	int err;
+	Record tempRec;
+
+	Schema f_schema(catalog_path, tbl_name);
+	initCNF(cnf_pred, literal, "cnf2", tbl_name);
+	dbfile.Load (f_schema, tbl_dir);
+	dbfile.MoveFirst();
+	
+	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
+		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
+				err++;
+		}		
+	}
+	EXPECT_EQ( 0 , err );	
+}
+
+TEST_F(HeapFileTest, GetNextFilterString) {
+	int err;
+	Record tempRec;
+
+	Schema f_schema(catalog_path, tbl_name);
+	initCNF(cnf_pred, literal, "cnf3", tbl_name);
+	dbfile.Load (f_schema, tbl_dir);
+	dbfile.MoveFirst();
+	
+	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
+		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
+				err++;
+		}		
+	}
+	EXPECT_EQ( 0 , err );	
+}
+
+TEST_F(HeapFileTest, GetNextFilterMixed1) {
+	int err;
+	Record tempRec;
+
+	Schema f_schema(catalog_path, tbl_name);
+	initCNF(cnf_pred, literal, "cnf4", tbl_name);
+	dbfile.Load (f_schema, tbl_dir);
+	dbfile.MoveFirst();
+	
+	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
+		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
+				err++;
+		}		
+	}
+	EXPECT_EQ( 0 , err );	
+}
+
+TEST_F(HeapFileTest, GetNextFilterMixed2) {
+	int err;
+	Record tempRec;
+
+	Schema f_schema(catalog_path, tbl_name);
+	initCNF(cnf_pred, literal, "cnf5", tbl_name);
+	dbfile.Load (f_schema, tbl_dir);
+	dbfile.MoveFirst();
+	
+	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
+		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
+				err++;
+		}		
+	}
+	EXPECT_EQ( 0 , err );	
+}
 
 TEST(HeapFileDeathTest, OpenNonExistFile) {
 	::testing::FLAGS_gtest_death_test_style = "threadsafe";
@@ -132,7 +242,7 @@ TEST(HeapFileDeathTest, CreateInNonExistDir) {
 	EXPECT_DEATH(dbfile.Create("nonexist/testFile.bin", heap , 0), "BAD!  Open did not work for nonexist/testFile.bin");
 }
 
-TEST(HeapFileDeathTest, AddRecordLTPage) {
+TEST(HeapFileDeathTest, AddRecordLargerThanPage) {
 	::testing::FLAGS_gtest_death_test_style = "threadsafe";
 	DBFile dbfile;
 	char *tempBits = NULL;
@@ -143,19 +253,52 @@ TEST(HeapFileDeathTest, AddRecordLTPage) {
 	tempRec1.SetBits(tempBits); 
 	EXPECT_DEATH( dbfile.Add (tempRec1), "This record is larger than a DBFile page");
 }
-*/
+
+
 /*
  * Big queue unit test
- * Rui 2015.02.21	
+ * Written by Rui 2015.02.21	
  */ 
 
- char sort_cnf_dir[100] = "sortCNF/";
+char sort_tbl_dir[256] = "/cise/tmp/dbi_sp11/DATA/10M/nation.tbl"; 
+char sort_tbl_name[100] = "nation";
+char sort_cnf_dir[100] = "sortCNF/";
 
  typedef struct {
 	Pipe *pipe;
 	OrderMaker *order;
 	int errnum;
 }testutil;
+
+class BigQTest : public ::testing::Test {
+protected:
+	virtual void SetUp(){
+		buffsz = 100;
+		runlen = 10;
+		input = new Pipe(buffsz);
+		output = new Pipe(buffsz);		
+		//pthread_create (&thread1, NULL, producer, (void *)input);		
+		tutil.pipe = output;
+		tutil.order = &sortorder;
+		tutil.errnum = 0;	
+	}
+	virtual void TearDown() {
+		delete input;
+		delete output;
+		remove(testFile_path);
+		remove(headFile_path);
+	}	
+	int buffsz;
+	Pipe *input;
+  	Pipe *output;
+	OrderMaker sortorder;
+	int runlen;	
+	pthread_t thread1;
+	pthread_t thread2;	
+	testutil tutil; 
+	ComparisonEngine ceng;
+	DBFile dbfile;
+};
 
 void *producer (void *arg) {
 	Pipe *myPipe = (Pipe *) arg;
@@ -171,7 +314,7 @@ void *producer (void *arg) {
 	}
 	tdbfile.Close ();
 	myPipe->ShutDown ();
-	pthread_exit(NULL);
+	//pthread_exit(NULL);
 }
 
 void *consumer (void *arg) {	
@@ -192,7 +335,7 @@ void *consumer (void *arg) {
 		i++;	
 	}
 	t->errnum = err;
-	pthread_exit(NULL);
+	//pthread_exit(NULL);
 }
 
 void initOrderMaker(OrderMaker &sortorder, char* sortname, char* tbl_name){
@@ -215,8 +358,8 @@ void initOrderMaker(OrderMaker &sortorder, char* sortname, char* tbl_name){
 	} while (!feof(yyin));
 	Record literal;
 	CNF sort_pred;
-	Schema *lisc = new Schema (catalog_path, tbl_name);
-	sort_pred.GrowFromParseTree (final, lisc, literal); // constructs CNF predicate
+	Schema lisc(catalog_path, tbl_name);
+	sort_pred.GrowFromParseTree (final, &lisc, literal); // constructs CNF predicate
 	OrderMaker dummy;
 	sort_pred.GetSortOrders (sortorder, dummy);
 	fclose(fp);
@@ -224,191 +367,127 @@ void initOrderMaker(OrderMaker &sortorder, char* sortname, char* tbl_name){
 
 void initTestRun(vector<Record> &oneRunRecords){
 	Record tempRec;
-	char sort_tbl_dir[256] = "/cise/tmp/dbi_sp11/DATA/10M/nation.tbl"; 
-	char sort_tbl_name[100] = "nation";
 	Schema f_schema(catalog_path, sort_tbl_name);
 	FILE *tableFile = fopen (sort_tbl_dir, "r");
 	assert(tableFile != NULL);		
-	while (tempRec.SuckNextRecord (f_schema, tableFile)){
+	while (tempRec.SuckNextRecord (&f_schema, tableFile)){
 		oneRunRecords.push_back(tempRec);
 	}
 	fclose(tableFile);
 }
 
-class BigQTest : public ::testing::Test {
-protected:
-	virtual void SetUp(){
-		buffsz = 100;
-		runlen = 10;
-		input = new Pipe(buffsz);
-		output = new Pipe(buffsz);		
-		pthread_create (&thread1, NULL, producer, (void *)input);		
-		tutil.pipe = output;
-		tutil.order = &sortorder;
-		tutil.errnum = 0;	
-	}
-	virtual void TearDown() {
-		//pthread_join (thread1, NULL);
-		//pthread_join (thread2, NULL);
-		delete input;
-		delete output;
-		remove(testFile_path);
-		remove(headFile_path);
-	}	
-	int buffsz;
-	Pipe *input;
-  	Pipe *output;
-	OrderMaker sortorder;
-	int runlen;	
-	pthread_t thread1;
-	pthread_t thread2;	
-	testutil tutil; 
-	ComparisonEngine ceng;
-	DBFile dbfile;
-};
-
 TEST_F(BigQTest, SortIntAttribute) {
+	pthread_create (&thread1, NULL, producer, (void *)input);		
 	initOrderMaker(sortorder, "sort1", tbl_name);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
+	pthread_join (thread1, NULL);
+	pthread_join (thread2, NULL);
 	EXPECT_EQ( 0, tutil.errnum );
 }
-/*
+
 TEST_F(BigQTest, SortDoubleAttribute) {
+	pthread_create (&thread1, NULL, producer, (void *)input);		
 	initOrderMaker(sortorder, "sort2", tbl_name);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
+	pthread_join (thread1, NULL);
+	pthread_join (thread2, NULL);
 	EXPECT_EQ( 0, tutil.errnum );
 }
 
 TEST_F(BigQTest, SortStringAttribute) {
+	pthread_create (&thread1, NULL, producer, (void *)input);		
 	initOrderMaker(sortorder, "sort3", tbl_name);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
+	pthread_join (thread1, NULL);
+	pthread_join (thread2, NULL);
 	EXPECT_EQ( 0, tutil.errnum );
 }
 
 TEST_F(BigQTest, SortTwoLiterals) {
+	pthread_create (&thread1, NULL, producer, (void *)input);		
 	initOrderMaker(sortorder, "sort4", tbl_name);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
+	pthread_join (thread1, NULL);
+	pthread_join (thread2, NULL);
 	EXPECT_EQ( 0, tutil.errnum );
 }
 
 TEST_F(BigQTest, SortThreeLiterals) {
+	pthread_create (&thread1, NULL, producer, (void *)input);		
 	initOrderMaker(sortorder, "sort5", tbl_name);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
+	pthread_join (thread1, NULL);
+	pthread_join (thread2, NULL);
 	EXPECT_EQ( 0, tutil.errnum );
 }
 
 TEST_F(BigQTest, SortSixLiterals) {
+	pthread_create (&thread1, NULL, producer, (void *)input);		
 	initOrderMaker(sortorder, "sort6", tbl_name);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
+	pthread_join (thread1, NULL);
+	pthread_join (thread2, NULL);
 	EXPECT_EQ( 0, tutil.errnum );
 }
 
 TEST_F(BigQTest, RunLengthOne) {
 	runlen = 1;
+	pthread_create (&thread1, NULL, producer, (void *)input);		
 	initOrderMaker(sortorder, "sort1", tbl_name);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
+	pthread_join (thread1, NULL);
+	pthread_join (thread2, NULL);
 	EXPECT_EQ( 0, tutil.errnum );
 }
 
 TEST_F(BigQTest, RunLengthTwo) {
 	runlen = 2;
+	pthread_create (&thread1, NULL, producer, (void *)input);		
 	initOrderMaker(sortorder, "sort1", tbl_name);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
+	pthread_join (thread1, NULL);
+	pthread_join (thread2, NULL);
 	EXPECT_EQ( 0, tutil.errnum );
 }
 
 TEST_F(BigQTest, RunLengthSeven) {
 	runlen = 7;
+	pthread_create (&thread1, NULL, producer, (void *)input);		
 	initOrderMaker(sortorder, "sort1", tbl_name);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
+	pthread_join (thread1, NULL);
+	pthread_join (thread2, NULL);
 	EXPECT_EQ( 0, tutil.errnum );
 }
 
 TEST_F(BigQTest, RunLengthTwenty) {
 	runlen = 20;
+	pthread_create (&thread1, NULL, producer, (void *)input);		
 	initOrderMaker(sortorder, "sort1", tbl_name);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
+	pthread_join (thread1, NULL);
+	pthread_join (thread2, NULL);
 	EXPECT_EQ( 0, tutil.errnum );
 }
 
 TEST_F(BigQTest, RunLengthFifty) {
 	runlen = 50;
+	pthread_create (&thread1, NULL, producer, (void *)input);		
 	initOrderMaker(sortorder, "sort1", tbl_name);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
+	pthread_join (thread1, NULL);
+	pthread_join (thread2, NULL);
 	EXPECT_EQ( 0, tutil.errnum );
 }
-*/
 
-TEST_F(BigQTest, SortInRun) {
-	int err = 0;
-	Record tempRec[2];
-	vector<Record> oneRunRecords;	
-
-	initOrderMaker(sortorder, "sortmem", sort_tbl_name);
-	BigQ bq (*input, *output, sortorder, 0);
-
-	initTestRun(oneRunRecords);
-	bq.SortInRun(oneRunRecords);
-	while(oneRunRecords.size() > 1){
-		tempRec[0] = oneRunRecords.back();
-		oneRunRecords.pop_back();
-		tempRec[1] = oneRunRecords.back();
-		if (ceng.Compare (&tempRec[0], &tempRec[1], &sortorder) < 0) {
-				err++;
-		}
-	}
-	EXPECT_EQ( 0, err );
-}
-
-TEST_F(BigQTest, WriteRunToFile) {
-	int err = 0, i = 0;
-	int beg, len;
-	Record tempRec[2];
-	Record *last = NULL, *prev = NULL;
-	vector<Record> oneRunRecords;
-		
-	initOrderMaker(sortorder, "sortmem", sort_tbl_name);
-	BigQ bq (*input, *output, sortorder, 0);
-		
-	initTestRun(oneRunRecords);
-	bq.SortInRun(oneRunRecords);
-	bq.runsFileName="/cise/tmp/rui/testfile.bin";
-	//create the associate file for temp file to avoid error
-	dbfile.Create(bq.runsFileName, heap, 0);	
-	dbfile.Close();
-	
-	bq.runsFile.Open(1, bq.runsFileName);
-	bq.WriteRunToFile(oneRunRecords, beg, len);
-	bq.runsFile.Close();
-
-	dbfile.Open(bq.runsFileName);
-	dbfile.MoveFirst();
-	while(dbfile.GetNext(tempRec[i%2])){
-		prev = last;
-		last = &tempRec[i%2];
-		if (prev && last) {
-			if (ceng.Compare (prev, last, &sortorder) == 1) {
-				err++;
-			}
-		}
-		i++;	
-	}	
-	dbfile.Close();
-	
-	EXPECT_EQ( 0, err );
-	EXPECT_EQ( 0, beg );
-	EXPECT_EQ( 1, len );
-	
-	remove(bq.runsFileName);	
-}
