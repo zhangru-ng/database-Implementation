@@ -32,7 +32,7 @@ friend class HeapFileTest;
 
 FRIEND_TEST(HeapFileTest, AddRecord);
 FRIEND_TEST(HeapFileTest, GetNextRecord);
-FRIEND_TEST(HeapFileDeathTest, AddRecordLTPage);
+FRIEND_TEST(HeapFileDeathTest, AddRecordLargerThanPage);
 private:
 	char *bits;
 	char* GetBits ();

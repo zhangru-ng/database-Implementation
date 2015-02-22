@@ -13,7 +13,7 @@ using namespace std;
 // make sure that the information below is correct
 
 char *catalog_path = "catalog"; 
-char *tpch_dir ="/cise/homes/rui/Desktop/testfile/10M_table/"; // dir where dbgen tpch files (extension *.tbl) can be found
+char *tpch_dir ="/cise/tmp/dbi_sp11/DATA/10M/"; // dir where dbgen tpch files (extension *.tbl) can be found
 char *dbfile_dir = "dbfile/"; 
 
 

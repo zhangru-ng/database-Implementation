@@ -75,7 +75,7 @@ private:
   Pipe &in;
   Pipe &out;
   OrderMaker &sortorder;
-  char* runsFileName;
+  char *runsFileName;
   File runsFile;
   int runlen;
   int runNum;

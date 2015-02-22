@@ -12,10 +12,8 @@ BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortor
  	//pthread_attr_destroy(&attr);
  	//prevent memory leak(_dl_allocate_tls), if workerthread is joinable
  		pthread_join (workthread, NULL); 
- 	}else if(runlen == 0){//resever for test private member functions
-		return;
 	}else{
-		cerr << "run length should greater than 0";
+		cerr << "ERROR in BigQ: run length should greater than 0!";
 		exit(1);
 	}
 }
@@ -49,7 +47,6 @@ void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
 	if(remove(runsFileName)){
 		cerr << "can't delete" << runsFileName;
 	}
-	//pthread_exit(NULL);
 }
 
 void BigQ::SortInRun(vector<Record> &oneRunRecords){
