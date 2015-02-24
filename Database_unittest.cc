@@ -17,7 +17,7 @@ char tbl_name[50] = "lineitem";
 char catalog_path[100] = "catalog";
 char cnf_dir[100] = "filterCNF/";
 char testFile_path[100] = "/cise/tmp/rui/testFile.bin";
-char headFile_path[100] = "/cise/tmp/rui/testFile.header";
+char headFile_path[100] = "/cise/tmp/rui/testFile.bin.header";
 
 /*
  * Heap file unit test
@@ -75,6 +75,10 @@ TEST_F(HeapFileTest, OpenFile) {
 	EXPECT_EQ( 1 , f_flag );	
 }
 
+TEST_F(HeapFileTest, OpenNonExistFile) {
+	EXPECT_EQ( 0, dbfile.Open("dbfile/nonexist.bin") );	
+}
+
 TEST_F(HeapFileTest, CloseFile) {
  	EXPECT_EQ(1 , dbfile.Close() );     //close created file
 	dbfile.Open(testFile_path); 
@@ -92,14 +96,14 @@ TEST_F(HeapFileTest, CreateHeapTypeHeader) {
 
 TEST_F(HeapFileTest, LoadFile) {
 	Schema f_schema(catalog_path, tbl_name);
-	EXPECT_EQ( 0, dbfile.curFile.GetLength() );
+	EXPECT_EQ( 0, dbfile.myInernalPoniter->curFile.GetLength() );
 	dbfile.Load (f_schema, tbl_dir);
-	EXPECT_LE( 2, dbfile.curFile.GetLength() );
+	EXPECT_LE( 2, dbfile.myInernalPoniter->curFile.GetLength() );
 }
 
 TEST_F(HeapFileTest, MoveFirst) {
 	dbfile.MoveFirst();
-	EXPECT_EQ( 0, dbfile.curPageIndex );
+	EXPECT_EQ( 0, dbfile.myInernalPoniter->curPageIndex );
 }
 
 TEST_F(HeapFileTest, GetNextRecord) {
@@ -121,32 +125,32 @@ TEST_F(HeapFileTest, AddRecord) {
 	char *tempBits = NULL;
 	Record tempRec1;
 		
-	EXPECT_EQ( 0, dbfile.curFile.GetLength() );
+	EXPECT_EQ( 0, dbfile.myInernalPoniter->curFile.GetLength() );
 	tempBits = new (std::nothrow) char[PAGE_SIZE/2];
 	ASSERT_TRUE(tempBits != NULL);
 	((int *) tempBits)[0] = PAGE_SIZE/2;
 	tempRec1.SetBits(tempBits);
 	dbfile.Add (tempRec1);
-	EXPECT_EQ( 2, dbfile.curFile.GetLength() );
+	EXPECT_EQ( 2, dbfile.myInernalPoniter->curFile.GetLength() );
 	
 	tempBits = new (std::nothrow) char[PAGE_SIZE/4];
 	ASSERT_TRUE(tempBits != NULL);
 	((int *) tempBits)[0] = PAGE_SIZE/4;
 	tempRec1.SetBits(tempBits); //SetBits is pointer operation and Add
 	dbfile.Add (tempRec1);		//consume rec, namely consume tempBits
-	EXPECT_EQ( 2, dbfile.curFile.GetLength() );		
+	EXPECT_EQ( 2, dbfile.myInernalPoniter->curFile.GetLength() );		
 	
 	tempBits = new (std::nothrow) char[PAGE_SIZE/4];
 	ASSERT_TRUE(tempBits != NULL);
 	((int *) tempBits)[0] = PAGE_SIZE/4;
 	tempRec1.SetBits(tempBits); 
 	dbfile.Add (tempRec1);		
-	EXPECT_EQ( 3, dbfile.curFile.GetLength() );		
+	EXPECT_EQ( 3, dbfile.myInernalPoniter->curFile.GetLength() );		
 //	delete[] tempBits;
 }
 
 TEST_F(HeapFileTest, GetNextFilterInt) {
-	int err;
+	int err = 0;
 	Record tempRec;
 
 	Schema f_schema(catalog_path, tbl_name);
@@ -163,7 +167,7 @@ TEST_F(HeapFileTest, GetNextFilterInt) {
 }
 
 TEST_F(HeapFileTest, GetNextFilterDouble) {
-	int err;
+	int err = 0;
 	Record tempRec;
 
 	Schema f_schema(catalog_path, tbl_name);
@@ -180,7 +184,7 @@ TEST_F(HeapFileTest, GetNextFilterDouble) {
 }
 
 TEST_F(HeapFileTest, GetNextFilterString) {
-	int err;
+	int err = 0;
 	Record tempRec;
 
 	Schema f_schema(catalog_path, tbl_name);
@@ -197,7 +201,7 @@ TEST_F(HeapFileTest, GetNextFilterString) {
 }
 
 TEST_F(HeapFileTest, GetNextFilterMixed1) {
-	int err;
+	int err = 0;
 	Record tempRec;
 
 	Schema f_schema(catalog_path, tbl_name);
@@ -214,7 +218,7 @@ TEST_F(HeapFileTest, GetNextFilterMixed1) {
 }
 
 TEST_F(HeapFileTest, GetNextFilterMixed2) {
-	int err;
+	int err = 0;
 	Record tempRec;
 
 	Schema f_schema(catalog_path, tbl_name);
@@ -230,12 +234,6 @@ TEST_F(HeapFileTest, GetNextFilterMixed2) {
 	EXPECT_EQ( 0 , err );	
 }
 
-TEST(HeapFileDeathTest, OpenNonExistFile) {
-	::testing::FLAGS_gtest_death_test_style = "threadsafe";
-	DBFile dbfile;
-	EXPECT_DEATH(dbfile.Open("dbfile/nonexist.bin"), "BAD!  Open did not work for dbfile/nonexist.bin");	
-}
-
 TEST(HeapFileDeathTest, CreateInNonExistDir) {
 	::testing::FLAGS_gtest_death_test_style = "threadsafe";
 	DBFile dbfile;
@@ -245,6 +243,7 @@ TEST(HeapFileDeathTest, CreateInNonExistDir) {
 TEST(HeapFileDeathTest, AddRecordLargerThanPage) {
 	::testing::FLAGS_gtest_death_test_style = "threadsafe";
 	DBFile dbfile;
+	dbfile.Create(testFile_path, heap , 0);
 	char *tempBits = NULL;
 	Record tempRec1;
 	tempBits = new (std::nothrow) char[PAGE_SIZE];
@@ -259,7 +258,7 @@ TEST(HeapFileDeathTest, AddRecordLargerThanPage) {
  * Big queue unit test
  * Written by Rui 2015.02.21	
  */ 
-
+/*
 char sort_tbl_dir[256] = "/cise/tmp/dbi_sp11/DATA/10M/nation.tbl"; 
 char sort_tbl_name[100] = "nation";
 char sort_cnf_dir[100] = "sortCNF/";
@@ -491,3 +490,4 @@ TEST_F(BigQTest, RunLengthFifty) {
 	EXPECT_EQ( 0, tutil.errnum );
 }
 
+*/

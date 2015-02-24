@@ -1,5 +1,5 @@
-#ifndef DBFILE_H
-#define DBFILE_H
+#ifndef SORTEDDBFILE_H
+#define SORTEDDBFILE_H
 
 #include "TwoWayList.h"
 #include "Record.h"
@@ -9,24 +9,19 @@
 #include "ComparisonEngine.h"
 #include "Defs.h"
 #include "GenericDBFile.h"
-#include "HeapDBFile.h"
-#include "SortedDBFile.h"
 
-// stub DBFile header..replace it with your own DBFile.h 
 
-class DBFile {
+struct SortInfo {
+	OrderMaker *myOrder;
+	int runLength;
+};
 
-friend class HeapFileTest;
-FRIEND_TEST(HeapFileTest, LoadFile);
-FRIEND_TEST(HeapFileTest, MoveFirst);
-FRIEND_TEST(HeapFileTest, AddRecord);
-
+class SortedDBFile : public GenericDBFile{
 private:
-	GenericDBFile *myInernalPoniter;
-
+	struct SortInfo sortinfo;
 public:
-	DBFile (); 
-	~DBFile (); 
+	SortedDBFile (); 
+	~SortedDBFile ();
 
 	int Create (char *fpath, fType file_type, void *startup);
 	int Open (char *fpath);
@@ -36,8 +31,6 @@ public:
 	void Add (Record &addme);
 	int GetNext (Record &fetchme);
 	int GetNext (Record &fetchme, CNF &cnf, Record &literal);
-
-	fType StringToEnum(char *type);
 
 };
 #endif
