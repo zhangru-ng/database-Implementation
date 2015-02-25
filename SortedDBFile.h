@@ -1,24 +1,26 @@
 #ifndef SORTEDDBFILE_H
 #define SORTEDDBFILE_H
 
-#include "TwoWayList.h"
-#include "Record.h"
-#include "Schema.h"
-#include "File.h"
-#include "Comparison.h"
-#include "ComparisonEngine.h"
-#include "Defs.h"
 #include "GenericDBFile.h"
 
+typedef enum _FileMode{ Read, Write } FileMode;
 
 struct SortInfo {
-	OrderMaker *myOrder;
-	int runLength;
+OrderMaker *order;
+int runlen;
 };
 
 class SortedDBFile : public GenericDBFile{
+FRIEND_TEST(SortedFileTest, SortedTypeHeaderFile);
 private:
-	struct SortInfo sortinfo;
+	OrderMaker myOrder;
+	int runLength;
+	FileMode curMode;
+	static const int buffsz;
+	Pipe *input;
+	Pipe *output;
+	BigQ *bq;
+
 public:
 	SortedDBFile (); 
 	~SortedDBFile ();
