@@ -1,6 +1,13 @@
 #ifndef GENERICDBFILE_H
 #define GENERICDBFILE_H
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <iostream>
+#include <string.h>
+#include <fstream>
+#include <string>
+
 #include "TwoWayList.h"
 #include "Record.h"
 #include "Schema.h"
@@ -8,6 +15,8 @@
 #include "Comparison.h"
 #include "ComparisonEngine.h"
 #include "Defs.h"
+
+#include "gtest/gtest.h"
 
 typedef enum {heap, sorted, tree} fType;
 

@@ -1,18 +1,8 @@
 #ifndef DBFILE_H
 #define DBFILE_H
 
-#include "TwoWayList.h"
-#include "Record.h"
-#include "Schema.h"
-#include "File.h"
-#include "Comparison.h"
-#include "ComparisonEngine.h"
-#include "Defs.h"
-#include "GenericDBFile.h"
 #include "HeapDBFile.h"
 #include "SortedDBFile.h"
-
-// stub DBFile header..replace it with your own DBFile.h 
 
 class DBFile {
 

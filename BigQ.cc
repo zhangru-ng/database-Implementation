@@ -24,7 +24,8 @@ BigQ::~BigQ () {
 //C++ class member functions have a hidden this parameter passed in, 
 //use a static class method (which has no this parameter) to bootstrap the class
 void* BigQ::workerthread_wrapper (void* arg) {
-    ((BigQ*)arg)->TPM_MergeSort();
+    ( reinterpret_cast<BigQ *>(arg) )->TPM_MergeSort();
+
 }
 
 //two phase multiway merge sort

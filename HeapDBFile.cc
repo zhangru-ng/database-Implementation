@@ -16,22 +16,21 @@ HeapDBFile::~HeapDBFile () {
 //enumeration with three possible values: heap, sorted and tree. The 
 //return value is a one on success and a zero on failure
 int HeapDBFile::Create (char *f_path, fType f_type, void *startup) {
-	FILE * fp;
-	char s[200],type[8];
+	string header = f_path;
 	
 	//create the binary DBfile
 	curFile.Open (0, f_path);
 	
 	//create the associated text file
-	sprintf (s, "%s.header", f_path);
-
-	if(	(fp= fopen (s,"w")) == NULL){
-		cerr << "Can't create associated file for" << f_path << "\n";
+	header += ".header";
+	
+	ofstream metafile(header.c_str());
+	if (!metafile.is_open()){
+		cerr << "Can't open associated file for " << f_path << "\n";
 		return 0;
 	}
-	EnumToString(f_type, type);
-	fprintf(fp, "%s", type);
-	fclose(fp);	
+	metafile << "heap" << endl;
+	metafile.close();	
 	return 1;
 }
 
@@ -42,7 +41,6 @@ int HeapDBFile::Create (char *f_path, fType f_type, void *startup) {
 //simply the physical location fo the file.The return value is a one on 
 //success and a zero on failure(open auxiliary text file at startup)
 int HeapDBFile::Open (char *f_path) {
-	FILE * fp;	
 	//open the exist DBfile
 	curFile.Open (1, f_path);
 	return 1;
@@ -183,19 +181,4 @@ int HeapDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {//first ti
 		 }
 	}
 	return 0;
-}
-
-//convert enum to string to wrtie into a txt file
-void HeapDBFile::EnumToString(fType f_type, char *type){
-	switch(f_type){
-		case heap:
-			strcpy(type, "heap");
-			break;
-		case sorted:
-			strcpy(type, "sorted");
-			break;
-		case tree:
-			strcpy(type, "tree");
-			break;
-	}
 }
