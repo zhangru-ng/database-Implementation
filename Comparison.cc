@@ -107,6 +107,33 @@ OrderMaker :: OrderMaker(Schema *schema) {
         }
 }
 
+int OrderMaker :: GetNumAtts(){
+	return numAtts;
+}
+
+int * OrderMaker :: GetAtts(){
+	return whichAtts;
+}
+
+Type * OrderMaker :: GetType(){
+	return whichTypes;
+}
+
+void OrderMaker :: Clear() {
+	numAtts = 0;
+}
+
+int OrderMaker :: Add(int attIndex, Type attType){
+	if( numAtts < MAX_ANDS ){
+		whichAtts[numAtts] = attIndex;			
+		whichTypes[numAtts] = attType;
+		numAtts++;
+	}else{
+		cerr << "ERROR: Can't add attributes, number of attributes in OrderMaker over" << MAX_ANDS;
+		return 0;
+	}		
+	return 1;
+}
 
 void OrderMaker :: Print () {
 	printf("NumAtts = %5d\n", numAtts);

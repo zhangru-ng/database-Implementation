@@ -57,6 +57,21 @@ public:
 	// based upon ALL of their attributes
 	OrderMaker(Schema *schema);
 
+	//Get number of attributes of the ordermaker
+	int GetNumAtts();
+
+	//Get attribute array of the ordermaker
+	int * GetAtts();
+
+	//Get attribute Type array of the ordermaker
+	Type * GetType();
+
+	//Add a attribute to the ordermaker
+	int Add(int attIndex, Type attType);
+
+	//clear the ordermaker
+	void Clear();
+
 	// print to the screen
 	void Print ();
 };
