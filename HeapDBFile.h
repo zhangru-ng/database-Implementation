@@ -7,9 +7,9 @@
 class HeapDBFile: public GenericDBFile{
 
 friend class HeapFileTest;
-FRIEND_TEST(HeapFileTest, LoadFile);
-FRIEND_TEST(HeapFileTest, MoveFirst);
-FRIEND_TEST(HeapFileTest, AddRecord);
+	FRIEND_TEST(HeapFileTest, LoadFile);
+	FRIEND_TEST(HeapFileTest, MoveFirst);
+	FRIEND_TEST(HeapFileTest, AddRecord);
 
 public:
 	HeapDBFile (); 

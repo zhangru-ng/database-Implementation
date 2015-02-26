@@ -120,7 +120,7 @@ int Pipe :: Remove (Record *removeMe) {
 void Pipe :: ShutDown () {
 
 	// first, get a mutex on the pipeline
-        pthread_mutex_lock (&pipeMutex);
+    pthread_mutex_lock (&pipeMutex);
 
 	// note that we are now done with the pipeline
 	done = 1;

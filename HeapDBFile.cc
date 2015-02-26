@@ -17,10 +17,6 @@ HeapDBFile::~HeapDBFile () {
 //return value is a one on success and a zero on failure
 int HeapDBFile::Create (char *f_path, fType f_type, void *startup) {
 	string header = f_path;
-	
-	//create the binary DBfile
-	curFile.Open (0, f_path);
-	
 	//create the associated text file
 	header += ".header";
 	
@@ -31,6 +27,9 @@ int HeapDBFile::Create (char *f_path, fType f_type, void *startup) {
 	}
 	metafile << "heap" << endl;
 	metafile.close();	
+
+	//create the binary DBfile
+	curFile.Open (0, f_path);
 	return 1;
 }
 
@@ -143,15 +142,14 @@ void HeapDBFile::Add (Record &addMe) {
 //only if there is not a valid record returned from the function call
 int HeapDBFile::GetNext (Record &fetchme) {	 //first time call this function,
 										//MoveFirst() is needed 
-		while(curPageIndex + 1 < curFile.GetLength()){
+	while(curPageIndex <= curFile.GetLength() - 2 ){
 		 //GetFirst consume fetchme in curPage
 		 if( curPage.GetFirst(&fetchme)){//fetch record successfully
 			return 1;
 		 }
-		 if(curPageIndex + 2 < curFile.GetLength()){
+		 if(curPageIndex < curFile.GetLength() - 2 ){
 			curPage.EmptyItOut();
-			curFile.GetPage(&curPage, curPageIndex+1); 
-			curPageIndex++;
+			curFile.GetPage(&curPage, ++curPageIndex); 
 		 }else{
 			break;
 		 }
@@ -166,19 +164,20 @@ int HeapDBFile::GetNext (Record &fetchme) {	 //first time call this function,
 int HeapDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {//first time call this function,
 																//MoveFirst() is needed 
 	ComparisonEngine comp;
-	while(curPageIndex + 1 < curFile.GetLength()){	
+	while(curPageIndex <= curFile.GetLength() - 2 ){	
 		while( curPage.GetFirst(&fetchme) ){//fetch record successfully
 			if(comp.Compare(&fetchme, &literal, &cnf)){
 				return 1;
 			}				
 		 }	
-		 if(curPageIndex + 2 < curFile.GetLength()){
+		 if(curPageIndex < curFile.GetLength() - 2 ){
 			curPage.EmptyItOut();
-			curFile.GetPage(&curPage, curPageIndex+1); 
-			curPageIndex++;
+			curFile.GetPage(&curPage, ++curPageIndex); 
 		 }else{
 			break;
 		 }
 	}
 	return 0;
 }
+
+
