@@ -14,6 +14,8 @@ FRIEND_TEST(HeapFileTest, AddRecord);
 private:
 	GenericDBFile *myInernalPoniter;
 
+	fType StringToEnum(const string &type);
+	
 public:
 	DBFile (); 
 	~DBFile (); 
@@ -26,8 +28,5 @@ public:
 	void Add (Record &addme);
 	int GetNext (Record &fetchme);
 	int GetNext (Record &fetchme, CNF &cnf, Record &literal);
-
-	fType StringToEnum(char *type);
-
 };
 #endif

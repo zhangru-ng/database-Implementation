@@ -18,9 +18,9 @@ int DBFile::Create (char *f_path, fType f_type, void *startup) {
 		case sorted: 
 			myInernalPoniter = new SortedDBFile();
 			break;
-	/*case tree: 
-		myInernalPoniter = new TreeDBFile(); 
-		break;*/
+	//case tree: 
+	//	myInernalPoniter = new TreeDBFile(); 
+	//	break;
 		default:
 			cerr << "ERROR: Can't create DBFile, File type doesn't exist!";
 			return 0;
@@ -29,19 +29,21 @@ int DBFile::Create (char *f_path, fType f_type, void *startup) {
 }
 
 int DBFile::Open (char *f_path) {
-	char s[200],type[8];	
-	fType f_type;
+	//create the associated text file
+	string header = f_path;
+	header += ".header";			
 	//open the exist associate file
-	sprintf (s, "%s.header", f_path);
-	ifstream metafile(s);
+	ifstream metafile(header.c_str());
 	if (!metafile.is_open()){
 		cerr << "Can't open associated file for " << f_path << "\n";
 		return 0;
 	}
+	string type;
+	//read file type from associate file
 	metafile >> type;
-	metafile.close();		
-	
-	f_type = StringToEnum(type);
+	metafile.close();
+	//convert file type string to enum
+	fType f_type = StringToEnum(type);
 	switch(f_type){
 	case heap: 
 		myInernalPoniter = new HeapDBFile();
@@ -49,9 +51,9 @@ int DBFile::Open (char *f_path) {
 	case sorted: 
 		myInernalPoniter = new SortedDBFile();
 		break;
-	/*case tree: 
-		myInernalPoniter = new TreeDBFile(); 
-		break;*/
+	//case tree: 
+	//	myInernalPoniter = new TreeDBFile(); 
+	//	break;
 	}
 	return myInernalPoniter -> Open(f_path);	
 }
@@ -81,10 +83,10 @@ int DBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 }
 
 //convert string to enum to wrtie into a txt file
-fType DBFile::StringToEnum(char *type){
-	if(strcmp(type, "heap") == 0){
+fType DBFile::StringToEnum(const string &type){
+	if(type.compare("heap") == 0){
 		return heap;
-	}else if(strcmp(type, "sorted") == 0){
+	}else if(type.compare("sorted") == 0){
 		return sorted;
 	}else{
 		return tree;
