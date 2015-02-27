@@ -57,6 +57,12 @@ public:
 	// based upon ALL of their attributes
 	OrderMaker(Schema *schema);
 
+	//overload ofstream << operator to write OrderMaker to file
+	friend ofstream & operator << (ofstream &out, const OrderMaker &om);
+
+	//overload ifstream >> operator to read OrderMaker from file
+	friend ifstream & operator >> (ifstream &in, const OrderMaker &om);
+
 	//Get number of attributes of the ordermaker
 	int GetNumAtts();
 

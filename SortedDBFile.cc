@@ -25,8 +25,9 @@ int SortedDBFile::Create (const char *f_path, fType f_type, void *startup) {
 	myOrder = *(sip -> order);
 	runLength = sip -> runlen;
 	//write data to associate file
-	metafile.write (reinterpret_cast<const char *> (&myOrder), sizeof (OrderMaker));
-	metafile << runLength << endl;
+	//ofstream operater << is overloaded for OrderMaker
+	metafile << myOrder;
+	metafile << runLength;
 	metafile.close();
 
 	//create the binary DBfile
@@ -46,8 +47,9 @@ int SortedDBFile::Open (const char *f_path) {
 		return 0;
 	}	
 	//read data from associate file
-	metafile.seekg (7, metafile.beg);  //ignore the first 6 bytes which stores file type
-	metafile.read (reinterpret_cast<char *> (&myOrder), sizeof (OrderMaker));
+	metafile.seekg (7, metafile.beg);  //ignore the first 6 bytes which stores file type "sorted"
+	//ifstream operater >> is overloaded for OrderMaker
+	metafile >> myOrder;
 	metafile >> runLength;
 
 	metafile.close ();
@@ -57,23 +59,17 @@ int SortedDBFile::Open (const char *f_path) {
 }
 
 void SortedDBFile::Load (Schema &f_schema, const char *loadpath) {
-	Record tempRec;
 	FILE *tableFile = fopen (loadpath, "r");
-
 	if(tableFile == NULL){
 		cerr << "Can't open table file: " << loadpath << "\n";
 	}
 	//if DBFile's current mode is wrtie
 	if(curMode == Read){
-		if( bq == NULL){
-			input = new Pipe (buffsz);
-			output = new Pipe (buffsz);
-			bq = new BigQ (*input, *output, myOrder, runLength);
-		}		
+		initBigQ();
 		curMode = Write;
 		isNewQuery = true;
 	}
-	
+	Record tempRec;
     while (tempRec.SuckNextRecord (&f_schema, tableFile) == 1) {
     	//insert record to input pipe
 		input->Insert (&tempRec);
@@ -84,11 +80,7 @@ void SortedDBFile::Load (Schema &f_schema, const char *loadpath) {
 void SortedDBFile::Add (Record &rec) {
 	//if DBFile's current mode is read
 	if(curMode == Read){
-		if( bq == NULL){
-			input = new Pipe (buffsz);
-			output = new Pipe (buffsz);
-			bq = new BigQ (*input, *output, myOrder, runLength);
-		}		
+		initBigQ();
 		curMode = Write;
 		isNewQuery = true;
 	}
@@ -127,6 +119,7 @@ int SortedDBFile::Close () {
 
 int SortedDBFile::GetNext (Record &fetchme) {
 	if(curMode == Write){
+		curMode = Read;
 		MergeSortedParts();
 	}
 	while(curPageIndex <= curFile.GetLength() - 2 ){	
@@ -149,25 +142,21 @@ int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 		curMode = Read;
 		MergeSortedParts();
 	}
-	//if the file is empty
-	if(curFile.GetLength() == 0 ){	
-		cerr << "In Sorted File GetNext, File is empty";
-		return 0;	
-	}	
+	//if the file is empty or fully scanned
 	if(curPageIndex > curFile.GetLength() - 2){	
-		cerr << "In Sorted File GetNext, Page index exceed file length";
 		return 0;	
 	}	
 	//in practice, the caller will never switches parameters without call MoveFirst or some kind of write
 	//so only recompute queryOrder and BinarySearch after MoveFirst or some kind of write
 	if(isNewQuery = false){
+		//if the query OrderMaker is not empty
 		if(queryOrder.GetNumAtts() > 0){
 			if(GetNext(fetchme)){
 				return FindAcceptedRecord(fetchme, literal, cnf);
 			}else{
 				return 0;
 			}			
-		}else{
+		}else{//otherwise use simple get next function without help of query ordermaker
 			return GetNextRecord(fetchme, cnf, literal);
 		}
 	}
@@ -182,6 +171,7 @@ int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 		int matchIndex = BinarySearch(literal, fetchme);
 		//if no record that “equals” the literal record
 		if(matchIndex == -1){
+			//current page index out of file, indicate no record is accepted in whole file
 			curPageIndex = curFile.GetLength() - 1;//may cause read out of bound 
 			return 0;
 		}else{
@@ -194,20 +184,38 @@ int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 	}	
 }
 
+//initial the internal BigQ of this file
+void SortedDBFile::initBigQ(){
+	if( bq == NULL){
+		input = new (std::nothrow) Pipe (buffsz);
+		if (input == NULL){
+			cerr << "ERROR : Not enough memory for input buffer of " << filename;
+			exit(1);
+		}
+		output = new (std::nothrow) Pipe (buffsz);
+		if (output == NULL){
+			cerr << "ERROR : Not enough memory for output buffer of " << filename;
+			exit(1);
+		}
+		bq = new (std::nothrow) BigQ (*input, *output, myOrder, runLength);
+		if (bq == NULL){
+			cerr << "ERROR : Not enough memory for bigQ of " << filename;
+			exit(1);
+		}
+	}		
+}	
+
 //merge the file's internal BigQ with its other sorted data when change from write to read or close the file
 void SortedDBFile::MergeSortedParts() {
-	File tempFile;
+	Record tempRec1, tempRec2, minRec;
 	Page tempPage;
-	Record tempRec1, tempRec2;
-	Record minRec;
-
+	File tempFile;
 	string tempFilename = filename;
 	tempFilename += ".temp";
 	tempFile.Open(0, tempFilename.c_str());
 	ComparisonEngine comp;
 	int tempIndex = 0;
-	input->ShutDown ();
-	
+	input->ShutDown ();	
 
 	MoveFirst();	
 	if( GetNext(tempRec1) && output->Remove(&tempRec2) ){
@@ -251,8 +259,8 @@ void SortedDBFile::MergeSortedParts() {
 			tempPage.Append(&tempRec2);
 		}	
 	}
-	tempFile.AddPage(&tempPage, tempIndex);  
 	output->ShutDown();
+	tempFile.AddPage(&tempPage, tempIndex);  	
 	tempFile.Close();
 	curFile.Close();
 	remove(filename.c_str());
@@ -313,13 +321,17 @@ void SortedDBFile::MakeQueryOrder(OrderMaker &searchOrder){
 			break;
 		}	
 	}
+	//query OrderMaker has updated, set isNewQuery to false
 	isNewQuery = false;
 }
 
 //use in conjunction with query OrderMaker to speed up GetNext
-int SortedDBFile::BinarySearch(Record &literal, Record &outRec)
-{
-	curPage.GetFirst(&outRec);
+//if find the match record, return the match page index
+//otherwise return -1
+int SortedDBFile::BinarySearch(Record &literal, Record &outRec) {
+	if(GetNext(outRec) == 0){
+		return -1;
+	}
 	ComparisonEngine comp;
 	int compare_result = comp.Compare(&outRec, &literal, &queryOrder);
 	//if current record "equal to" the literal record, return current page index
@@ -332,50 +344,55 @@ int SortedDBFile::BinarySearch(Record &literal, Record &outRec)
     	return -1;
     }
     //if current record "less than" the literal record, run the binary search
-
+    //initial the min and max page index
 	int minIndex = curPageIndex;
 	int maxIndex = curFile.GetLength() - 2;
-
-  	while (minIndex < maxIndex)
-    {
+  	while (minIndex < maxIndex){
+  		//compute the middle page index
     	int midIndex = (minIndex + maxIndex) / 2;
-  
+  		//read first record of middle page
     	curFile.GetPage(&curPage, midIndex);
     	curPage.GetFirst(&outRec);
+    	//if the record is "less than" literal
       	if (comp.Compare(&outRec, &literal, &queryOrder) < 0){
         	minIndex = midIndex + 1;//maybe don't plus 1
-      	}else{
+      	}else{//if the record is "greater or equal to" literal
        		maxIndex = midIndex;
        	}
     }
-  // At exit of while:
-  //   if file is empty, then maxIndex < minIndex
-  //   otherwise maxIndex == minIndex
- 
-  // deferred test for equality
+  	//deferred test for equality, reduce branch in while loop
+  	//if find the match record, return the match page index
 	if ((maxIndex == minIndex) && (comp.Compare(&outRec, &literal, &queryOrder) == 0)){
 		return minIndex;
-	}else{
+	}else{//otherwise return -1
 		return -1;
 	}    	
 }
 
 //after the binary search locate match record, examine record one-by-one to find accepted record
+//return 1 if find a accepted record, otherwise return 0 
 int SortedDBFile::FindAcceptedRecord(Record &fetchme, Record &literal, CNF &cnf){
 	ComparisonEngine comp;
+	//if the query CNF accept the record, return 1
 	if(comp.Compare(&fetchme, &literal, &cnf)){
 		return 1;
 	}else{
+		//scan record one-by-one
 		while(curPageIndex <= curFile.GetLength() - 2 ){	
 			while( curPage.GetFirst(&fetchme) ){//fetch record successfully
+				//if query OrderMaker accept the record
 				if(comp.Compare(&fetchme, &literal, &queryOrder) == 0){
+					//if query CNF  accept the record, return 1
 					if(comp.Compare(&fetchme, &literal, &cnf)){
 						return 1;
 					}				
-				}else{
+				}
+				//if query OrderMaker dosen't accept the record, return 0
+				else{
 					return 0;
 				}
 			}	
+			//read next page
 			if(curPageIndex < curFile.GetLength() - 2 ){
 				curPage.EmptyItOut();
 				curFile.GetPage(&curPage, ++curPageIndex); 

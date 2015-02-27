@@ -107,6 +107,27 @@ OrderMaker :: OrderMaker(Schema *schema) {
         }
 }
 
+ofstream & operator << (ofstream &out, const OrderMaker &om) {    
+	out << numAtts;
+	for(int i = 0; i < MAX_ANDS; i++){
+		out << whichAtts[i] << endl;
+		int temp = reinterpret_cast<int>(whichTypes[i]);
+        out << temp << endl;
+	}	
+    return out;
+}
+	 
+ifstream & operator >> (ifstream &in, const OrderMaker &om) {
+	in >> numAtts;
+	for(int i = 0; i < MAX_ANDS; i++){
+		out >> whichAtts[i];
+		int temp;
+		out >> temp;
+		whichTypes[i] = reinterpret_cast<Type>(temp);        
+	}	
+    return in;
+}
+
 int OrderMaker :: GetNumAtts(){
 	return numAtts;
 }

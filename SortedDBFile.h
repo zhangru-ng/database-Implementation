@@ -28,6 +28,8 @@ private:
 	OrderMaker queryOrder;		//the queryOrder built by file ordermaker and the input CNF
 	bool isNewQuery;			//true if start a new query, used to reduce to overhead of repeatedly cnf query GetNext 
 
+	//initial the internal BigQ of this file
+	void initBigQ();
 	//merge the file's internal BigQ with its other sorted data when change from write to read or close the file
 	void MergeSortedParts();
 	//simple GetNext sub-function used when there's no attribute in query OrderMaker
