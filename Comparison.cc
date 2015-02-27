@@ -108,22 +108,21 @@ OrderMaker :: OrderMaker(Schema *schema) {
 }
 
 ofstream & operator << (ofstream &out, const OrderMaker &om) {    
-	out << numAtts;
-	for(int i = 0; i < MAX_ANDS; i++){
-		out << whichAtts[i] << endl;
-		int temp = reinterpret_cast<int>(whichTypes[i]);
-        out << temp << endl;
+	out << om.numAtts << endl;
+	for(int i = 0; i < om.numAtts; i++){
+		out << om.whichAtts[i] << endl;
+        out << om.whichTypes[i] << endl;
 	}	
     return out;
 }
 	 
-ifstream & operator >> (ifstream &in, const OrderMaker &om) {
-	in >> numAtts;
-	for(int i = 0; i < MAX_ANDS; i++){
-		out >> whichAtts[i];
+ifstream & operator >> (ifstream &in, OrderMaker &om) {
+	in >> om.numAtts;
+	for(int i = 0; i < om.numAtts; i++){
+		in >> om.whichAtts[i];
 		int temp;
-		out >> temp;
-		whichTypes[i] = reinterpret_cast<Type>(temp);        
+		in >> temp;
+		om.whichTypes[i] = (Type)temp;        
 	}	
     return in;
 }
@@ -195,7 +194,7 @@ int CNF :: GetSortOrders (OrderMaker &left, OrderMaker &right) {
 		// now verify that it operates over atts from both tables
 		if (!((orList[i][0].operand1 == Left && orList[i][0].operand2 == Right) ||
 		      (orList[i][0].operand2 == Left && orList[i][0].operand1 == Right))) {
-			//continue;		
+		//	continue;		
 		}
 
 		// since we are here, we have found a join attribute!!!
@@ -228,7 +227,6 @@ int CNF :: GetSortOrders (OrderMaker &left, OrderMaker &right) {
 	
 	return left.numAtts;
 }
-
 
 void CNF :: Print () {
 

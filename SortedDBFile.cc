@@ -122,18 +122,18 @@ int SortedDBFile::GetNext (Record &fetchme) {
 		curMode = Read;
 		MergeSortedParts();
 	}
-	while(curPageIndex <= curFile.GetLength() - 2 ){	
-		while( curPage.GetFirst(&fetchme) ){//fetch record successfully
-			return 1;				
-		 }	
-		 if(curPageIndex < curFile.GetLength() - 2 ){
-			curPage.EmptyItOut();
-			curFile.GetPage(&curPage, ++curPageIndex); 
-		 }else{
-			break;
+	while(1){//if there is no "hole" in the file, while is not necessary
+		 if( curPage.GetFirst(&fetchme)){//fetch record successfully
+			return 1;
 		 }
-	}
-	return 0;
+		 if(++curPageIndex <= curFile.GetLength() - 2){
+			curPage.EmptyItOut();
+			curFile.GetPage(&curPage, curPageIndex); 
+			continue;
+		 }
+		break;
+     }	
+     return 0;
 }
 
 int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
@@ -162,7 +162,7 @@ int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 	}
 	OrderMaker searchOrder, dummy;
 	//build search OrderMaker using the query CNF
-	cnf.GetSortOrders (searchOrder, dummy);
+	cnf.GetSortOrders(searchOrder, dummy);
 	//generate the query OrderMaker using myOrder and SearchOrder
 	MakeQueryOrder(searchOrder);
 	//if the query OrderMaker is not empty
@@ -271,19 +271,11 @@ void SortedDBFile::MergeSortedParts() {
 //simple GetNext sub-function used when there's no attribute in query OrderMaker
 int SortedDBFile::GetNextRecord(Record &fetchme, CNF &cnf, Record &literal){
 	ComparisonEngine comp;
-	while(curPageIndex <= curFile.GetLength() - 2 ){	
-		while( curPage.GetFirst(&fetchme) ){//fetch record successfully
-			if(comp.Compare(&fetchme, &literal, &cnf)){
-				return 1;
-			}				
-		 }	
-		 if(curPageIndex < curFile.GetLength() - 2 ){
-			curPage.EmptyItOut();
-			curFile.GetPage(&curPage, ++curPageIndex); 
-		 }else{
-			break;
-		 }
-	}
+	while( GetNext(fetchme) ){//fetch record successfully
+		if(comp.Compare(&fetchme, &literal, &cnf)){
+			return 1;
+		}				
+	}	
 	return 0;
 }
 
@@ -344,29 +336,48 @@ int SortedDBFile::BinarySearch(Record &literal, Record &outRec) {
     	return -1;
     }
     //if current record "less than" the literal record, run the binary search
-    //initial the min and max page index
+    //initial the min and max page index	
+	bool matchflag = false;
+	int matchIndex;
 	int minIndex = curPageIndex;
 	int maxIndex = curFile.GetLength() - 2;
   	while (minIndex < maxIndex){
   		//compute the middle page index
     	int midIndex = (minIndex + maxIndex) / 2;
-  		//read first record of middle page
+   /* 	if(midIndex >= maxIndex){
+    		break;
+    	}*/
+    	//read first record of middle page
     	curFile.GetPage(&curPage, midIndex);
     	curPage.GetFirst(&outRec);
     	//if the record is "less than" literal
-      	if (comp.Compare(&outRec, &literal, &queryOrder) < 0){
-        	minIndex = midIndex + 1;//maybe don't plus 1
-      	}else{//if the record is "greater or equal to" literal
-       		maxIndex = midIndex;
+      	if (comp.Compare(&outRec, &literal, &queryOrder) < 0){//if the record is "<" literal
+      		minIndex = midIndex + 1;
+      	}else if(comp.Compare(&outRec, &literal, &queryOrder) > 0){//if the record is ">=" literal
+      	//if the record is "=" literal, there maybe other match records in preivous pages, set matchflag to true
+      	//to mark a match record is found, then keep on search the preivous pages
+      		if(comp.Compare(&outRec, &literal, &queryOrder) == 0){
+      			matchflag = true;
+      		} 
+      		maxIndex = midIndex;
        	}
     }
+    matchIndex = ( minIndex == curFile.GetLength() - 2) ? minIndex : minIndex - 1;
   	//deferred test for equality, reduce branch in while loop
   	//if find the match record, return the match page index
-	if ((maxIndex == minIndex) && (comp.Compare(&outRec, &literal, &queryOrder) == 0)){
-		return minIndex;
-	}else{//otherwise return -1
-		return -1;
-	}    	
+  	curFile.GetPage(&curPage, matchIndex);    
+  	while(curPage.GetFirst(&outRec)){
+  		if ((comp.Compare(&outRec, &literal, &queryOrder) == 0)){
+  			return matchIndex;
+  		}
+  	}
+  	if(matchflag == true){
+  		curFile.GetPage(&curPage, ++matchIndex);    
+  		curPage.GetFirst(&outRec);
+  		return matchIndex;
+  	}
+	//otherwise return -1
+	return -1;
 }
 
 //after the binary search locate match record, examine record one-by-one to find accepted record

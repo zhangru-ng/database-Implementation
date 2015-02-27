@@ -1,13 +1,15 @@
 #ifndef COMPARISON_H
 #define COMPARISON_H
 
+#include <fstream>
 #include "Record.h"
 #include "Schema.h"
 #include "File.h"
 #include "Comparison.h"
 #include "ComparisonEngine.h"
 
-
+using std::ofstream;
+using std::ifstream;
 // This stores an individual comparison that is part of a CNF
 class Comparison {
 
@@ -61,7 +63,7 @@ public:
 	friend ofstream & operator << (ofstream &out, const OrderMaker &om);
 
 	//overload ifstream >> operator to read OrderMaker from file
-	friend ifstream & operator >> (ifstream &in, const OrderMaker &om);
+	friend ifstream & operator >> (ifstream &in, OrderMaker &om);
 
 	//Get number of attributes of the ordermaker
 	int GetNumAtts();
@@ -97,7 +99,6 @@ class CNF {
 	int numAnds;
 
 public:
-
 	// this returns an instance of the OrderMaker class that
 	// allows the CNF to be implemented using a sort-based
 	// algorithm such as a sort-merge join.  Returns a 0 if and

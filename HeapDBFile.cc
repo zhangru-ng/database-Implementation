@@ -140,19 +140,19 @@ void HeapDBFile::Add (Record &addMe) {
 //current location of the pointer. After the function call returns, the 
 //porinter into the file is incremented, the return value is zero if and 
 //only if there is not a valid record returned from the function call
-int HeapDBFile::GetNext (Record &fetchme) {	 //first time call this function,
-										//MoveFirst() is needed 
-	while(curPageIndex <= curFile.GetLength() - 2 ){
+int HeapDBFile::GetNext (Record &fetchme) {	
+//first time call this function, MoveFirst() is needed 
+	while(1){//if there is no "hole" in the file, while is not necessary
 		 //GetFirst consume fetchme in curPage
 		 if( curPage.GetFirst(&fetchme)){//fetch record successfully
 			return 1;
 		 }
-		 if(curPageIndex < curFile.GetLength() - 2 ){
+		 if(++curPageIndex <= curFile.GetLength() - 2){
 			curPage.EmptyItOut();
-			curFile.GetPage(&curPage, ++curPageIndex); 
-		 }else{
-			break;
+			curFile.GetPage(&curPage, curPageIndex); 
+			continue;
 		 }
+		break;
      }	
      return 0;
 }
@@ -161,23 +161,16 @@ int HeapDBFile::GetNext (Record &fetchme) {	 //first time call this function,
 //the next record in the file that is accepted by the selection predicte
 //The literal record is used to check the selection predicate, and is 
 //created when the parse tree for the CNF is processed
-int HeapDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {//first time call this function,
-																//MoveFirst() is needed 
+int HeapDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
+//first time call this function, MoveFirst() is needed 
 	ComparisonEngine comp;
-	while(curPageIndex <= curFile.GetLength() - 2 ){	
-		while( curPage.GetFirst(&fetchme) ){//fetch record successfully
-			if(comp.Compare(&fetchme, &literal, &cnf)){
-				return 1;
-			}				
-		 }	
-		 if(curPageIndex < curFile.GetLength() - 2 ){
-			curPage.EmptyItOut();
-			curFile.GetPage(&curPage, ++curPageIndex); 
-		 }else{
-			break;
-		 }
-	}
+	while( GetNext(fetchme) ){//fetch record successfully
+		if(comp.Compare(&fetchme, &literal, &cnf)){
+			return 1;
+		}				
+	}	
 	return 0;
+
 }
 
 
