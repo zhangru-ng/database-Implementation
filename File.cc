@@ -231,7 +231,7 @@ void File :: AddPage (Page *addMe, off_t whichPage) {
 }
 
 
-void File :: Open (int fileLen, char *fName) {
+void File :: Open (int fileLen, const char *fName) {
 
 	// figure out the flags for the system open call
         int mode;
@@ -246,7 +246,6 @@ void File :: Open (int fileLen, char *fName) {
 #ifdef verbose
 	cout << "Opening file " << fName << " with "<< curLength << " pages.\n";
 #endif
-
 	// see if there was an error
 	if (myFilDes < 0) {
 		cerr << "BAD!  Open did not work for " << fName << "\n";

@@ -6,18 +6,10 @@ SortedDBFile::SortedDBFile () : myOrder(), runLength(0), curMode(Read), input(NU
 }
 
 SortedDBFile::~SortedDBFile () {
-	if(input != NULL){
-		delete[] input;
-	}
-	if(output != NULL){
-		delete[] output;
-	}
-	if(bq != NULL){
-		delete[] bq;
-	}
+	
 }
 
-int SortedDBFile::Create (char *f_path, fType f_type, void *startup) {
+int SortedDBFile::Create (const char *f_path, fType f_type, void *startup) {
 	string header = f_path;
 	//generate header file name	
 	header += ".header";
@@ -39,10 +31,11 @@ int SortedDBFile::Create (char *f_path, fType f_type, void *startup) {
 
 	//create the binary DBfile
 	curFile.Open (0, f_path);
+	filename = f_path;
 	return 1;
 }
 
-int SortedDBFile::Open (char *f_path) {
+int SortedDBFile::Open (const char *f_path) {
 	string header = f_path;
 	//generate header file name	
 	header += ".header";
@@ -59,10 +52,11 @@ int SortedDBFile::Open (char *f_path) {
 
 	metafile.close ();
 	curFile.Open (1, f_path);
+	filename = f_path;
 	return 1;
 }
 
-void SortedDBFile::Load (Schema &f_schema, char *loadpath) {
+void SortedDBFile::Load (Schema &f_schema, const char *loadpath) {
 	Record tempRec;
 	FILE *tableFile = fopen (loadpath, "r");
 
@@ -105,8 +99,8 @@ void SortedDBFile::Add (Record &rec) {
 void SortedDBFile::MoveFirst () {
 	//if DBFile's current mode is wrtie
 	if(curMode == Write){
-		MergeSortedParts();
 		curMode = Read;
+		MergeSortedParts();
 	}
 	isNewQuery = true;
 	curPageIndex = 0;
@@ -119,16 +113,21 @@ void SortedDBFile::MoveFirst () {
 
 int SortedDBFile::Close () {
 	if(curMode == Write){
-		MergeSortedParts();
 		curMode = Read;
+		MergeSortedParts();
 	}
 	curFile.Close ();
+	if(bq != NULL){
+		delete bq;
+		delete input;
+		delete output;		
+	}
+	return 1;
 }
 
 int SortedDBFile::GetNext (Record &fetchme) {
 	if(curMode == Write){
 		MergeSortedParts();
-		curMode = Read;
 	}
 	while(curPageIndex <= curFile.GetLength() - 2 ){	
 		while( curPage.GetFirst(&fetchme) ){//fetch record successfully
@@ -147,8 +146,8 @@ int SortedDBFile::GetNext (Record &fetchme) {
 int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 	//if DBFile's current mode is wrtie
 	if(curMode == Write){
-		MergeSortedParts();
 		curMode = Read;
+		MergeSortedParts();
 	}
 	//if the file is empty
 	if(curFile.GetLength() == 0 ){	
@@ -195,25 +194,73 @@ int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 	}	
 }
 
+//merge the file's internal BigQ with its other sorted data when change from write to read or close the file
 void SortedDBFile::MergeSortedParts() {
 	File tempFile;
 	Page tempPage;
 	Record tempRec1, tempRec2;
+	Record minRec;
 
+	string tempFilename = filename;
+	tempFilename += ".temp";
+	tempFile.Open(0, tempFilename.c_str());
 	ComparisonEngine comp;
 	int tempIndex = 0;
 	input->ShutDown ();
+	
 
-	while(tempPage.GetFirst(&tempRec2)){
-		while(output->Remove(&tempRec1)){
-			if(comp.Compare (&tempRec1,&tempRec2, &myOrder) < 0){
-
+	MoveFirst();	
+	if( GetNext(tempRec1) && output->Remove(&tempRec2) ){
+		while(1){
+			if(comp.Compare (&tempRec1,&tempRec2, &myOrder) <= 0){
+				minRec = tempRec1;
+				if(!GetNext(tempRec1)){
+					break;
+				}
+			}else{
+				minRec = tempRec2;
+				if(!output->Remove(&tempRec2)){
+					break;
+				}
 			}
+			if( tempPage.Append(&minRec) == 0){
+				//if the page is full, create a new page
+				tempFile.AddPage(&tempPage, tempIndex);  
+				tempPage.EmptyItOut();
+				tempIndex++;
+				tempPage.Append(&minRec);
+			}	
 		}
 	}
-		
+	
+	while(GetNext(tempRec1)){
+		if( tempPage.Append(&tempRec1) == 0){
+			//if the page is full, create a new page
+			tempFile.AddPage(&tempPage, tempIndex);  
+			tempPage.EmptyItOut();
+			tempIndex++;
+			tempPage.Append(&tempRec1);
+		}	
+	}
+	while(output->Remove(&tempRec2)){
+		if( tempPage.Append(&tempRec2) == 0){
+			//if the page is full, create a new page
+			tempFile.AddPage(&tempPage, tempIndex);  
+			tempPage.EmptyItOut();
+			tempIndex++;
+			tempPage.Append(&tempRec2);
+		}	
+	}
+	tempFile.AddPage(&tempPage, tempIndex);  
+	output->ShutDown();
+	tempFile.Close();
+	curFile.Close();
+	remove(filename.c_str());
+	rename(tempFilename.c_str(), filename.c_str());
+	curFile.Open(1, filename.c_str());	
 }
 
+//simple GetNext sub-function used when there's no attribute in query OrderMaker
 int SortedDBFile::GetNextRecord(Record &fetchme, CNF &cnf, Record &literal){
 	ComparisonEngine comp;
 	while(curPageIndex <= curFile.GetLength() - 2 ){	
@@ -232,7 +279,7 @@ int SortedDBFile::GetNextRecord(Record &fetchme, CNF &cnf, Record &literal){
 	return 0;
 }
 
-
+//use the file OrderMaker myOrder and SearchOrder derive from input CNF to built query OrderMaker
 void SortedDBFile::MakeQueryOrder(OrderMaker &searchOrder){
 	//Get attributes used to sort the file
 	int *sortedFileAtts = myOrder.GetAtts();
@@ -269,6 +316,7 @@ void SortedDBFile::MakeQueryOrder(OrderMaker &searchOrder){
 	isNewQuery = false;
 }
 
+//use in conjunction with query OrderMaker to speed up GetNext
 int SortedDBFile::BinarySearch(Record &literal, Record &outRec)
 {
 	curPage.GetFirst(&outRec);
@@ -312,6 +360,7 @@ int SortedDBFile::BinarySearch(Record &literal, Record &outRec)
 	}    	
 }
 
+//after the binary search locate match record, examine record one-by-one to find accepted record
 int SortedDBFile::FindAcceptedRecord(Record &fetchme, Record &literal, CNF &cnf){
 	ComparisonEngine comp;
 	if(comp.Compare(&fetchme, &literal, &cnf)){

@@ -6,10 +6,12 @@ DBFile::DBFile () : myInernalPoniter(NULL) {
 }
 
 DBFile::~DBFile () {
-
+	if(myInernalPoniter != NULL){
+		delete myInernalPoniter;
+	}
 }
 
-int DBFile::Create (char *f_path, fType f_type, void *startup) {
+int DBFile::Create (const char *f_path, fType f_type, void *startup) {
 	switch(f_type){
 		case heap: 
 			myInernalPoniter = new HeapDBFile();
@@ -28,7 +30,7 @@ int DBFile::Create (char *f_path, fType f_type, void *startup) {
 	return myInernalPoniter -> Create(f_path, f_type, startup);
 }
 
-int DBFile::Open (char *f_path) {
+int DBFile::Open (const char *f_path) {
 	//create the associated text file
 	string header = f_path;
 	header += ".header";			
@@ -58,7 +60,7 @@ int DBFile::Open (char *f_path) {
 	return myInernalPoniter -> Open(f_path);	
 }
 
-void DBFile::Load (Schema &f_schema, char *loadpath) {
+void DBFile::Load (Schema &f_schema, const char *loadpath) {
 	myInernalPoniter -> Load(f_schema, loadpath);
 }
 

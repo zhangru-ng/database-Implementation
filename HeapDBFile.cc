@@ -15,14 +15,14 @@ HeapDBFile::~HeapDBFile () {
 //store in an associated text file(.header). The second parameter is an
 //enumeration with three possible values: heap, sorted and tree. The 
 //return value is a one on success and a zero on failure
-int HeapDBFile::Create (char *f_path, fType f_type, void *startup) {
+int HeapDBFile::Create (const char *f_path, fType f_type, void *startup) {
 	string header = f_path;
 	//create the associated text file
 	header += ".header";
 	
 	ofstream metafile(header.c_str());
 	if (!metafile.is_open()){
-		cerr << "Can't open associated file for " << f_path << "\n";
+		cerr << "Can't create associated file for " << f_path << "\n";
 		return 0;
 	}
 	metafile << "heap" << endl;
@@ -39,7 +39,7 @@ int HeapDBFile::Create (char *f_path, fType f_type, void *startup) {
 //been created and then closed. The one parameter to this function is 
 //simply the physical location fo the file.The return value is a one on 
 //success and a zero on failure(open auxiliary text file at startup)
-int HeapDBFile::Open (char *f_path) {
+int HeapDBFile::Open (const char *f_path) {
 	//open the exist DBfile
 	curFile.Open (1, f_path);
 	return 1;
@@ -61,7 +61,7 @@ int HeapDBFile::Close () {
 //data to it using the SuckNextRecord function from Record.h. 
 //The character string passed to Load is the name of the data file to 
 //bulk load
-void HeapDBFile::Load (Schema &f_schema, char *loadpath) {
+void HeapDBFile::Load (Schema &f_schema, const char *loadpath) {
 	FILE *tableFile = fopen (loadpath, "r");
 	Record tempRec;
 	Page tempPage;

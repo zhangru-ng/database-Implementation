@@ -70,14 +70,19 @@ TEST_F(HeapFileTest, CreateFile) {
 	fclose(fp);	
 }
 
+TEST_F(HeapFileTest, CreateInNonExistDir) {
+	EXPECT_EQ( 0, dbfile.Create("nonexist/testFile.bin", heap , 0) );
+}
+
 TEST_F(HeapFileTest, OpenFile) {
-	int f_flag = dbfile.Open(testFile_path);
-	EXPECT_EQ( 1 , f_flag );	
+	EXPECT_EQ( 1 , dbfile.Open(testFile_path) );	
 }
 
 TEST_F(HeapFileTest, OpenNonExistFile) {
 	EXPECT_EQ( 0, dbfile.Open("dbfile/nonexist.bin") );	
 }
+
+
 
 TEST_F(HeapFileTest, CloseFile) {
  	EXPECT_EQ(1 , dbfile.Close() );     //close created file
@@ -234,12 +239,6 @@ TEST_F(HeapFileTest, GetNextFilterMixed2) {
 	EXPECT_EQ( 0 , err );	
 }
 
-TEST(HeapFileDeathTest, CreateInNonExistDir) {
-	::testing::FLAGS_gtest_death_test_style = "threadsafe";
-	DBFile dbfile;
-	EXPECT_DEATH(dbfile.Create("nonexist/testFile.bin", heap , 0), "BAD!  Open did not work for nonexist/testFile.bin");
-}
-
 TEST(HeapFileDeathTest, AddRecordLargerThanPage) {
 	::testing::FLAGS_gtest_death_test_style = "threadsafe";
 	DBFile dbfile;
@@ -253,12 +252,11 @@ TEST(HeapFileDeathTest, AddRecordLargerThanPage) {
 	EXPECT_DEATH( dbfile.Add (tempRec1), "This record is larger than a DBFile page");
 }
 
-
 /*
  * Big queue unit test
  * Written by Rui 2015.02.21	
  */ 
-/*
+
 char sort_tbl_dir[256] = "/cise/tmp/dbi_sp11/DATA/10M/nation.tbl"; 
 char sort_tbl_name[100] = "nation";
 char sort_cnf_dir[100] = "sortCNF/";
@@ -374,7 +372,7 @@ void initTestRun(vector<Record> &oneRunRecords){
 	}
 	fclose(tableFile);
 }
-
+/*
 TEST_F(BigQTest, SortIntAttribute) {
 	pthread_create (&thread1, NULL, producer, (void *)input);		
 	initOrderMaker(sortorder, "sort1", tbl_name);
@@ -488,6 +486,33 @@ TEST_F(BigQTest, RunLengthFifty) {
 	pthread_join (thread1, NULL);
 	pthread_join (thread2, NULL);
 	EXPECT_EQ( 0, tutil.errnum );
+}
+*/
+
+/*
+
+TEST(SortedFileTest, CreateSortedFile){
+	DBFile dbfile;
+	int runlen = 10;
+	OrderMaker sortorder;
+	initOrderMaker(sortorder, "sort1", tbl_name);
+	struct {OrderMaker *o; int l;} startup = {&sortorder, runlen};
+	dbfile.Create(testFile_path, sorted , &startup);
+	dbfile.Close();
+	FILE * fp = fopen(testFile_path,"r");
+	ASSERT_TRUE(fp != NULL);	
+	fclose(fp);	
+}
+
+TEST(SortedFileTest, SortedTypeHeaderFile){
+	DBFile dbfile;
+	int runlen = 10;
+	OrderMaker sortorder;
+	initOrderMaker(sortorder, "sort1", tbl_name);
+	struct {OrderMaker *o; int l;} startup = {&sortorder, runlen};
+	dbfile.Create(testFile_path, sorted , &startup);
+	dbfile.Close();
+	dbfile.Open(testFile_path);
 }
 
 */

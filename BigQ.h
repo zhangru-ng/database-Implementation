@@ -6,11 +6,13 @@
 #include <queue>
 #include <algorithm>
 #include <stdlib.h>
+#include <time.h>
+#include <string>
 #include "Pipe.h"
 #include "File.h"
 #include "Record.h"
 #include "Schema.h"
-#include <time.h>
+
 
 
 using namespace std;
@@ -75,7 +77,7 @@ private:
   Pipe &in;
   Pipe &out;
   OrderMaker &sortorder;
-  char *runsFileName;
+  string runsFileName;
   File runsFile;
   int runlen;
   int runNum;

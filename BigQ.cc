@@ -4,14 +4,14 @@
 BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl),runNum(0), workthread(){
 	if(runlen > 0){
 	//prevent memory leak(_dl_allocate_tls), if workerthread is detached
-	/*pthread_attr_t attr;
-	pthread_attr_init(&attr);
-   	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);*/
+		pthread_attr_t attr;
+		pthread_attr_init(&attr);
+   		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
    	//create own worker thread for this BigQ	
  		pthread_create (&workthread, NULL, &workerthread_wrapper, this); 	
- 	//pthread_attr_destroy(&attr);
+ 		pthread_attr_destroy(&attr);
  	//prevent memory leak(_dl_allocate_tls), if workerthread is joinable
- 		pthread_join (workthread, NULL); 
+ 		//pthread_join (workthread, NULL); 
 	}else{
 		cerr << "ERROR in BigQ: run length should greater than 0!";
 		exit(1);
@@ -34,7 +34,7 @@ void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
 	double cpu_time_used;
 	start = clock(); 				
 	runsFileName="/cise/tmp/rui/tempfile.bin";
-	runsFile.Open(0, runsFileName);
+	runsFile.Open(0, runsFileName.c_str());
 	vector<Run> runs;
 	//First Phase of TPMMS
 	FirstPhase(runs);
@@ -45,7 +45,7 @@ void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
 	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 	runsFile.Close();
 	//cout << "TPMMS spent totally " << cpu_time_used << " senconds cpu time" << endl;		
-	if(remove(runsFileName)){
+	if(remove(runsFileName.c_str())){
 		cerr << "can't delete" << runsFileName;
 	}
 }
