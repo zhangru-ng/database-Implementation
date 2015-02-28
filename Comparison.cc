@@ -107,6 +107,8 @@ OrderMaker :: OrderMaker(Schema *schema) {
         }
 }
 
+/*******************************Added by Rui: 2015.2.26*******************************************/
+//overload ofstream << operator to write OrderMaker to file
 ofstream & operator << (ofstream &out, const OrderMaker &om) {    
 	out << om.numAtts << endl;
 	for(int i = 0; i < om.numAtts; i++){
@@ -115,7 +117,8 @@ ofstream & operator << (ofstream &out, const OrderMaker &om) {
 	}	
     return out;
 }
-	 
+
+//overload ifstream >> operator to read OrderMaker from file	 
 ifstream & operator >> (ifstream &in, OrderMaker &om) {
 	in >> om.numAtts;
 	for(int i = 0; i < om.numAtts; i++){
@@ -127,22 +130,28 @@ ifstream & operator >> (ifstream &in, OrderMaker &om) {
     return in;
 }
 
+//following methods are used to construct query OrderMaker
+//Get number of attributes of the ordermaker
 int OrderMaker :: GetNumAtts(){
 	return numAtts;
 }
 
+//Get attribute array of the ordermaker
 int * OrderMaker :: GetAtts(){
 	return whichAtts;
 }
 
+//Get attribute Type array of the ordermaker
 Type * OrderMaker :: GetType(){
 	return whichTypes;
 }
 
+//clear the ordermaker
 void OrderMaker :: Clear() {
 	numAtts = 0;
 }
 
+//Add a attribute to the ordermaker
 int OrderMaker :: Add(int attIndex, Type attType){
 	if( numAtts < MAX_ANDS ){
 		whichAtts[numAtts] = attIndex;			
@@ -154,6 +163,7 @@ int OrderMaker :: Add(int attIndex, Type attType){
 	}		
 	return 1;
 }
+/**************************************************************************************************/
 
 void OrderMaker :: Print () {
 	printf("NumAtts = %5d\n", numAtts);

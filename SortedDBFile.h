@@ -35,11 +35,11 @@ private:
 	//simple GetNext sub-function used when there's no attribute in query OrderMaker
 	int GetNextRecord(Record &fetchme, CNF &cnf, Record &literal);
 	//use the file OrderMaker myOrder and SearchOrder derive from input CNF to built query OrderMaker
-	void MakeQueryOrder(OrderMaker &SearchOrder);
+	void MakeQueryOrder(OrderMaker &SearchOrder, int *litOrder);
 	//use in conjunction with query OrderMaker to speed up GetNext
-	int BinarySearch(Record &literal, Record &outRec);
+	int BinarySearch(Record &literal, Record &outRec, int *litOrder);
 	//after the binary search locate match record, examine record one-by-one to find accepted record
-	int FindAcceptedRecord(Record &fetchme, Record &literal, CNF &cnf);
+	int FindAcceptedRecord(Record &fetchme, Record &literal, CNF &cnf, int *litOrder);
 
 public:
 	SortedDBFile (); 

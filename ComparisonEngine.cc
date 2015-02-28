@@ -72,6 +72,71 @@ int ComparisonEngine :: Compare(Record *left, Record *right, OrderMaker *orderUs
 
 	return 0;
 }
+/********************Added by Rui: 2015.2.28**********************************/
+//use to compare record and literal in sorted file binary search
+int ComparisonEngine :: Compare(Record *left, Record *literal, OrderMaker *orderUs, int *litOrder) {
+
+	char *val1, *val2;
+
+	char *left_bits = left->GetBits();
+	char *lit_bits = literal->GetBits();
+
+	for (int i = 0; i < orderUs->numAtts; i++) {
+		val1 = left_bits + ((int *) left_bits)[orderUs->whichAtts[i] + 1];
+		val2 = lit_bits + ((int *) lit_bits)[litOrder[i] + 1];
+	
+		// these are used to store the two operands, depending on their type
+		int val1Int, val2Int;
+		double val1Double, val2Double;
+		
+		// now check the type and do the comparison
+		switch (orderUs->whichTypes[i]) {
+	
+			// first case: we are dealing with integers
+			case Int:
+	
+			// cast the two bit strings to ints
+			val1Int = *((int *) val1);
+			val2Int = *((int *) val2);
+	
+			// and do the comparison
+			if (val1Int < val2Int) 
+				return -1;
+			else if (val1Int > val2Int)
+				return 1;
+	
+			break;
+	
+	
+			// second case: dealing with doubles
+			case Double:
+	
+			// cast the two bit strings to doubles
+			val1Double = *((double *) val1);
+			val2Double = *((double *) val2);
+	
+			// and do the comparison
+			if (val1Double < val2Double)
+				return -1;
+			else if (val1Double > val2Double)
+				return 1;
+	
+			break;
+	
+	
+			// last case: dealing with strings
+			default:
+			int sc = strcmp (val1, val2);
+			if (sc != 0)
+				return sc;
+
+			break;
+	
+		}
+	}
+
+	return 0;
+}
 
 
 // returns a -1, 0, or 1 depending upon whether left is less then, equal to, or greater

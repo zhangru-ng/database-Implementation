@@ -6,8 +6,7 @@
 #include <queue>
 #include <algorithm>
 #include <stdlib.h>
-#include <time.h>
-#include <string>
+#include <string.h>
 #include "Pipe.h"
 #include "File.h"
 #include "Record.h"
@@ -77,7 +76,7 @@ private:
   Pipe &in;
   Pipe &out;
   OrderMaker &sortorder;
-  string runsFileName;
+  char runsFileName[256];
   File runsFile;
   int runlen;
   int runNum;

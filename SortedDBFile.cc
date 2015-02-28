@@ -1,15 +1,18 @@
 
 #include "SortedDBFile.h"
 
-SortedDBFile::SortedDBFile () : myOrder(), runLength(0), curMode(Read), input(NULL), output(NULL), bq(NULL), isNewQuery(true) {	
-
+SortedDBFile::SortedDBFile () : myOrder(), runLength(0), curMode(Read), filename(), input(NULL), output(NULL), bq(NULL), isNewQuery(true), queryOrder() {	
 }
 
 SortedDBFile::~SortedDBFile () {
-	
 }
 
 int SortedDBFile::Create (const char *f_path, fType f_type, void *startup) {
+	//if no startup configuration passed in, can't create sorted file
+	if(startup == NULL){
+		cerr << "ERROR: Can't create sorted file, no startup configuration";
+		exit(1);
+	}
 	string header = f_path;
 	//generate header file name	
 	header += ".header";
@@ -20,7 +23,7 @@ int SortedDBFile::Create (const char *f_path, fType f_type, void *startup) {
 		return 0;
 	}
 	metafile << "sorted" << endl;
-	//read data from startup
+	//read data from startup	
 	SortInfo* sip = reinterpret_cast<SortInfo*> (startup);
 	myOrder = *(sip -> order);
 	runLength = sip -> runlen;
@@ -51,8 +54,12 @@ int SortedDBFile::Open (const char *f_path) {
 	//ifstream operater >> is overloaded for OrderMaker
 	metafile >> myOrder;
 	metafile >> runLength;
-
 	metafile.close ();
+	//someone may externally modify the header file and make attribute number or run length <= 0
+	if(myOrder.GetNumAtts() <= 0 || runLength <= 0){
+		cerr << "ERROR: Can't open sorted file, startup configuration is wrong in header file";
+		exit(1);
+	}	
 	curFile.Open (1, f_path);
 	filename = f_path;
 	return 1;
@@ -110,9 +117,9 @@ int SortedDBFile::Close () {
 	}
 	curFile.Close ();
 	if(bq != NULL){
-		delete bq;
 		delete input;
-		delete output;		
+		delete output;	
+		delete bq;			
 	}
 	return 1;
 }
@@ -149,26 +156,19 @@ int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 	//in practice, the caller will never switches parameters without call MoveFirst or some kind of write
 	//so only recompute queryOrder and BinarySearch after MoveFirst or some kind of write
 	if(isNewQuery = false){
-		//if the query OrderMaker is not empty
-		if(queryOrder.GetNumAtts() > 0){
-			if(GetNext(fetchme)){
-				return FindAcceptedRecord(fetchme, literal, cnf);
-			}else{
-				return 0;
-			}			
-		}else{//otherwise use simple get next function without help of query ordermaker
-			return GetNextRecord(fetchme, cnf, literal);
-		}
+		return GetNextRecord(fetchme, cnf, literal);
 	}
 	OrderMaker searchOrder, dummy;
 	//build search OrderMaker using the query CNF
 	cnf.GetSortOrders(searchOrder, dummy);
+	//array for converting query order to literal order
+	int lit_order[MAX_ANDS];
 	//generate the query OrderMaker using myOrder and SearchOrder
-	MakeQueryOrder(searchOrder);
+	MakeQueryOrder(searchOrder, lit_order);
 	//if the query OrderMaker is not empty
 	if(queryOrder.GetNumAtts() > 0){
 		//use query OrderMaker to run a binary search on the file
-		int matchIndex = BinarySearch(literal, fetchme);
+		int matchIndex = BinarySearch(literal, fetchme, lit_order);
 		//if no record that “equals” the literal record
 		if(matchIndex == -1){
 			//current page index out of file, indicate no record is accepted in whole file
@@ -176,12 +176,13 @@ int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 			return 0;
 		}else{
 			curPageIndex = matchIndex;
-			return FindAcceptedRecord(fetchme, literal, cnf);
+			return FindAcceptedRecord(fetchme, literal, cnf, lit_order);
 		}
 	}else{
 		//has no useful sorting attributes, search from first current record
 		return GetNextRecord(fetchme, cnf, literal);
 	}	
+
 }
 
 //initial the internal BigQ of this file
@@ -280,7 +281,7 @@ int SortedDBFile::GetNextRecord(Record &fetchme, CNF &cnf, Record &literal){
 }
 
 //use the file OrderMaker myOrder and SearchOrder derive from input CNF to built query OrderMaker
-void SortedDBFile::MakeQueryOrder(OrderMaker &searchOrder){
+void SortedDBFile::MakeQueryOrder(OrderMaker &searchOrder, int *litOrder){
 	//Get attributes used to sort the file
 	int *sortedFileAtts = myOrder.GetAtts();
 	//Get attributes type used to sort the file
@@ -303,6 +304,7 @@ void SortedDBFile::MakeQueryOrder(OrderMaker &searchOrder){
 			if( searchAtts[j] == sortedFileAtts[i] ){
 				//add the attribute to the query OrderMaker
 				if( queryOrder.Add(sortedFileAtts[i], sortedFileType[i]) ){
+					litOrder[i] = j;
 					break;
 				}				
 			}
@@ -320,12 +322,12 @@ void SortedDBFile::MakeQueryOrder(OrderMaker &searchOrder){
 //use in conjunction with query OrderMaker to speed up GetNext
 //if find the match record, return the match page index
 //otherwise return -1
-int SortedDBFile::BinarySearch(Record &literal, Record &outRec) {
+int SortedDBFile::BinarySearch(Record &literal, Record &outRec, int *litOrder) {
 	if(GetNext(outRec) == 0){
 		return -1;
 	}
 	ComparisonEngine comp;
-	int compare_result = comp.Compare(&outRec, &literal, &queryOrder);
+	int compare_result = comp.Compare(&outRec, &literal, &queryOrder, litOrder);
 	//if current record "equal to" the literal record, return current page index
     if(compare_result == 0){
     	return curPageIndex;
@@ -336,45 +338,54 @@ int SortedDBFile::BinarySearch(Record &literal, Record &outRec) {
     	return -1;
     }
     //if current record "less than" the literal record, run the binary search
-    //initial the min and max page index	
-	bool matchflag = false;
+  
+  	bool scanNextPage = false;
 	int matchIndex;
+	//initial the min and max page index	
 	int minIndex = curPageIndex;
 	int maxIndex = curFile.GetLength() - 2;
   	while (minIndex < maxIndex){
   		//compute the middle page index
     	int midIndex = (minIndex + maxIndex) / 2;
-   /* 	if(midIndex >= maxIndex){
-    		break;
-    	}*/
-    	//read first record of middle page
+      	//read first record of middle page
     	curFile.GetPage(&curPage, midIndex);
     	curPage.GetFirst(&outRec);
-    	//if the record is "less than" literal
-      	if (comp.Compare(&outRec, &literal, &queryOrder) < 0){//if the record is "<" literal
+    	//if the record is "<" literal
+      	if (comp.Compare(&outRec, &literal, &queryOrder, litOrder) < 0){
       		minIndex = midIndex + 1;
-      	}else if(comp.Compare(&outRec, &literal, &queryOrder) > 0){//if the record is ">=" literal
-      	//if the record is "=" literal, there maybe other match records in preivous pages, set matchflag to true
-      	//to mark a match record is found, then keep on search the preivous pages
-      		if(comp.Compare(&outRec, &literal, &queryOrder) == 0){
-      			matchflag = true;
+      	}
+      	//if the record is ">=" literal
+      	else{
+      	//if the record is "=" literal, there maybe other match records in preivous pages, 
+      	//keep on search the preivous pages. When the binary search terminate, scan one more 
+      	//page to find match record
+      		if(comp.Compare(&outRec, &literal, &queryOrder, litOrder) == 0){
+      			//set scanNextPage to true to mark a match record is found, 
+      			scanNextPage = true;
       		} 
       		maxIndex = midIndex;
        	}
     }
-    matchIndex = ( minIndex == curFile.GetLength() - 2) ? minIndex : minIndex - 1;
-  	//deferred test for equality, reduce branch in while loop
+    //when the binary search terminate, minIndex = maxIndex, if the match record exists, its Page index is midIndex
+    //which is minIndex - 1 (or maxIndex - 1). However, there is an exception when minIndex reach end of file
+    matchIndex = minIndex - 1;
+   	//deferred test for equality to ensure find the first match record
   	//if find the match record, return the match page index
   	curFile.GetPage(&curPage, matchIndex);    
   	while(curPage.GetFirst(&outRec)){
-  		if ((comp.Compare(&outRec, &literal, &queryOrder) == 0)){
+  		if ((comp.Compare(&outRec, &literal, &queryOrder, litOrder) == 0)){
   			return matchIndex;
   		}
   	}
-  	if(matchflag == true){
+  	//if minIndex reach the end of file, can not determine whether the match record in second last page or not, 
+  	//or if scanNextPage is true, scan one more page to ensure no match record is lost
+  	if( scanNextPage == true || minIndex == curFile.GetLength() - 2 ){
   		curFile.GetPage(&curPage, ++matchIndex);    
-  		curPage.GetFirst(&outRec);
-  		return matchIndex;
+  		while(curPage.GetFirst(&outRec)){
+  			if ((comp.Compare(&outRec, &literal, &queryOrder, litOrder) == 0)){
+  				return matchIndex;
+  			}
+  		}
   	}
 	//otherwise return -1
 	return -1;
@@ -382,35 +393,26 @@ int SortedDBFile::BinarySearch(Record &literal, Record &outRec) {
 
 //after the binary search locate match record, examine record one-by-one to find accepted record
 //return 1 if find a accepted record, otherwise return 0 
-int SortedDBFile::FindAcceptedRecord(Record &fetchme, Record &literal, CNF &cnf){
+int SortedDBFile::FindAcceptedRecord(Record &fetchme, Record &literal, CNF &cnf, int *litOrder){
 	ComparisonEngine comp;
 	//if the query CNF accept the record, return 1
 	if(comp.Compare(&fetchme, &literal, &cnf)){
 		return 1;
 	}else{
 		//scan record one-by-one
-		while(curPageIndex <= curFile.GetLength() - 2 ){	
-			while( curPage.GetFirst(&fetchme) ){//fetch record successfully
-				//if query OrderMaker accept the record
-				if(comp.Compare(&fetchme, &literal, &queryOrder) == 0){
-					//if query CNF  accept the record, return 1
-					if(comp.Compare(&fetchme, &literal, &cnf)){
-						return 1;
-					}				
-				}
-				//if query OrderMaker dosen't accept the record, return 0
-				else{
-					return 0;
-				}
-			}	
-			//read next page
-			if(curPageIndex < curFile.GetLength() - 2 ){
-				curPage.EmptyItOut();
-				curFile.GetPage(&curPage, ++curPageIndex); 
-		 	}else{
-				break;
-		 	}
-		}
+		while( GetNext(fetchme) ){//fetch record successfully
+			//if query OrderMaker accept the record
+			if(comp.Compare(&fetchme, &literal, &queryOrder, litOrder) == 0){
+				//if query CNF  accept the record, return 1
+				if(comp.Compare(&fetchme, &literal, &cnf)){
+					return 1;
+				}				
+			}
+			//if query OrderMaker dosen't accept the record, return 0
+			else{
+				return 0;
+			}
+		}	
 		return 0;
 	}
 }

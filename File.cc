@@ -27,7 +27,6 @@ Page :: ~Page () {
 	delete myRecs;
 }
 
-
 void Page :: EmptyItOut () {
 
 	// get rid of all of the records
@@ -211,7 +210,6 @@ void File :: AddPage (Page *addMe, off_t whichPage) {
 		// set the size
 		curLength = whichPage + 1;	
 	}
-
 	// now write the page
 	char *bits = new (std::nothrow) char[PAGE_SIZE];
 	if (bits == NULL)
@@ -219,11 +217,10 @@ void File :: AddPage (Page *addMe, off_t whichPage) {
 		cout << "ERROR : Not enough memory. EXIT !!!\n";
 		exit(1);
 	}
-
-	memset(bits, 0, PAGE_SIZE); //prevent memory leak
 	addMe->ToBinary (bits);
-	lseek (myFilDes, PAGE_SIZE * whichPage, SEEK_SET);
+	lseek (myFilDes, PAGE_SIZE * whichPage, SEEK_SET);	
 	write (myFilDes, bits, PAGE_SIZE);
+
 	delete [] bits;
 #ifdef F_DEBUG
 	cerr << " File: curLength " << curLength << " whichPage " << whichPage << endl;

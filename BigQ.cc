@@ -4,12 +4,12 @@
 BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl),runNum(0), workthread(){
 	if(runlen > 0){
 	//prevent memory leak(_dl_allocate_tls), if workerthread is detached
-		pthread_attr_t attr;
-		pthread_attr_init(&attr);
-   		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	/*pthread_attr_t attr;
+	pthread_attr_init(&attr);
+   	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);*/
    	//create own worker thread for this BigQ	
  		pthread_create (&workthread, NULL, &workerthread_wrapper, this); 	
- 		pthread_attr_destroy(&attr);
+ 	//pthread_attr_destroy(&attr);
  	//prevent memory leak(_dl_allocate_tls), if workerthread is joinable
  		//pthread_join (workthread, NULL); 
 	}else{
@@ -19,35 +19,29 @@ BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortor
 }
 
 BigQ::~BigQ () {
-	
+	if(remove(runsFileName)){
+		cerr << "can't delete" << runsFileName;
+	}
 }
 //C++ class member functions have a hidden this parameter passed in, 
 //use a static class method (which has no this parameter) to bootstrap the class
 void* BigQ::workerthread_wrapper (void* arg) {
-    ( reinterpret_cast<BigQ *>(arg) )->TPM_MergeSort();
-
+    ( reinterpret_cast<BigQ*>(arg) )->TPM_MergeSort();
 }
 
 //two phase multiway merge sort
 void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
-	double start, end;
-	double cpu_time_used;
-	start = clock(); 				
-	runsFileName="/cise/tmp/rui/tempfile.bin";
-	runsFile.Open(0, runsFileName.c_str());
+	strcpy(runsFileName, "/cise/tmp/rui/tempfile0b0q0x.bin");
+	runsFile.Open(0, runsFileName);
 	vector<Run> runs;
 	//First Phase of TPMMS
 	FirstPhase(runs);
 	//Second Phase of TPMMS
 	SecondPhase(runs);
-	out.ShutDown ();	
-	end = clock();
-	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+	out.ShutDown ();		
 	runsFile.Close();
 	//cout << "TPMMS spent totally " << cpu_time_used << " senconds cpu time" << endl;		
-	if(remove(runsFileName.c_str())){
-		cerr << "can't delete" << runsFileName;
-	}
+	 pthread_exit(NULL);
 }
 
 void BigQ::SortInRun(vector<Record> &oneRunRecords){
@@ -70,14 +64,12 @@ void BigQ::WriteRunToFile(vector<Record> &oneRunRecords, int &beg, int &len){
 		tempIndex = runsFile.GetLength() - 1;
 	}
 	else{ //length less than 0, something wrong with current file
-		cerr << "File length less than 0 in DBFile add\n";
+		cerr << "ERROR in BigQ tempFile: File length less than 0\n";
 		exit (1);
 	}
-
 	beg = tempIndex;
-
-	while (recIndex < oneRunRecords.size()) {//while there are records in this oneRunRecords
-		tempRec.Consume(&oneRunRecords[recIndex]);
+	for(vector<Record>::iterator it = oneRunRecords.begin(); it != oneRunRecords.end(); ++it){
+		tempRec.Consume(&(*it));
 		if( tempPage.Append(&tempRec) == 1){
 			recIndex++;
 		}else{
@@ -91,7 +83,7 @@ void BigQ::WriteRunToFile(vector<Record> &oneRunRecords, int &beg, int &len){
 	}		 
 	//there may be less than one page records in the last page 
 	runsFile.AddPage(&tempPage, tempIndex);  
-
+	//compute the length of this run
 	len = tempIndex - beg + 1;
 }
 
@@ -170,24 +162,22 @@ void BigQ::LinearScan(vector<Run> &runs){
 	Sorter sorter(sortorder);
 	QueueMember tempQM;
 	Record minRec;
-	vector<Run>::iterator it;
 	vector<QueueMember> qm;
-	vector<QueueMember>::iterator itq;
-	
-	for (it=runs.begin(); it!=runs.end(); ++it){
+		
+	for (vector<Run>::iterator it=runs.begin(); it!=runs.end(); ++it){
 		tempQM.runID = it->GetRunID();
 		it->GetNext(tempQM.rec);
 		qm.push_back(tempQM);
 	}
 	while( runCount < runNum ){
-		for (itq=qm.begin(); itq!=qm.end(); ++itq){
+		for (vector<QueueMember>::iterator itq=qm.begin(); itq!=qm.end(); ++itq){
 			if(itq->runID >=0){
 				minRec = itq->rec;
 				minID = itq->runID;
 				break;
 			}			
 		}	
-		for (itq=qm.begin(); itq!=qm.end(); ++itq){
+		for (vector<QueueMember>::iterator itq=qm.begin(); itq!=qm.end(); ++itq){
 			if(itq->runID >=0){
 				if(sorter(minRec, itq->rec) ){
 					minRec = itq->rec;
@@ -215,12 +205,11 @@ void BigQ::PriorityQueue(vector<Run> &runs){
 	int minID = 0;
 	Sorter sorter(sortorder);
 	QueueMember tempQM;
-	vector<Run>::iterator it;
 	//priority queue of first record of each run
 	priority_queue<QueueMember, vector<QueueMember>, Sorter>pqueue(sorter);
 
 	//for (it=runs.begin()+0; it!=runs.begin()+runNum; ++it){
-	for (it=runs.begin(); it!=runs.end(); ++it){
+	for (vector<Run>::iterator it=runs.begin(); it!=runs.end(); ++it){
 		tempQM.runID = it->GetRunID();
 		it->GetNext(tempQM.rec);
 		pqueue.push(tempQM);
@@ -271,6 +260,7 @@ void BigQ::PriorityQueue(vector<Run> &runs){
  Run::~Run(){ 	
  }
 
+//"=" operator
  Run& Run::operator = (const Run r){
  	runID = r.runID;
  	curRunLen = r.curRunLen;
@@ -288,7 +278,7 @@ int Run::GetRunID(){
 
 //get the next record of this run 
 int Run::GetNext(Record &curRec){
- 	while(runCurIndex < runBegIndex + curRunLen){
+ 	while(1){
  		if(curPage.GetFirst(&curRec)){
  			return 1;
  		}else{

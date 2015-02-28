@@ -32,6 +32,12 @@ public:
         // when both of the records come from the SAME RELATION
 	int Compare(Record *left, Record *right, OrderMaker *orderUs);
 
+	/********************Added by Rui: 2015.2.28**********************************/
+	//attributes permutation in literal record is compress(add one at a time from 0) 
+	//and not the same as Ordermaker, the a subscripte converting arry litOrder 
+	//match the subscript of literal to OrderMaker.whichAtts[]
+	int Compare(Record *left, Record *literal, OrderMaker *orderUs, int *litOrder);
+
 	// similar to the last function, except that this one works in the
         // case where the two records come from different input relations
 	// it is used to do sorts for a sort-merge join
