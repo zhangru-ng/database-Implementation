@@ -1,5 +1,5 @@
-#ifndef TEST_H
-#define TEST_H
+#ifndef A22TEST_H
+#define A22TEST_H
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
@@ -41,7 +41,7 @@ public:
 	relation (char *_name, Schema *_schema, char *_prefix) :
 		rname (_name), rschema (_schema), prefix (_prefix) {
 		sprintf (rpath, "%s%s.bin", prefix, rname);
-	}
+	}	
 	char* name () { return rname; }
 	char* path () { return rpath; }
 	Schema* schema () { return rschema;}

@@ -96,7 +96,7 @@ void SortedDBFile::Add (Record &rec) {
 }
 
 void SortedDBFile::MoveFirst () {
-	//if DBFile's current mode is wrtie
+	//if DBFile's current mode is wrtie, merge bigQ and sorted file
 	if(curMode == Write){
 		curMode = Read;
 		MergeSortedParts();
@@ -111,6 +111,7 @@ void SortedDBFile::MoveFirst () {
 }
 
 int SortedDBFile::Close () {
+	//if DBFile's current mode is wrtie, merge bigQ and sorted file
 	if(curMode == Write){
 		curMode = Read;
 		MergeSortedParts();
@@ -125,6 +126,7 @@ int SortedDBFile::Close () {
 }
 
 int SortedDBFile::GetNext (Record &fetchme) {
+	//if DBFile's current mode is wrtie, merge bigQ and sorted file
 	if(curMode == Write){
 		curMode = Read;
 		MergeSortedParts();
@@ -144,7 +146,7 @@ int SortedDBFile::GetNext (Record &fetchme) {
 }
 
 int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
-	//if DBFile's current mode is wrtie
+	//if DBFile's current mode is wrtie, merge bigQ and sorted file
 	if(curMode == Write){
 		curMode = Read;
 		MergeSortedParts();
@@ -208,65 +210,100 @@ void SortedDBFile::initBigQ(){
 
 //merge the file's internal BigQ with its other sorted data when change from write to read or close the file
 void SortedDBFile::MergeSortedParts() {
-	Record tempRec1, tempRec2, minRec;
+	Record tempRec;
 	Page tempPage;
 	File tempFile;
+	int tempIndex = 0;
 	string tempFilename = filename;
 	tempFilename += ".temp";
-	tempFile.Open(0, tempFilename.c_str());
-	ComparisonEngine comp;
-	int tempIndex = 0;
+	//open the temporary file to store merged records
+	tempFile.Open(0, tempFilename.c_str());	
+	//shut down input pipe
 	input->ShutDown ();	
+	//Merge records in sorted file and bigQ until one of them reaches the end
+	MergeRecord(tempPage, tempFile, tempIndex);
+	//add the remaining records in the old DBFile to new DBFile	
+	while(GetNext(tempRec)){
+		AddRecord(tempRec, tempPage, tempFile, tempIndex);
+	}
+	//add the remaining records in the output pipe to new DBFile
+	while(output->Remove(&tempRec)){
+		AddRecord(tempRec, tempPage, tempFile, tempIndex);
+	}
+	//last page may not full to trigger to writing to file
+	tempFile.AddPage(&tempPage, tempIndex);  	
+	//shut down output pipe
+	output->ShutDown();
+	//there is no way to activate pipes after they are shut down, allocte new pipes when next write occur
+	delete input;
+	delete output;	
+	delete bq;	
+	//c++ delete may not set pointer to NULL
+	input = NULL;
+	output = NULL;
+	bq = NULL;
+	//close new merged file and old sorted file
+	tempFile.Close();
+	curFile.Close();
+	//remove the old DBFile
+	remove(filename.c_str());
+	//rename the new merged DBFile to old name
+	rename(tempFilename.c_str(), filename.c_str());
+	//open the new merged DBFile
+	curFile.Open(1, filename.c_str());	
+}
 
+void SortedDBFile::AddRecord(Record &tempRec, Page &tempPage, File &tempFile, int &tempIndex){
+	if( tempPage.Append(&tempRec) == 0){
+		//if the page is full, create a new page
+		tempFile.AddPage(&tempPage, tempIndex);  
+		tempPage.EmptyItOut();
+		tempIndex++;
+		tempPage.Append(&tempRec);
+	}	
+}
+
+void SortedDBFile::MergeRecord(Page &tempPage, File &tempFile, int &tempIndex){
+	Record tempRec1, tempRec2, minRec;
+	ComparisonEngine comp;	
 	MoveFirst();	
-	if( GetNext(tempRec1) && output->Remove(&tempRec2) ){
+	Schema mySchema("catalog","customer");
+	//true if sorted file has at least one record
+	bool fileHasRecord = GetNext(tempRec1);
+	//true if BigQ has at least one record
+	bool bigQHasRecord = output->Remove(&tempRec2);
+	if(bigQHasRecord){tempRec2.Print(&mySchema);}
+	//if both the sorted DBFile and output pipe have at least one record
+	if( fileHasRecord && bigQHasRecord ){
 		while(1){
-			if(comp.Compare (&tempRec1,&tempRec2, &myOrder) <= 0){
-				minRec = tempRec1;
-				if(!GetNext(tempRec1)){
-					break;
-				}
-			}else{
-				minRec = tempRec2;
-				if(!output->Remove(&tempRec2)){
+			//if the record in old DBFile is smaller
+			if(comp.Compare (&tempRec1,&tempRec2, &myOrder) < 0){
+				minRec.Consume(&tempRec1);
+				AddRecord(minRec, tempPage, tempFile, tempIndex);
+				//get next record in DBFile for next comparion, if no record left then break
+				if(GetNext(tempRec1) == 0){				
+					AddRecord(tempRec2, tempPage, tempFile, tempIndex);
 					break;
 				}
 			}
-			if( tempPage.Append(&minRec) == 0){
-				//if the page is full, create a new page
-				tempFile.AddPage(&tempPage, tempIndex);  
-				tempPage.EmptyItOut();
-				tempIndex++;
-				tempPage.Append(&minRec);
-			}	
+			//if the record in output pipe is smaller
+			else{
+				minRec.Consume(&tempRec2);
+				AddRecord(minRec, tempPage, tempFile, tempIndex);
+				//get next record in output pipe for next comparion, if no record left then break
+				if(output->Remove(&tempRec2) == 0){					
+					AddRecord(tempRec1, tempPage, tempFile, tempIndex);
+					break;
+				}
+			}
 		}
+	}else if(fileHasRecord){
+		//if sorted file has record and bigQ is empty
+		AddRecord(tempRec1, tempPage, tempFile, tempIndex);
+	}else if(bigQHasRecord){
+		//if bigQ has record and sorted file is empty
+		AddRecord(tempRec2, tempPage, tempFile, tempIndex);
 	}
-	
-	while(GetNext(tempRec1)){
-		if( tempPage.Append(&tempRec1) == 0){
-			//if the page is full, create a new page
-			tempFile.AddPage(&tempPage, tempIndex);  
-			tempPage.EmptyItOut();
-			tempIndex++;
-			tempPage.Append(&tempRec1);
-		}	
-	}
-	while(output->Remove(&tempRec2)){
-		if( tempPage.Append(&tempRec2) == 0){
-			//if the page is full, create a new page
-			tempFile.AddPage(&tempPage, tempIndex);  
-			tempPage.EmptyItOut();
-			tempIndex++;
-			tempPage.Append(&tempRec2);
-		}	
-	}
-	output->ShutDown();
-	tempFile.AddPage(&tempPage, tempIndex);  	
-	tempFile.Close();
-	curFile.Close();
-	remove(filename.c_str());
-	rename(tempFilename.c_str(), filename.c_str());
-	curFile.Open(1, filename.c_str());	
 }
 
 //simple GetNext sub-function used when there's no attribute in query OrderMaker

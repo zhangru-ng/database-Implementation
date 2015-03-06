@@ -12,9 +12,7 @@ FRIEND_TEST(HeapFileTest, MoveFirst);
 FRIEND_TEST(HeapFileTest, AddRecord);
 
 private:
-	GenericDBFile *myInernalPoniter;
-
-	fType StringToEnum(const string &type);
+	GenericDBFile *myInernalPoniter;	
 	
 public:
 	DBFile (); 

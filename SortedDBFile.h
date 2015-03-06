@@ -30,8 +30,12 @@ private:
 
 	//initial the internal BigQ of this file
 	void initBigQ();
-	//merge the file's internal BigQ with its other sorted data when change from write to read or close the file
+	//merge BigQ with sorted data when change from write to read or close the file
 	void MergeSortedParts();
+	//subroutine of MergeSortedParts, compare record in bigQ with that in sorted file to merge them
+	void MergeRecord(Page &tempPage, File &tempFile, int &tempIndex);
+	//add record to temporary file when merge bigQ with sorted file 
+	void AddRecord(Record &tempRec, Page &tempPage, File &tempFile, int &tempIndex);
 	//simple GetNext sub-function used when there's no attribute in query OrderMaker
 	int GetNextRecord(Record &fetchme, CNF &cnf, Record &literal);
 	//use the file OrderMaker myOrder and SearchOrder derive from input CNF to built query OrderMaker

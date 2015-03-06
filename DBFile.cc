@@ -44,53 +44,48 @@ int DBFile::Open (const char *f_path) {
 	//read file type from associate file
 	metafile >> type;
 	metafile.close();
-	//convert file type string to enum
-	fType f_type = StringToEnum(type);
-	switch(f_type){
-	case heap: 
+	//check file type and create corresponding DBFile instance
+	if(type.compare("heap") == 0){
 		myInernalPoniter = new HeapDBFile();
-		break;
-	case sorted: 
+	}else if(type.compare("sorted") == 0){
 		myInernalPoniter = new SortedDBFile();
-		break;
-	//case tree: 
-	//	myInernalPoniter = new TreeDBFile(); 
-	//	break;
 	}
+	// else if(type.compare("tree") == 0){
+	// 	myInernalPoniter = new TreeDBFile(); 
+	// }
+	else{
+		cerr << "ERROR: Can't open DBFile, File type doesn't exist!";
+		return 0;
+	}	
 	return myInernalPoniter -> Open(f_path);	
 }
 
 void DBFile::Load (Schema &f_schema, const char *loadpath) {
+	//call corresponding Load
 	myInernalPoniter -> Load(f_schema, loadpath);
 }
 
 void DBFile::MoveFirst () {
+	//call corresponding MoveFirst
 	myInernalPoniter -> MoveFirst();
 }
 
 int DBFile::Close () {
+	//call corresponding Close
 	return myInernalPoniter -> Close();
 }
 
 void DBFile::Add (Record &rec) {
+	//call corresponding Add
 	myInernalPoniter -> Add(rec);
 }
 
 int DBFile::GetNext (Record &fetchme){
+	//call corresponding GetNext version 1
 	return myInernalPoniter -> GetNext(fetchme);
 }
 
 int DBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
+	//call corresponding GetNext version 2
 	return myInernalPoniter -> GetNext(fetchme, cnf, literal);
-}
-
-//convert string to enum to wrtie into a txt file
-fType DBFile::StringToEnum(const string &type){
-	if(type.compare("heap") == 0){
-		return heap;
-	}else if(type.compare("sorted") == 0){
-		return sorted;
-	}else{
-		return tree;
-	}	
 }
