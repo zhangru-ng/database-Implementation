@@ -108,22 +108,6 @@ OrderMaker :: OrderMaker(Schema *schema) {
 }
 
 /*******************************Added by Rui: 2015.2.26*******************************************/
-OrderMaker :: OrderMaker (const OrderMaker &copyme) {
-	numAtts = copyme.numAtts;
-	for (int i = 0; i < MAX_ANDS; i++) {
-		whichAtts[i] = copyme.whichAtts[i];
-		whichTypes[i] = copyme.whichTypes[i] ;
-	}	
-}
-
-OrderMaker & OrderMaker :: operator = (const OrderMaker &other){
-	numAtts = other.numAtts;
-	for (int i = 0; i < MAX_ANDS; i++) {
-		whichAtts[i] = other.whichAtts[i];
-		whichTypes[i] = other.whichTypes[i] ;
-	}
-    	return *this;
-}
 
 //overload ofstream << operator to write OrderMaker to file
 ofstream & operator << (ofstream &out, const OrderMaker &om) {    

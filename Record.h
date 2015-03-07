@@ -35,7 +35,7 @@ FRIEND_TEST(HeapFileTest, GetNextRecord);
 FRIEND_TEST(HeapFileDeathTest, AddRecordLargerThanPage);
 private:
 	char *bits;
-	char* GetBits ();
+	char* GetBits () const;
 	void SetBits (char *bits);
 	void CopyBits(char *bits, int b_len);
 

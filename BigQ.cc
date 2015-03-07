@@ -1,7 +1,7 @@
 #include "BigQ.h"
 
 
-BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl),runNum(0), workthread(){
+BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl),runNum(0), workthread(), runsFileName(NULL){
 	if(runlen > 0){
 	//prevent memory leak(_dl_allocate_tls), if workerthread is detached
 	/*pthread_attr_t attr;
@@ -22,6 +22,7 @@ BigQ::~BigQ () {
 	if(remove(runsFileName)){
 		cerr << "can't delete" << runsFileName;
 	}
+	free(runsFileName);
 }
 //C++ class member functions have a hidden this parameter passed in, 
 //use a static class method (which has no this parameter) to bootstrap the class
@@ -31,7 +32,7 @@ void* BigQ::workerthread_wrapper (void* arg) {
 
 //two phase multiway merge sort
 void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
-	strcpy(runsFileName, "/cise/tmp/rui/tempfile0b0q0x.bin");
+	runsFileName = strdup("/cise/tmp/rui/tempfile0b0q0x.bin");
 	runsFile.Open(0, runsFileName);
 	vector<Run> runs;
 	//First Phase of TPMMS

@@ -153,7 +153,7 @@ void Record :: SetBits (char *bits) {
 	this->bits = bits;
 }
 
-char* Record :: GetBits (void) {
+char* Record :: GetBits (void) const {
 	return bits;
 }
 

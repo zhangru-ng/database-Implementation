@@ -49,7 +49,7 @@ private:
 public:
   Sorter(OrderMaker s) : sortorder(s),comp() {}
   //compare operator for phase one vecter<Record>
-  bool operator()(Record r1, Record r2){   
+  bool operator()(const Record &r1, const Record &r2){   
     if(comp.Compare (&r1, &r2, &sortorder) < 0){
       return true;
     }else{
@@ -57,7 +57,7 @@ public:
     }      
   }
   //compare operator for phase two priority queue
-  bool operator()(QueueMember &qm1, QueueMember &qm2){   
+  bool operator()(const QueueMember &qm1, const QueueMember &qm2){   
     if(comp.Compare (&(qm1.rec), &(qm2.rec), &sortorder) > 0){
       return true;
     }else{
@@ -67,16 +67,11 @@ public:
 };
 
 class BigQ {
-  
-friend class BigQTest;
-FRIEND_TEST(BigQTest, SortInRun);
-FRIEND_TEST(BigQTest, WriteRunToFile);
-
 private:
   Pipe &in;
   Pipe &out;
   OrderMaker &sortorder;
-  char runsFileName[256];
+  char *runsFileName;
   File runsFile;
   int runlen;
   int runNum;
