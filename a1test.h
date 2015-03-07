@@ -25,9 +25,6 @@ public:
 		rname (_name), rschema (_schema), prefix (_prefix) {
 		sprintf (rpath, "%s%s.bin", prefix, rname);
 	}
-	~relation() {
-		delete rschema;
-	}
 	char* name () { return rname; }
 	char* path () { return rpath; }
 	Schema* schema () { return rschema;}
@@ -88,15 +85,7 @@ void setup (char *catalog_path, char *dbfile_dir, char *tpch_dir) {
 }
 
 void cleanup () {
-	delete s; 
-	delete p;
-	delete ps; 
-	delete n;
-	delete li; 
-	delete r;
-	delete o; 
-	delete c;
-
+	
 	//added by rui, prevent memory leak
 	delete ssc;
 	delete psc;
@@ -106,6 +95,15 @@ void cleanup () {
 	delete rsc;
 	delete osc;
 	delete csc;
+
+	delete s; 
+	delete p;
+	delete ps; 
+	delete n;
+	delete li; 
+	delete r;
+	delete o; 
+	delete c;
 }
 
 #endif

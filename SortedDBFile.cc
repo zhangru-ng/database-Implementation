@@ -272,7 +272,6 @@ void SortedDBFile::MergeRecord(Page &tempPage, File &tempFile, int &tempIndex){
 	bool fileHasRecord = GetNext(tempRec1);
 	//true if BigQ has at least one record
 	bool bigQHasRecord = output->Remove(&tempRec2);
-	if(bigQHasRecord){tempRec2.Print(&mySchema);}
 	//if both the sorted DBFile and output pipe have at least one record
 	if( fileHasRecord && bigQHasRecord ){
 		while(1){

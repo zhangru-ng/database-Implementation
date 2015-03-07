@@ -108,6 +108,23 @@ OrderMaker :: OrderMaker(Schema *schema) {
 }
 
 /*******************************Added by Rui: 2015.2.26*******************************************/
+OrderMaker :: OrderMaker (const OrderMaker &copyme) {
+	numAtts = copyme.numAtts;
+	for (int i = 0; i < MAX_ANDS; i++) {
+		whichAtts[i] = copyme.whichAtts[i];
+		whichTypes[i] = copyme.whichTypes[i] ;
+	}	
+}
+
+OrderMaker & OrderMaker :: operator = (const OrderMaker &other){
+	numAtts = other.numAtts;
+	for (int i = 0; i < MAX_ANDS; i++) {
+		whichAtts[i] = other.whichAtts[i];
+		whichTypes[i] = other.whichTypes[i] ;
+	}
+    	return *this;
+}
+
 //overload ofstream << operator to write OrderMaker to file
 ofstream & operator << (ofstream &out, const OrderMaker &om) {    
 	out << om.numAtts << endl;
@@ -115,7 +132,7 @@ ofstream & operator << (ofstream &out, const OrderMaker &om) {
 		out << om.whichAtts[i] << endl;
         out << om.whichTypes[i] << endl;
 	}	
-    return out;
+    	return out;
 }
 
 //overload ifstream >> operator to read OrderMaker from file	 
@@ -127,7 +144,7 @@ ifstream & operator >> (ifstream &in, OrderMaker &om) {
 		in >> temp;
 		om.whichTypes[i] = (Type)temp;        
 	}	
-    return in;
+   	return in;
 }
 
 //following methods are used to construct query OrderMaker

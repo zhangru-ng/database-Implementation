@@ -118,15 +118,7 @@ void setup () {
 }
 
 void cleanup () {
-	delete s;
-	delete p;
-	delete ps; 
-	delete n;
-	delete li;
-	delete r;
-	delete o;
-	delete c;
-
+	
 	//added by rui, prevent memory leak
 	delete ssc;
 	delete psc;
@@ -136,6 +128,15 @@ void cleanup () {
 	delete rsc;
 	delete osc;
 	delete csc;
+
+	delete s;
+	delete p;
+	delete ps; 
+	delete n;
+	delete li;
+	delete r;
+	delete o;
+	delete c;
 }
 
 #endif

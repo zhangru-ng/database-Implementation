@@ -59,6 +59,12 @@ public:
 	// based upon ALL of their attributes
 	OrderMaker(Schema *schema);
 
+	//copy constructor
+	OrderMaker (const OrderMaker &copyme);
+
+	//"=" operator
+	OrderMaker & operator = (const OrderMaker &other);
+
 	//overload ofstream << operator to write OrderMaker to file
 	friend ofstream & operator << (ofstream &out, const OrderMaker &om);
 
