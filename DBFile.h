@@ -7,12 +7,17 @@
 class DBFile {
 
 friend class HeapFileTest;
+friend class SortedFileTest;
+
 FRIEND_TEST(HeapFileTest, LoadFile);
 FRIEND_TEST(HeapFileTest, MoveFirst);
 FRIEND_TEST(HeapFileTest, AddRecord);
+FRIEND_TEST(SortedFileTest, LoadFile);
+FRIEND_TEST(SortedFileTest, AddRecord);
+FRIEND_TEST(SortedFileTest, MoveFirst);
 
 private:
-	GenericDBFile *myInernalPoniter;	
+	GenericDBFile *myInernalPoniter;
 	
 public:
 	DBFile (); 

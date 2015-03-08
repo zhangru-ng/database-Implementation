@@ -1,7 +1,7 @@
 #include "BigQ.h"
 
 
-BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl),runNum(0), workthread(), runsFileName(NULL){
+BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl), runsFileName(NULL), runsFile(), runNum(0), workthread(){
 	if(runlen > 0){
 	//prevent memory leak(_dl_allocate_tls), if workerthread is detached
 	/*pthread_attr_t attr;
@@ -42,7 +42,7 @@ void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
 	out.ShutDown ();		
 	runsFile.Close();
 	//cout << "TPMMS spent totally " << cpu_time_used << " senconds cpu time" << endl;		
-	 pthread_exit(NULL);
+	pthread_exit(NULL);
 }
 
 void BigQ::SortInRun(vector<Record> &oneRunRecords){
@@ -156,50 +156,45 @@ void BigQ::SecondPhase(vector<Run> &runs){
 	//cout << "LinearScan:" << cpu_time_used2 << endl;
 }
 
-void BigQ::LinearScan(vector<Run> &runs){
-	int count = 0;
-	int runCount = 0;
-	int minID = 0;
-	Sorter sorter(sortorder);
-	QueueMember tempQM;
-	Record minRec;
-	vector<QueueMember> qm;
+// void BigQ::LinearScan(vector<Run> &runs){
+// 	int runCount = 0;
+// 	int minID = 0;
+// 	Sorter sorter(sortorder);
+// 	QueueMember tempQM;
+// 	Record minRec;
+// 	vector<QueueMember> qm;
 		
-	for (vector<Run>::iterator it=runs.begin(); it!=runs.end(); ++it){
-		tempQM.runID = it->GetRunID();
-		it->GetNext(tempQM.rec);
-		qm.push_back(tempQM);
-	}
-	while( runCount < runNum ){
-		for (vector<QueueMember>::iterator itq=qm.begin(); itq!=qm.end(); ++itq){
-			if(itq->runID >=0){
-				minRec = itq->rec;
-				minID = itq->runID;
-				break;
-			}			
-		}	
-		for (vector<QueueMember>::iterator itq=qm.begin(); itq!=qm.end(); ++itq){
-			if(itq->runID >=0){
-				if(sorter(minRec, itq->rec) ){
-					minRec = itq->rec;
-					minID = itq->runID;
-				}
-			}			
-		}	
-		/*count++;
-     	if(count % 100000 == 0){
-     		cout << "Insert " << count << " records to output pipe" << endl;
-     	}*/
-		out.Insert(&minRec);
-		if(qm[minID].runID >= 0 && runs[minID].GetNext(tempQM.rec)){
-			tempQM.runID = minID;
-			qm[minID] = tempQM;
- 		}else{
- 			qm[minID].runID = -1;
- 			runCount++;
- 		}	
-	}
-}
+// 	for (vector<Run>::iterator it=runs.begin(); it!=runs.end(); ++it){
+// 		tempQM.runID = it->GetRunID();
+// 		it->GetNext(tempQM.rec);
+// 		qm.push_back(tempQM);
+// 	}
+// 	while( runCount < runNum ){
+// 		for (vector<QueueMember>::iterator itq=qm.begin(); itq!=qm.end(); ++itq){
+// 			if(itq->runID >=0){
+// 				minRec = itq->rec;
+// 				minID = itq->runID;
+// 				break;
+// 			}			
+// 		}	
+// 		for (vector<QueueMember>::iterator itq=qm.begin(); itq!=qm.end(); ++itq){
+// 			if(itq->runID >=0){
+// 				if(sorter(minRec, itq->rec) ){
+// 					minRec = itq->rec;
+// 					minID = itq->runID;
+// 				}
+// 			}			
+// 		}		
+// 		out.Insert(&minRec);
+// 		if(qm[minID].runID >= 0 && runs[minID].GetNext(tempQM.rec)){
+// 			tempQM.runID = minID;
+// 			qm[minID] = tempQM;
+//  		}else{
+//  			qm[minID].runID = -1;
+//  			runCount++;
+//  		}	
+// 	}
+// }
 
 void BigQ::PriorityQueue(vector<Run> &runs){
 	int count = 0;

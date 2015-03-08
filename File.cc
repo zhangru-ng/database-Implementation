@@ -217,6 +217,7 @@ void File :: AddPage (Page *addMe, off_t whichPage) {
 		cout << "ERROR : Not enough memory. EXIT !!!\n";
 		exit(1);
 	}
+	
 	addMe->ToBinary (bits);
 	lseek (myFilDes, PAGE_SIZE * whichPage, SEEK_SET);	
 	write (myFilDes, bits, PAGE_SIZE);

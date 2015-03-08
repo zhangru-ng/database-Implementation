@@ -1,7 +1,7 @@
 
 #include "SortedDBFile.h"
 
-SortedDBFile::SortedDBFile () : myOrder(), runLength(0), curMode(Read), filename(), input(NULL), output(NULL), bq(NULL), isNewQuery(true), queryOrder() {	
+SortedDBFile::SortedDBFile () : myOrder(), runLength(0), curMode(Read), filename(), bq(NULL), input(NULL), output(NULL), queryOrder(), isNewQuery(true) {	
 }
 
 SortedDBFile::~SortedDBFile () {
@@ -22,11 +22,19 @@ int SortedDBFile::Create (const char *f_path, fType f_type, void *startup) {
 		cerr << "Can't open associated file for " << f_path << "\n";
 		return 0;
 	}
-	metafile << "sorted" << endl;
+	metafile << (int)f_type << endl;
 	//read data from startup	
 	SortInfo* sip = reinterpret_cast<SortInfo*> (startup);
+	if(sip -> order == NULL){
+		cerr << "ERROR: Can't create sorted file, startup configuration is wrong\n";
+		return 0;
+	}
 	myOrder = *(sip -> order);
 	runLength = sip -> runlen;
+	if(myOrder.GetNumAtts() <= 0 || runLength <= 0){
+		cerr << "ERROR: Can't create sorted file, startup configuration is wrong\n";
+		return 0;
+	}	
 	//write data to associate file
 	//ofstream operater << is overloaded for OrderMaker
 	metafile << myOrder;
@@ -46,11 +54,12 @@ int SortedDBFile::Open (const char *f_path) {
 	//open the exist associate file
 	ifstream metafile( header.c_str() );
 	if ( !metafile.is_open () ){
-		cerr << "Can't open associated file for " << f_path << "\n";
+		cerr << "Can't open associated file for Sorted File: " << f_path << "\n";
 		return 0;
 	}	
 	//read data from associate file
-	metafile.seekg (7, metafile.beg);  //ignore the first 6 bytes which stores file type "sorted"
+	int temp;
+	metafile >> temp;//ignore the file type 
 	//ifstream operater >> is overloaded for OrderMaker
 	metafile >> myOrder;
 	metafile >> runLength;
@@ -58,7 +67,7 @@ int SortedDBFile::Open (const char *f_path) {
 	//someone may externally modify the header file and make attribute number or run length <= 0
 	if(myOrder.GetNumAtts() <= 0 || runLength <= 0){
 		cerr << "ERROR: Can't open sorted file, startup configuration is wrong in header file";
-		exit(1);
+		return 0;
 	}	
 	curFile.Open (1, f_path);
 	filename = f_path;
@@ -157,7 +166,7 @@ int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 	}	
 	//in practice, the caller will never switches parameters without call MoveFirst or some kind of write
 	//so only recompute queryOrder and BinarySearch after MoveFirst or some kind of write
-	if(isNewQuery = false){
+	if(isNewQuery == false){
 		return GetNextRecord(fetchme, cnf, literal);
 	}
 	OrderMaker searchOrder, dummy;
@@ -189,23 +198,25 @@ int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 
 //initial the internal BigQ of this file
 void SortedDBFile::initBigQ(){
-	if( bq == NULL){
-		input = new (std::nothrow) Pipe (buffsz);
-		if (input == NULL){
-			cerr << "ERROR : Not enough memory for input buffer of " << filename;
-			exit(1);
-		}
-		output = new (std::nothrow) Pipe (buffsz);
-		if (output == NULL){
-			cerr << "ERROR : Not enough memory for output buffer of " << filename;
-			exit(1);
-		}
-		bq = new (std::nothrow) BigQ (*input, *output, myOrder, runLength);
-		if (bq == NULL){
-			cerr << "ERROR : Not enough memory for bigQ of " << filename;
-			exit(1);
-		}
-	}		
+	//there is no way to activate pipes after they are shut down, delete old pipes&BigQ, allocte new pipes when next write occur
+	delete input;
+	delete output;	
+	delete bq;	
+	input = new (std::nothrow) Pipe (buffsz);
+	if (input == NULL){
+		cerr << "ERROR : Not enough memory for input buffer of " << filename;
+		exit(1);
+	}
+	output = new (std::nothrow) Pipe (buffsz);
+	if (output == NULL){
+		cerr << "ERROR : Not enough memory for output buffer of " << filename;
+		exit(1);
+	}
+	bq = new (std::nothrow) BigQ (*input, *output, myOrder, runLength);
+	if (bq == NULL){
+		cerr << "ERROR : Not enough memory for bigQ of " << filename;
+		exit(1);
+	}
 }	
 
 //merge the file's internal BigQ with its other sorted data when change from write to read or close the file
@@ -233,15 +244,7 @@ void SortedDBFile::MergeSortedParts() {
 	//last page may not full to trigger to writing to file
 	tempFile.AddPage(&tempPage, tempIndex);  	
 	//shut down output pipe
-	output->ShutDown();
-	//there is no way to activate pipes after they are shut down, allocte new pipes when next write occur
-	delete input;
-	delete output;	
-	delete bq;	
-	//c++ delete may not set pointer to NULL
-	input = NULL;
-	output = NULL;
-	bq = NULL;
+	//output->ShutDown();  //BigQ will shut down output pipe
 	//close new merged file and old sorted file
 	tempFile.Close();
 	curFile.Close();

@@ -22,9 +22,14 @@ typedef enum {heap, sorted, tree} fType;
 
 class GenericDBFile {	
 friend class HeapFileTest;
+friend class SortedFileTest;
+
 FRIEND_TEST(HeapFileTest, LoadFile);
 FRIEND_TEST(HeapFileTest, MoveFirst);
 FRIEND_TEST(HeapFileTest, AddRecord);
+FRIEND_TEST(SortedFileTest, LoadFile);
+FRIEND_TEST(SortedFileTest, AddRecord);
+FRIEND_TEST(SortedFileTest, MoveFirst);
 
 protected:
 	File curFile;
@@ -33,7 +38,7 @@ protected:
 
 public:
 	GenericDBFile (); 
-	~GenericDBFile (); 
+	virtual ~GenericDBFile (); 
 	virtual int Create (const char *fpath, fType file_type, void *startup) = 0;
 	virtual int Open (const char *fpath) = 0;
 	virtual int Close () = 0;

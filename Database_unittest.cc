@@ -20,7 +20,7 @@ char testFile_path[100] = "/cise/tmp/rui/testFile.bin";
 char headFile_path[100] = "/cise/tmp/rui/testFile.bin.header";
 
 /*
- * Heap file unit test
+ * Heap DBFile unit test
  * Written by Rui 2015.02.06	
  */ 
  
@@ -39,7 +39,23 @@ protected:
 	ComparisonEngine comp;	
 	CNF cnf_pred;
 	Record literal;
+public:
+	int AddRecord(int size);
 };
+
+int HeapFileTest::AddRecord(int size){
+	char *tempBits = NULL;
+	Record tempRec;
+
+	tempBits = new (std::nothrow) char[size];
+	if(tempBits == NULL){
+		return 0;
+	}
+	((int *) tempBits)[0] = size;
+	tempRec.SetBits(tempBits); //SetBits is pointer operation and Add
+	dbfile.Add (tempRec);		//consume rec, namely consume tempBits
+	return 1;
+}
 
 void initCNF(CNF &cnf_pred, Record &literal, char* cnf_name, char* tbl_name){
 	char cnf_file[100];
@@ -70,11 +86,17 @@ TEST_F(HeapFileTest, CreateFile) {
 	fclose(fp);	
 }
 
+TEST_F(HeapFileTest, CreateWrongType){
+	int what = 10;
+	EXPECT_EQ( 0, dbfile.Create(testFile_path, (fType)what , 0) );
+}
+
 TEST_F(HeapFileTest, CreateInNonExistDir) {
 	EXPECT_EQ( 0, dbfile.Create("nonexist/testFile.bin", heap , 0) );
 }
 
 TEST_F(HeapFileTest, OpenFile) {
+	EXPECT_EQ( 1 , dbfile.Close() );     //close created file
 	EXPECT_EQ( 1 , dbfile.Open(testFile_path) );	
 }
 
@@ -82,21 +104,24 @@ TEST_F(HeapFileTest, OpenNonExistFile) {
 	EXPECT_EQ( 0, dbfile.Open("dbfile/nonexist.bin") );	
 }
 
-
+TEST_F(HeapFileTest, OpenWithoutHeaderFile) {
+	remove(headFile_path);
+	EXPECT_EQ( 0 , dbfile.Open(testFile_path) );	
+}
 
 TEST_F(HeapFileTest, CloseFile) {
- 	EXPECT_EQ(1 , dbfile.Close() );     //close created file
+ 	EXPECT_EQ( 1 , dbfile.Close() );     //close created file
 	dbfile.Open(testFile_path); 
-	EXPECT_EQ(1 , dbfile.Close() );		//close open file
+	EXPECT_EQ( 1 , dbfile.Close() );		//close open file
 }
 
 TEST_F(HeapFileTest, CreateHeapTypeHeader) {
-	char type[8];
+	int type;
 	FILE * fp = fopen(headFile_path,"r");
 	ASSERT_TRUE(fp != NULL);
-	fscanf(fp,"%s",type);
+	fscanf(fp,"%d", &type);
 	fclose(fp);		
-	EXPECT_STREQ("heap", type);	
+	EXPECT_EQ(0, type);	
 }
 
 TEST_F(HeapFileTest, LoadFile) {
@@ -127,31 +152,15 @@ TEST_F(HeapFileTest, GetNextRecord) {
 }
 
 TEST_F(HeapFileTest, AddRecord) {
-	char *tempBits = NULL;
-	Record tempRec1;
-		
 	EXPECT_EQ( 0, dbfile.myInernalPoniter->curFile.GetLength() );
-	tempBits = new (std::nothrow) char[PAGE_SIZE/2];
-	ASSERT_TRUE(tempBits != NULL);
-	((int *) tempBits)[0] = PAGE_SIZE/2;
-	tempRec1.SetBits(tempBits);
-	dbfile.Add (tempRec1);
+	ASSERT_TRUE(AddRecord(PAGE_SIZE/2));	
 	EXPECT_EQ( 2, dbfile.myInernalPoniter->curFile.GetLength() );
 	
-	tempBits = new (std::nothrow) char[PAGE_SIZE/4];
-	ASSERT_TRUE(tempBits != NULL);
-	((int *) tempBits)[0] = PAGE_SIZE/4;
-	tempRec1.SetBits(tempBits); //SetBits is pointer operation and Add
-	dbfile.Add (tempRec1);		//consume rec, namely consume tempBits
-	EXPECT_EQ( 2, dbfile.myInernalPoniter->curFile.GetLength() );		
+	ASSERT_TRUE(AddRecord(PAGE_SIZE/4));	
+	EXPECT_EQ( 2, dbfile.myInernalPoniter->curFile.GetLength() );
 	
-	tempBits = new (std::nothrow) char[PAGE_SIZE/4];
-	ASSERT_TRUE(tempBits != NULL);
-	((int *) tempBits)[0] = PAGE_SIZE/4;
-	tempRec1.SetBits(tempBits); 
-	dbfile.Add (tempRec1);		
-	EXPECT_EQ( 3, dbfile.myInernalPoniter->curFile.GetLength() );		
-//	delete[] tempBits;
+	ASSERT_TRUE(AddRecord(PAGE_SIZE/4));	
+	EXPECT_EQ( 3, dbfile.myInernalPoniter->curFile.GetLength() );
 }
 
 TEST_F(HeapFileTest, GetNextFilterInt) {
@@ -257,8 +266,6 @@ TEST(HeapFileDeathTest, AddRecordLargerThanPage) {
  * Written by Rui 2015.02.21	
  */ 
 
-char sort_tbl_dir[256] = "/cise/tmp/dbi_sp11/DATA/10M/nation.tbl"; 
-char sort_tbl_name[100] = "nation";
 char sort_cnf_dir[100] = "sortCNF/";
 
  typedef struct {
@@ -300,7 +307,6 @@ protected:
 void *producer (void *arg) {
 	Pipe *myPipe = (Pipe *) arg;
 	Record temp;
-	int counter = 0;
 	DBFile tdbfile;
 	tdbfile.Create(testFile_path, heap , 0);
 	Schema f_schema(catalog_path, tbl_name);
@@ -362,17 +368,6 @@ void initOrderMaker(OrderMaker &sortorder, char* sortname, char* tbl_name){
 	fclose(fp);
 }
 
-void initTestRun(vector<Record> &oneRunRecords){
-	Record tempRec;
-	Schema f_schema(catalog_path, sort_tbl_name);
-	FILE *tableFile = fopen (sort_tbl_dir, "r");
-	assert(tableFile != NULL);		
-	while (tempRec.SuckNextRecord (&f_schema, tableFile)){
-		oneRunRecords.push_back(tempRec);
-	}
-	fclose(tableFile);
-}
-/*
 TEST_F(BigQTest, SortIntAttribute) {
 	pthread_create (&thread1, NULL, producer, (void *)input);		
 	initOrderMaker(sortorder, "sort1", tbl_name);
@@ -487,32 +482,257 @@ TEST_F(BigQTest, RunLengthFifty) {
 	pthread_join (thread2, NULL);
 	EXPECT_EQ( 0, tutil.errnum );
 }
-*/
+
 
 /*
+ * Sorted DBFile unit test
+ * Written by Rui 2015.03.08	
+ */ 
 
-TEST(SortedFileTest, CreateSortedFile){
-	DBFile dbfile;
-	int runlen = 10;
+class SortedFileTest : public ::testing::Test {
+protected:
+	virtual void SetUp() {
+		runlen = 10;
+		initOrderMaker(sortorder, "sort1", tbl_name);
+		startup.order = &sortorder;  //can be initailized as startup = {&sortorder, runlen}; in C++ 11
+		startup.runlen = runlen;
+	}
+
+	virtual void TearDown() {
+		dbfile.Close();
+		remove(testFile_path);
+		remove(headFile_path);
+	}
+	DBFile dbfile;	
+	ComparisonEngine comp;	
+	CNF cnf_pred;
+	Record literal;
+	int runlen;
 	OrderMaker sortorder;
-	initOrderMaker(sortorder, "sort1", tbl_name);
-	struct {OrderMaker *o; int l;} startup = {&sortorder, runlen};
+	SortInfo startup;
+public:
+	int AddRecord(int size);
+	int checkOrder(OrderMaker &sortorder);
+};
+
+int SortedFileTest::AddRecord(int size){
+	char *tempBits = NULL;
+	Record tempRec;
+
+	tempBits = new (std::nothrow) char[size];
+	if(tempBits == NULL){
+		return 0;
+	}
+	((int *) tempBits)[0] = size;
+	tempRec.SetBits(tempBits); //SetBits is pointer operation and Add
+	dbfile.Add (tempRec);		//consume rec, namely consume tempBits
+	dbfile.MoveFirst();
+	return 1;
+}
+
+int SortedFileTest::checkOrder(OrderMaker &sortorder){
+	ComparisonEngine ceng;
+	int err = 0;
+	int i = 0;
+	Record rec[2];
+	Record *last = NULL, *prev = NULL;
+	while (dbfile.GetNext(rec[i%2])) {
+		prev = last;
+		last = &rec[i%2];
+		if (prev && last) {
+			if (ceng.Compare (prev, last, &sortorder) == 1) {
+				err++;
+			}
+		}
+		i++;	
+	}
+	return err;
+}
+
+TEST_F(SortedFileTest, CreateFile){
 	dbfile.Create(testFile_path, sorted , &startup);
-	dbfile.Close();
 	FILE * fp = fopen(testFile_path,"r");
 	ASSERT_TRUE(fp != NULL);	
 	fclose(fp);	
 }
 
-TEST(SortedFileTest, SortedTypeHeaderFile){
-	DBFile dbfile;
-	int runlen = 10;
-	OrderMaker sortorder;
-	initOrderMaker(sortorder, "sort1", tbl_name);
-	struct {OrderMaker *o; int l;} startup = {&sortorder, runlen};
+TEST_F(SortedFileTest, SortedTypeHeaderFile){
 	dbfile.Create(testFile_path, sorted , &startup);
-	dbfile.Close();
-	dbfile.Open(testFile_path);
+	int type;
+	FILE * fp = fopen(headFile_path,"r");
+	ASSERT_TRUE(fp != NULL);
+	fscanf(fp,"%d", &type);
+	fclose(fp);		
+	EXPECT_EQ(1, type);	
 }
 
-*/
+TEST_F(SortedFileTest, CreateWithWrongOrder){
+	startup.order = NULL;
+	startup.runlen = runlen;
+	EXPECT_EQ( 0, dbfile.Create(testFile_path, sorted , &startup) );	
+}
+
+TEST_F(SortedFileTest, CreateWithWrongRunlen){
+	startup.order = &sortorder;
+	startup.runlen = -2;
+	EXPECT_EQ( 0, dbfile.Create(testFile_path, sorted , &startup) );
+}
+
+TEST_F(SortedFileTest, CreateInNonExistDir) {
+	EXPECT_EQ( 0, dbfile.Create("nonexist/testFile.bin", sorted , &startup) );
+}
+
+TEST_F(SortedFileTest, OpenFile) {
+	dbfile.Create(testFile_path, sorted , &startup);
+	dbfile.Close();
+	EXPECT_EQ( 1 , dbfile.Open(testFile_path) );	
+}
+
+TEST_F(SortedFileTest, OpenNonExistFile) {
+	EXPECT_EQ( 0, dbfile.Open("dbfile/nonexist.bin") );	
+}
+
+TEST_F(SortedFileTest, CloseFile) {
+	dbfile.Create(testFile_path, sorted , &startup);
+ 	EXPECT_EQ(1 , dbfile.Close() );     //close created file
+	dbfile.Open(testFile_path); 
+	EXPECT_EQ(1 , dbfile.Close() );		//close open file
+}
+
+TEST_F(SortedFileTest, MoveFirst) {
+	dbfile.Create(testFile_path, sorted , &startup);
+	dbfile.MoveFirst();
+	EXPECT_EQ( 0, dbfile.myInernalPoniter->curPageIndex );
+}
+
+TEST_F(SortedFileTest, AddRecord) {
+	Record tempRec;
+	Schema f_schema(catalog_path, tbl_name);
+	FILE *tableFile = fopen (tbl_dir, "r");
+	ASSERT_TRUE(tableFile != NULL);	
+	dbfile.Create(testFile_path, sorted , &startup);		
+	while (tempRec.SuckNextRecord (&f_schema, tableFile)){
+		dbfile.Add(tempRec);
+	}
+	fclose(tableFile);
+	dbfile.MoveFirst();
+	EXPECT_EQ( 0, checkOrder(sortorder) );
+}
+
+TEST_F(SortedFileTest, LoadFile) {
+	dbfile.Create(testFile_path, sorted , &startup);
+	Schema f_schema(catalog_path, tbl_name);
+	EXPECT_EQ( 0, dbfile.myInernalPoniter->curFile.GetLength() );
+	dbfile.Load (f_schema, tbl_dir);
+	dbfile.MoveFirst();
+	EXPECT_LE( 2, dbfile.myInernalPoniter->curFile.GetLength() );
+}
+
+TEST_F(SortedFileTest, GetNextRecord) {
+	dbfile.Create(testFile_path, sorted , &startup);	
+	Schema f_schema(catalog_path, tbl_name);
+	dbfile.Load (f_schema, tbl_dir);
+	dbfile.MoveFirst();
+	EXPECT_EQ( 0, checkOrder(sortorder) );
+}	
+
+TEST_F(SortedFileTest, SortOneLiterals) {			
+	initOrderMaker(sortorder, "sort2", tbl_name);
+	startup.order = &sortorder;
+	startup.runlen = runlen;
+	dbfile.Create(testFile_path, sorted , &startup);	
+	Schema f_schema(catalog_path, tbl_name);
+	dbfile.Load (f_schema, tbl_dir);
+	dbfile.MoveFirst();
+	EXPECT_EQ( 0, checkOrder(sortorder) );
+}
+
+TEST_F(SortedFileTest, SortTwoLiterals) {		
+	initOrderMaker(sortorder, "sort4", tbl_name);
+	startup.order = &sortorder;
+	startup.runlen = runlen;
+	dbfile.Create(testFile_path, sorted , &startup);	
+	Schema f_schema(catalog_path, tbl_name);
+	dbfile.Load (f_schema, tbl_dir);
+	dbfile.MoveFirst();
+	EXPECT_EQ( 0, checkOrder(sortorder) );
+}
+
+TEST_F(SortedFileTest, SortSixLiterals) {		
+	initOrderMaker(sortorder, "sort6", tbl_name);
+	startup.order = &sortorder;
+	startup.runlen = runlen;
+	dbfile.Create(testFile_path, sorted , &startup);
+	Schema f_schema(catalog_path, tbl_name);	
+	dbfile.Load (f_schema, tbl_dir);
+	dbfile.MoveFirst();
+	EXPECT_EQ( 0, checkOrder(sortorder) );
+}
+
+TEST_F(SortedFileTest, GetNextFilterMixed1) {
+	int err = 0;
+	Schema f_schema(catalog_path, tbl_name);
+	dbfile.Create(testFile_path, sorted , &startup);	
+	dbfile.Load (f_schema, tbl_dir);
+	dbfile.MoveFirst();	
+	Record tempRec;
+	initCNF(cnf_pred, literal, "cnf4", tbl_name);
+	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
+		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
+				err++;
+		}		
+	}
+	EXPECT_EQ( 0 , err );	
+}
+
+TEST_F(SortedFileTest, GetNextFilterMixed2) {
+	int err = 0;
+	Schema f_schema(catalog_path, tbl_name);
+	dbfile.Create(testFile_path, sorted , &startup);		
+	dbfile.Load (f_schema, tbl_dir);
+	dbfile.MoveFirst();	
+	Record tempRec;
+	initCNF(cnf_pred, literal, "cnf5", tbl_name);
+	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
+		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
+				err++;
+		}		
+	}
+	EXPECT_EQ( 0 , err );	
+}
+
+
+TEST_F(SortedFileTest, FilterMatchSortAtts) {
+	initOrderMaker(sortorder, "sort7", tbl_name);
+	startup.order = &sortorder;
+	startup.runlen = runlen;
+	dbfile.Create(testFile_path, sorted , &startup);	
+	Schema f_schema(catalog_path, tbl_name);
+	dbfile.Load (f_schema, tbl_dir);
+	dbfile.MoveFirst();	
+	Record tempRec;
+	int err = 0;
+	initCNF(cnf_pred, literal, "cnf6", tbl_name);
+	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
+		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
+				err++;
+		}		
+	}
+	EXPECT_EQ( 0 , err );	
+}
+
+TEST_F(SortedFileTest, FilterNotMatchSortAtts) {	
+	dbfile.Create(testFile_path, sorted , &startup);	
+	Schema f_schema(catalog_path, tbl_name);
+	dbfile.Load (f_schema, tbl_dir);
+	dbfile.MoveFirst();	
+	Record tempRec;
+	int err = 0;
+	initCNF(cnf_pred, literal, "cnf6", tbl_name);
+	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
+		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
+				err++;
+		}		
+	}
+	EXPECT_EQ( 0 , err );	
+}

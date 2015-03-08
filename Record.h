@@ -29,10 +29,13 @@ class Record {
 friend class ComparisonEngine;
 friend class Page;
 friend class HeapFileTest;
+friend class SortedFileTest;
 
 FRIEND_TEST(HeapFileTest, AddRecord);
 FRIEND_TEST(HeapFileTest, GetNextRecord);
 FRIEND_TEST(HeapFileDeathTest, AddRecordLargerThanPage);
+FRIEND_TEST(SortedFileTest, AddRecord);
+
 private:
 	char *bits;
 	char* GetBits () const;
@@ -75,7 +78,7 @@ public:
 	void Print (Schema *mySchema);
 
 	//return the size of this record
-	int Size();
+	size_t Size() const;
 };
 
 #endif

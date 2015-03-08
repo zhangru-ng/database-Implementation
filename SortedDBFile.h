@@ -24,7 +24,6 @@ private:
 	Pipe *input;				//input pipe for internal bigQ
 	Pipe *output;				//output pipe for internal bigQ
 	static const int buffsz = 100;		//the buffer size of pipe
-
 	OrderMaker queryOrder;		//the queryOrder built by file ordermaker and the input CNF
 	bool isNewQuery;			//true if start a new query, used to reduce to overhead of repeatedly cnf query GetNext 
 

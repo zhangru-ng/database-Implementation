@@ -71,9 +71,9 @@ private:
   Pipe &in;
   Pipe &out;
   OrderMaker &sortorder;
+  int runlen;
   char *runsFileName;
   File runsFile;
-  int runlen;
   int runNum;
   pthread_t workthread;
   //bootstrap wrapper function

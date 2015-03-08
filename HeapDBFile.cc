@@ -25,7 +25,7 @@ int HeapDBFile::Create (const char *f_path, fType f_type, void *startup) {
 		cerr << "Can't create associated file for " << f_path << "\n";
 		return 0;
 	}
-	metafile << "heap" << endl;
+	metafile << (int)f_type << endl;
 	metafile.close();	
 
 	//create the binary DBfile
@@ -170,7 +170,6 @@ int HeapDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 		}				
 	}	
 	return 0;
-
 }
 
 
