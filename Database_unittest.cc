@@ -511,24 +511,8 @@ protected:
 	OrderMaker sortorder;
 	SortInfo startup;
 public:
-	int AddRecord(int size);
 	int checkOrder(OrderMaker &sortorder);
 };
-
-int SortedFileTest::AddRecord(int size){
-	char *tempBits = NULL;
-	Record tempRec;
-
-	tempBits = new (std::nothrow) char[size];
-	if(tempBits == NULL){
-		return 0;
-	}
-	((int *) tempBits)[0] = size;
-	tempRec.SetBits(tempBits); //SetBits is pointer operation and Add
-	dbfile.Add (tempRec);		//consume rec, namely consume tempBits
-	dbfile.MoveFirst();
-	return 1;
-}
 
 int SortedFileTest::checkOrder(OrderMaker &sortorder){
 	ComparisonEngine ceng;

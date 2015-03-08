@@ -34,7 +34,6 @@ friend class SortedFileTest;
 FRIEND_TEST(HeapFileTest, AddRecord);
 FRIEND_TEST(HeapFileTest, GetNextRecord);
 FRIEND_TEST(HeapFileDeathTest, AddRecordLargerThanPage);
-FRIEND_TEST(SortedFileTest, AddRecord);
 
 private:
 	char *bits;
