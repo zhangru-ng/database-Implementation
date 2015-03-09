@@ -68,6 +68,7 @@ void HeapDBFile::Load (Schema &f_schema, const char *loadpath) {
 	int tempIndex = 0;
 	if(tableFile == NULL){
 		cerr << "Can't open table file for" << loadpath << "\n";
+		exit(1);
 	}
      while (tempRec.SuckNextRecord (&f_schema, tableFile) == 1) {
 		if( tempPage.Append(&tempRec) == 0){

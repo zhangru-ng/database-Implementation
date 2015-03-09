@@ -18,7 +18,7 @@ FRIEND_TEST(SortedFileTest, MoveFirst);
 
 private:
 	GenericDBFile *myInernalPoniter;
-	
+	bool AssertInit();
 public:
 	DBFile (); 
 	~DBFile (); 

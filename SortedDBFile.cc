@@ -21,30 +21,31 @@ int SortedDBFile::Create (const char *f_path, fType f_type, void *startup) {
 	if ( !metafile.is_open() ){
 		cerr << "Can't open associated file for " << f_path << "\n";
 		return 0;
-	}
-	metafile << (int)f_type << endl;
-	//read data from startup	
-	SortInfo* sip = reinterpret_cast<SortInfo*> (startup);
-	if(sip -> order == NULL){
-		cerr << "ERROR: Can't create sorted file, startup configuration is wrong\n";
-		return 0;
-	}
-	myOrder = *(sip -> order);
-	runLength = sip -> runlen;
-	if(myOrder.GetNumAtts() <= 0 || runLength <= 0){
-		cerr << "ERROR: Can't create sorted file, startup configuration is wrong\n";
-		return 0;
-	}	
-	//write data to associate file
-	//ofstream operater << is overloaded for OrderMaker
-	metafile << myOrder;
-	metafile << runLength;
-	metafile.close();
+	}else{
+		metafile << (int)f_type << endl;
+		//read data from startup	
+		SortInfo* sip = reinterpret_cast<SortInfo*> (startup);
+		if(sip -> order == NULL){
+			cerr << "ERROR: Can't create sorted file, startup configuration is wrong\n";
+			return 0;
+		}
+		myOrder = *(sip -> order);
+		runLength = sip -> runlen;
+		if(myOrder.GetNumAtts() <= 0 || runLength <= 0){
+			cerr << "ERROR: Can't create sorted file, startup configuration is wrong\n";
+			return 0;
+		}	
+		//write data to associate file
+		//ofstream operater << is overloaded for OrderMaker
+		metafile << myOrder;
+		metafile << runLength;
+		metafile.close();
 
-	//create the binary DBfile
-	curFile.Open (0, f_path);
-	filename = f_path;
-	return 1;
+		//create the binary DBfile
+		curFile.Open (0, f_path);
+		filename = f_path;
+		return 1;
+	}	
 }
 
 int SortedDBFile::Open (const char *f_path) {
@@ -52,32 +53,35 @@ int SortedDBFile::Open (const char *f_path) {
 	//generate header file name	
 	header += ".header";
 	//open the exist associate file
-	ifstream metafile( header.c_str() );
+	ifstream metafile;
+	metafile.open( header.c_str() );
 	if ( !metafile.is_open () ){
 		cerr << "Can't open associated file for Sorted File: " << f_path << "\n";
 		return 0;
+	}else{
+		//read data from associate file
+		int temp;
+		metafile >> temp;//ignore the file type 
+		//ifstream operater >> is overloaded for OrderMaker
+		metafile >> myOrder;
+		metafile >> runLength;
+		metafile.close ();
+		//someone may externally modify the header file and make attribute number or run length <= 0
+		if(myOrder.GetNumAtts() <= 0 || runLength <= 0){
+			cerr << "ERROR: Can't open sorted file, startup configuration is wrong in header file";
+			return 0;
+		}	
+		curFile.Open (1, f_path);
+		filename = f_path;
+		return 1;
 	}	
-	//read data from associate file
-	int temp;
-	metafile >> temp;//ignore the file type 
-	//ifstream operater >> is overloaded for OrderMaker
-	metafile >> myOrder;
-	metafile >> runLength;
-	metafile.close ();
-	//someone may externally modify the header file and make attribute number or run length <= 0
-	if(myOrder.GetNumAtts() <= 0 || runLength <= 0){
-		cerr << "ERROR: Can't open sorted file, startup configuration is wrong in header file";
-		return 0;
-	}	
-	curFile.Open (1, f_path);
-	filename = f_path;
-	return 1;
 }
 
 void SortedDBFile::Load (Schema &f_schema, const char *loadpath) {
 	FILE *tableFile = fopen (loadpath, "r");
 	if(tableFile == NULL){
 		cerr << "Can't open table file: " << loadpath << "\n";
+		exit(1);
 	}
 	//if DBFile's current mode is wrtie
 	if(curMode == Read){
@@ -126,11 +130,9 @@ int SortedDBFile::Close () {
 		MergeSortedParts();
 	}
 	curFile.Close ();
-	if(bq != NULL){
-		delete input;
-		delete output;	
-		delete bq;			
-	}
+	delete input;
+	delete output;	
+	delete bq;			
 	return 1;
 }
 

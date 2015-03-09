@@ -572,8 +572,9 @@ TEST_F(SortedFileTest, OpenFile) {
 	EXPECT_EQ( 1 , dbfile.Open(testFile_path) );	
 }
 
-TEST_F(SortedFileTest, OpenNonExistFile) {
-	EXPECT_EQ( 0, dbfile.Open("dbfile/nonexist.bin") );	
+TEST_F(SortedFileTest, OpenNonExistFile) {	
+	EXPECT_EQ( 0, dbfile.Open("dbfile/nonexist.bin") );
+	EXPECT_EQ( 1 , dbfile.Create(testFile_path, sorted , &startup));	
 }
 
 TEST_F(SortedFileTest, CloseFile) {
@@ -720,3 +721,4 @@ TEST_F(SortedFileTest, FilterNotMatchSortAtts) {
 	}
 	EXPECT_EQ( 0 , err );	
 }
+
