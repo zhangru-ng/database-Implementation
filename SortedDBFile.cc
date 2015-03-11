@@ -1,51 +1,49 @@
 
 #include "SortedDBFile.h"
 
-SortedDBFile::SortedDBFile () : myOrder(), runLength(0), curMode(Read), filename(), bq(NULL), input(NULL), output(NULL), queryOrder(), isNewQuery(true) {	
-}
-
-SortedDBFile::~SortedDBFile () {
+SortedDBFile::SortedDBFile () : myOrder(), runLength(0), curMode(Read), filename(), bq(nullptr), input(nullptr), output(nullptr), queryOrder(), isNewQuery(true) {	
 }
 
 int SortedDBFile::Create (const char *f_path, fType f_type, void *startup) {
 	//if no startup configuration passed in, can't create sorted file
-	if(startup == NULL){
-		cerr << "ERROR: Can't create sorted file, no startup configuration";
+	if( nullptr == startup ){
+		cerr << "ERROR: Can't create sorted file, no startup configuration\n";
 		exit(1);
 	}
 	string header = f_path;
 	//generate header file name	
 	header += ".header";
 	//create the associated text file
-	ofstream metafile( header.c_str() );
-	if ( !metafile.is_open() ){
+	ofstream metafile;
+	metafile.open( header.c_str() );
+	if ( false == metafile.is_open() ){
 		cerr << "Can't open associated file for " << f_path << "\n";
 		return 0;
-	}else{
-		metafile << (int)f_type << endl;
-		//read data from startup	
-		SortInfo* sip = reinterpret_cast<SortInfo*> (startup);
-		if(sip -> order == NULL){
-			cerr << "ERROR: Can't create sorted file, startup configuration is wrong\n";
-			return 0;
-		}
-		myOrder = *(sip -> order);
-		runLength = sip -> runlen;
-		if(myOrder.GetNumAtts() <= 0 || runLength <= 0){
-			cerr << "ERROR: Can't create sorted file, startup configuration is wrong\n";
-			return 0;
-		}	
-		//write data to associate file
-		//ofstream operater << is overloaded for OrderMaker
-		metafile << myOrder;
-		metafile << runLength;
-		metafile.close();
-
-		//create the binary DBfile
-		curFile.Open (0, f_path);
-		filename = f_path;
-		return 1;
+	}
+	metafile << (int)f_type << endl;
+	//read data from startup	
+	SortInfo* sip = reinterpret_cast<SortInfo*> (startup);
+	if( nullptr == sip -> order ){
+		cerr << "ERROR: Can't create sorted file, startup configuration is wrong\n";
+		return 0;
+	}
+	myOrder = *(sip -> order);
+	runLength = sip -> runlen;
+	if( myOrder.GetNumAtts() <= 0 || runLength <= 0){
+		cerr << "ERROR: Can't create sorted file, startup configuration is wrong\n";
+		return 0;
 	}	
+	//write data to associate file
+	//ofstream operater << is overloaded for OrderMaker
+	metafile << myOrder;
+	metafile << runLength;
+	metafile.close();
+
+	//create the binary DBfile
+	curFile.Open (0, f_path);
+	filename = f_path;
+	return 1;
+		
 }
 
 int SortedDBFile::Open (const char *f_path) {
@@ -58,33 +56,33 @@ int SortedDBFile::Open (const char *f_path) {
 	if ( !metafile.is_open () ){
 		cerr << "Can't open associated file for Sorted File: " << f_path << "\n";
 		return 0;
-	}else{
-		//read data from associate file
-		int temp;
-		metafile >> temp;//ignore the file type 
-		//ifstream operater >> is overloaded for OrderMaker
-		metafile >> myOrder;
-		metafile >> runLength;
-		metafile.close ();
-		//someone may externally modify the header file and make attribute number or run length <= 0
-		if(myOrder.GetNumAtts() <= 0 || runLength <= 0){
-			cerr << "ERROR: Can't open sorted file, startup configuration is wrong in header file";
-			return 0;
-		}	
-		curFile.Open (1, f_path);
-		filename = f_path;
-		return 1;
+	}
+	//read data from associate file
+	int temp;
+	metafile >> temp;//ignore the file type 
+	//ifstream operater >> is overloaded for OrderMaker
+	metafile >> myOrder;
+	metafile >> runLength;
+	metafile.close ();
+	//someone may externally modify the header file and make attribute number or run length <= 0
+	if(myOrder.GetNumAtts() <= 0 || runLength <= 0){
+		cerr << "ERROR: Can't open sorted file, startup configuration is wrong in header file\n";
+		return 0;
 	}	
+	curFile.Open (1, f_path);
+	filename = f_path;
+	return 1;
+		
 }
 
 void SortedDBFile::Load (Schema &f_schema, const char *loadpath) {
 	FILE *tableFile = fopen (loadpath, "r");
-	if(tableFile == NULL){
+	if( nullptr == tableFile ){
 		cerr << "Can't open table file: " << loadpath << "\n";
 		exit(1);
 	}
 	//if DBFile's current mode is wrtie
-	if(curMode == Read){
+	if( Read == curMode ){
 		initBigQ();
 		curMode = Write;
 		isNewQuery = true;
@@ -99,7 +97,7 @@ void SortedDBFile::Load (Schema &f_schema, const char *loadpath) {
 
 void SortedDBFile::Add (Record &rec) {
 	//if DBFile's current mode is read
-	if(curMode == Read){
+	if( Read == curMode ){
 		initBigQ();
 		curMode = Write;
 		isNewQuery = true;
@@ -110,7 +108,7 @@ void SortedDBFile::Add (Record &rec) {
 
 void SortedDBFile::MoveFirst () {
 	//if DBFile's current mode is wrtie, merge bigQ and sorted file
-	if(curMode == Write){
+	if( Write == curMode ){
 		curMode = Read;
 		MergeSortedParts();
 	}
@@ -125,7 +123,7 @@ void SortedDBFile::MoveFirst () {
 
 int SortedDBFile::Close () {
 	//if DBFile's current mode is wrtie, merge bigQ and sorted file
-	if(curMode == Write){
+	if( Write == curMode ){
 		curMode = Read;
 		MergeSortedParts();
 	}
@@ -138,7 +136,7 @@ int SortedDBFile::Close () {
 
 int SortedDBFile::GetNext (Record &fetchme) {
 	//if DBFile's current mode is wrtie, merge bigQ and sorted file
-	if(curMode == Write){
+	if( Write == curMode ){
 		curMode = Read;
 		MergeSortedParts();
 	}
@@ -158,7 +156,7 @@ int SortedDBFile::GetNext (Record &fetchme) {
 
 int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 	//if DBFile's current mode is wrtie, merge bigQ and sorted file
-	if(curMode == Write){
+	if( Write == curMode ){
 		curMode = Read;
 		MergeSortedParts();
 	}
@@ -168,7 +166,7 @@ int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 	}	
 	//in practice, the caller will never switches parameters without call MoveFirst or some kind of write
 	//so only recompute queryOrder and BinarySearch after MoveFirst or some kind of write
-	if(isNewQuery == false){
+	if( false == isNewQuery ){
 		return GetNextRecord(fetchme, cnf, literal);
 	}
 	OrderMaker searchOrder, dummy;
@@ -183,7 +181,7 @@ int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 		//use query OrderMaker to run a binary search on the file
 		int matchIndex = BinarySearch(literal, fetchme, lit_order);
 		//if no record that “equals” the literal record
-		if(matchIndex == -1){
+		if( -1 == matchIndex){
 			//current page index out of file, indicate no record is accepted in whole file
 			curPageIndex = curFile.GetLength() - 1;//may cause read out of bound 
 			return 0;
@@ -204,21 +202,9 @@ void SortedDBFile::initBigQ(){
 	delete input;
 	delete output;	
 	delete bq;	
-	input = new (std::nothrow) Pipe (buffsz);
-	if (input == NULL){
-		cerr << "ERROR : Not enough memory for input buffer of " << filename;
-		exit(1);
-	}
-	output = new (std::nothrow) Pipe (buffsz);
-	if (output == NULL){
-		cerr << "ERROR : Not enough memory for output buffer of " << filename;
-		exit(1);
-	}
-	bq = new (std::nothrow) BigQ (*input, *output, myOrder, runLength);
-	if (bq == NULL){
-		cerr << "ERROR : Not enough memory for bigQ of " << filename;
-		exit(1);
-	}
+	input = new Pipe (buffsz);
+	output = new Pipe (buffsz);
+	bq = new BigQ (*input, *output, myOrder, runLength);
 }	
 
 //merge the file's internal BigQ with its other sorted data when change from write to read or close the file
@@ -259,7 +245,7 @@ void SortedDBFile::MergeSortedParts() {
 }
 
 void SortedDBFile::AddRecord(Record &tempRec, Page &tempPage, File &tempFile, int &tempIndex){
-	if( tempPage.Append(&tempRec) == 0){
+	if( 0 == tempPage.Append(&tempRec) ){
 		//if the page is full, create a new page
 		tempFile.AddPage(&tempPage, tempIndex);  
 		tempPage.EmptyItOut();
@@ -285,7 +271,7 @@ void SortedDBFile::MergeRecord(Page &tempPage, File &tempFile, int &tempIndex){
 				minRec.Consume(&tempRec1);
 				AddRecord(minRec, tempPage, tempFile, tempIndex);
 				//get next record in DBFile for next comparion, if no record left then break
-				if(GetNext(tempRec1) == 0){				
+				if( 0 == GetNext(tempRec1) ){				
 					AddRecord(tempRec2, tempPage, tempFile, tempIndex);
 					break;
 				}
@@ -295,7 +281,7 @@ void SortedDBFile::MergeRecord(Page &tempPage, File &tempFile, int &tempIndex){
 				minRec.Consume(&tempRec2);
 				AddRecord(minRec, tempPage, tempFile, tempIndex);
 				//get next record in output pipe for next comparion, if no record left then break
-				if(output->Remove(&tempRec2) == 0){					
+				if( 0 == output->Remove(&tempRec2) ){					
 					AddRecord(tempRec1, tempPage, tempFile, tempIndex);
 					break;
 				}
@@ -364,13 +350,13 @@ void SortedDBFile::MakeQueryOrder(OrderMaker &searchOrder, int *litOrder){
 //if find the match record, return the match page index
 //otherwise return -1
 int SortedDBFile::BinarySearch(Record &literal, Record &outRec, int *litOrder) {
-	if(GetNext(outRec) == 0){
+	if( 0 == GetNext(outRec) ){
 		return -1;
 	}
 	ComparisonEngine comp;
 	int compare_result = comp.Compare(&outRec, &literal, &queryOrder, litOrder);
 	//if current record "equal to" the literal record, return current page index
-    if(compare_result == 0){
+    if( 0 == compare_result ){
     	return curPageIndex;
     }
     //if current record "greater than" the literal record, all of the rest records 
@@ -400,7 +386,7 @@ int SortedDBFile::BinarySearch(Record &literal, Record &outRec, int *litOrder) {
       	//if the record is "=" literal, there maybe other match records in preivous pages, 
       	//keep on search the preivous pages. When the binary search terminate, scan one more 
       	//page to find match record
-      		if(comp.Compare(&outRec, &literal, &queryOrder, litOrder) == 0){
+      		if( 0 == comp.Compare(&outRec, &literal, &queryOrder, litOrder) ){
       			//set scanNextPage to true to mark a match record is found, 
       			scanNextPage = true;
       		} 
@@ -420,10 +406,10 @@ int SortedDBFile::BinarySearch(Record &literal, Record &outRec, int *litOrder) {
   	}
   	//if minIndex reach the end of file, can not determine whether the match record in second last page or not, 
   	//or if scanNextPage is true, scan one more page to ensure no match record is lost
-  	if( scanNextPage == true || minIndex == curFile.GetLength() - 2 ){
+  	if( true == scanNextPage || (curFile.GetLength() - 2) == minIndex ){
   		curFile.GetPage(&curPage, ++matchIndex);    
   		while(curPage.GetFirst(&outRec)){
-  			if ((comp.Compare(&outRec, &literal, &queryOrder, litOrder) == 0)){
+  			if ( 0 == comp.Compare(&outRec, &literal, &queryOrder, litOrder) ){
   				return matchIndex;
   			}
   		}
@@ -443,7 +429,7 @@ int SortedDBFile::FindAcceptedRecord(Record &fetchme, Record &literal, CNF &cnf,
 		//scan record one-by-one
 		while( GetNext(fetchme) ){//fetch record successfully
 			//if query OrderMaker accept the record
-			if(comp.Compare(&fetchme, &literal, &queryOrder, litOrder) == 0){
+			if( 0 == comp.Compare(&fetchme, &literal, &queryOrder, litOrder) ){
 				//if query CNF  accept the record, return 1
 				if(comp.Compare(&fetchme, &literal, &cnf)){
 					return 1;

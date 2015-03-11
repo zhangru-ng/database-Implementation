@@ -1,19 +1,17 @@
 #include "DBFile.h"
 
 
-DBFile::DBFile () : myInernalPoniter(NULL) {
+DBFile::DBFile () : myInernalPoniter(nullptr) {
 
 }
 
-DBFile::~DBFile () {
-	delete myInernalPoniter;
-}
-
+//check if the internal pointer is initialize
 bool DBFile::AssertInit(){
-	if(myInernalPoniter != NULL){
+	if(myInernalPoniter != nullptr){
 		return true;
 	}else{
-		cerr << "ERROR: DBFile is not initialized!";
+		//if the internal pointer is not initialize, all operation on this instant will cause serious problem
+		cerr << "ERROR: DBFile is not initialized or is already closed!\n";
 		exit(1);
 	}
 }
@@ -22,7 +20,7 @@ int DBFile::Create (const char *f_path, fType f_type, void *startup) {
 	switch(f_type){
 		case heap: 
 			myInernalPoniter = new HeapDBFile();
-			startup = NULL;
+			startup = nullptr;
 			break;
 		case sorted: 
 			myInernalPoniter = new SortedDBFile();
@@ -31,7 +29,7 @@ int DBFile::Create (const char *f_path, fType f_type, void *startup) {
 	//	myInernalPoniter = new TreeDBFile(); 
 	//	break;
 		default:
-			cerr << "ERROR: Can't create DBFile, File type doesn't exist!";
+			cerr << "ERROR: Can't create DBFile, File type doesn't exist!\n";
 			return 0;
 	}
 	if(AssertInit()){
@@ -46,33 +44,33 @@ int DBFile::Open (const char *f_path) {
 	//open the exist associate file
 	ifstream metafile;
 	metafile.open(header.c_str());
-	if ( metafile.is_open() == false ){
+	if ( false == metafile.is_open() ){
 		cerr << "Can't open associated file for " << f_path << "\n";
 		return 0;
-	}else{
-		int type;
-		//read file type from associate file
-		metafile >> type;
-		metafile.close();
-		//check file type and create corresponding DBFile instance
-		switch((fType)type){
-			case heap:
-				myInernalPoniter = new HeapDBFile();
-				break;
-			case sorted:
-				myInernalPoniter = new SortedDBFile();
-				break;
-			case tree:
-				// myInernalPoniter = new TreeDBFile(); 
-				break;
-			default:
-				cerr << "ERROR: Can't open DBFile, File type doesn't exist!";
-				return 0;
-		}	
-		if(AssertInit()){
-			return myInernalPoniter->Open(f_path);	
-		}
 	}
+	int type;
+	//read file type from associate file
+	metafile >> type;
+	metafile.close();
+	//check file type and create corresponding DBFile instance
+	switch((fType)type){
+		case heap:
+			myInernalPoniter = new HeapDBFile();
+			break;
+		case sorted:
+			myInernalPoniter = new SortedDBFile();
+			break;
+		case tree:
+			// myInernalPoniter = new TreeDBFile(); 
+			break;
+		default:
+			cerr << "ERROR: Can't open DBFile, File type doesn't exist!\n";
+			return 0;
+	}	
+	if(AssertInit()){
+		return myInernalPoniter->Open(f_path);	
+	}
+
 	
 }
 
@@ -91,10 +89,14 @@ void DBFile::MoveFirst () {
 }
 
 int DBFile::Close () {
+	int isClose;
 	if(AssertInit()){
 		//call corresponding Close
-		return myInernalPoniter -> Close();
+		 isClose = myInernalPoniter -> Close();
 	}
+	delete myInernalPoniter;
+	myInernalPoniter = nullptr;
+	return isClose;
 }
 
 void DBFile::Add (Record &rec) {

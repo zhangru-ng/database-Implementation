@@ -160,10 +160,6 @@ File :: File () {
 	curLength = 0; 
 }
 
-File :: ~File () {
-}
-
-
 void File :: GetPage (Page *putItHere, off_t whichPage) {
 
 	// this is because the first page has no data

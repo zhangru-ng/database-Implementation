@@ -55,7 +55,6 @@ private:
 public:
 
 	File ();
-	~File ();
 
 	// returns the current length of the file, in pages
 	off_t GetLength ();

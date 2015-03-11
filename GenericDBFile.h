@@ -38,7 +38,6 @@ protected:
 
 public:
 	GenericDBFile (); 
-	virtual ~GenericDBFile (); 
 	virtual int Create (const char *fpath, fType file_type, void *startup) = 0;
 	virtual int Open (const char *fpath) = 0;
 	virtual int Close () = 0;

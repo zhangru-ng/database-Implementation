@@ -71,7 +71,7 @@ void initCNF(CNF &cnf_pred, Record &literal, char* cnf_name, char* tbl_name){
 	// parse through the input until there is no more:
 	do {
 		if(yyparse()){
-			cerr << "Can't parse test filter CNF";
+			cerr << "Can't parse test filter CNF\n";
 			exit(1);
 		}
 	} while (!feof(yyin));
@@ -95,7 +95,7 @@ TEST_F(HeapFileTest, CreateInNonExistDir) {
 	EXPECT_EQ( 0, dbfile.Create("nonexist/testFile.bin", heap , 0) );
 }
 
-TEST_F(HeapFileTest, OpenFile) {
+TEST_F(HeapFileTest, OpenAndCloseFile) {
 	EXPECT_EQ( 1 , dbfile.Close() );     //close created file
 	EXPECT_EQ( 1 , dbfile.Open(testFile_path) );	
 }
@@ -107,12 +107,6 @@ TEST_F(HeapFileTest, OpenNonExistFile) {
 TEST_F(HeapFileTest, OpenWithoutHeaderFile) {
 	remove(headFile_path);
 	EXPECT_EQ( 0 , dbfile.Open(testFile_path) );	
-}
-
-TEST_F(HeapFileTest, CloseFile) {
- 	EXPECT_EQ( 1 , dbfile.Close() );     //close created file
-	dbfile.Open(testFile_path); 
-	EXPECT_EQ( 1 , dbfile.Close() );		//close open file
 }
 
 TEST_F(HeapFileTest, CreateHeapTypeHeader) {
@@ -261,6 +255,15 @@ TEST(HeapFileDeathTest, AddRecordLargerThanPage) {
 	EXPECT_DEATH( dbfile.Add (tempRec1), "This record is larger than a DBFile page");
 }
 
+
+TEST(HeapFileDeathTest, CloseTwice) {
+	::testing::FLAGS_gtest_death_test_style = "threadsafe";
+	DBFile dbfile;
+	dbfile.Create(testFile_path, heap , 0);
+	dbfile.Close();
+	EXPECT_DEATH( dbfile.Close(), "ERROR: DBFile is not initialized or is already closed!");
+}
+
 /*
  * Big queue unit test
  * Written by Rui 2015.02.21	
@@ -355,7 +358,7 @@ void initOrderMaker(OrderMaker &sortorder, char* sortname, char* tbl_name){
 	// parse through the input until there is no more:
 	do {
 		if(yyparse()){
-			cerr << "Can't parse test sort CNF";
+			cerr << "Can't parse test sort CNF\n";
 			exit(1);
 		}
 	} while (!feof(yyin));
@@ -566,22 +569,15 @@ TEST_F(SortedFileTest, CreateInNonExistDir) {
 	EXPECT_EQ( 0, dbfile.Create("nonexist/testFile.bin", sorted , &startup) );
 }
 
-TEST_F(SortedFileTest, OpenFile) {
+TEST_F(SortedFileTest, OpenAndCloseFile) {
 	dbfile.Create(testFile_path, sorted , &startup);
-	dbfile.Close();
+	EXPECT_EQ(1 , dbfile.Close() ); 
 	EXPECT_EQ( 1 , dbfile.Open(testFile_path) );	
 }
 
 TEST_F(SortedFileTest, OpenNonExistFile) {	
 	EXPECT_EQ( 0, dbfile.Open("dbfile/nonexist.bin") );
 	EXPECT_EQ( 1 , dbfile.Create(testFile_path, sorted , &startup));	
-}
-
-TEST_F(SortedFileTest, CloseFile) {
-	dbfile.Create(testFile_path, sorted , &startup);
- 	EXPECT_EQ(1 , dbfile.Close() );     //close created file
-	dbfile.Open(testFile_path); 
-	EXPECT_EQ(1 , dbfile.Close() );		//close open file
 }
 
 TEST_F(SortedFileTest, MoveFirst) {

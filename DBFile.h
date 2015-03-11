@@ -18,10 +18,10 @@ FRIEND_TEST(SortedFileTest, MoveFirst);
 
 private:
 	GenericDBFile *myInernalPoniter;
+	//check if the internal pointer is initialize
 	bool AssertInit();
 public:
 	DBFile (); 
-	~DBFile (); 
 
 	int Create (const char *fpath, fType file_type, void *startup);
 	int Open (const char *fpath);

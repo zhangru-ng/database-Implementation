@@ -4,11 +4,6 @@ HeapDBFile::HeapDBFile () {
 
 }
 
-HeapDBFile::~HeapDBFile () {
-
-}
-
-
 //The following function is used to actually create the file. The first
 //parameter is a text string that tells where the binary data is 
 //physically to be located. If there is meta-data(type of file, etc),
@@ -21,7 +16,7 @@ int HeapDBFile::Create (const char *f_path, fType f_type, void *startup) {
 	header += ".header";
 	
 	ofstream metafile(header.c_str());
-	if (!metafile.is_open()){
+	if ( false == metafile.is_open()){
 		cerr << "Can't create associated file for " << f_path << "\n";
 		return 0;
 	}
@@ -66,16 +61,16 @@ void HeapDBFile::Load (Schema &f_schema, const char *loadpath) {
 	Record tempRec;
 	Page tempPage;
 	int tempIndex = 0;
-	if(tableFile == NULL){
+	if( nullptr == tableFile ){
 		cerr << "Can't open table file for" << loadpath << "\n";
 		exit(1);
 	}
-     while (tempRec.SuckNextRecord (&f_schema, tableFile) == 1) {
-		if( tempPage.Append(&tempRec) == 0){
+     while (tempRec.SuckNextRecord (&f_schema, tableFile)) {
+		if( 0 == tempPage.Append(&tempRec) ){
 			//if the page is full, create a new page
 			curFile.AddPage(&tempPage, tempIndex);  
 			tempPage.EmptyItOut();
-			if( tempPage.Append(&tempRec) == 0 ){ //if fail again, record larger than page
+			if( 0 == tempPage.Append(&tempRec) ){ //if fail again, record larger than page
 				cerr << "Can't load " << loadpath << ", a record larger than page" << "\n";
 				exit(1);
 			}
@@ -109,7 +104,7 @@ void HeapDBFile::Add (Record &addMe) {
 	int tempIndex;	 
 	//length is 0 for empty file, GetPage(&tempPage, 0) will lead to 
 	//read over bound of file	
-	if(curFile.GetLength() == 0){
+	if( 0 == curFile.GetLength() ){
 		tempIndex = 0;      
 	}
 	//if the file is not empty, file length-2 is the last page
@@ -118,7 +113,7 @@ void HeapDBFile::Add (Record &addMe) {
 		curFile.GetPage(&tempPage, tempIndex);		
 	}
 	else{ //length less than 0, something wrong with current file
-		cerr << "File length less than 0 in DBFile add";
+		cerr << "File length less than 0 in DBFile add\n";
 		exit (1);
 	}
 	if( tempPage.Append(&addMe) ){//if the page is not full 
@@ -127,7 +122,7 @@ void HeapDBFile::Add (Record &addMe) {
 		//clean the page and add the record that failed before
 		tempPage.EmptyItOut();		
 		if( !tempPage.Append(&addMe) ){ 
-			cerr << "This record is larger than a DBFile page";
+			cerr << "This record is larger than a DBFile page\n";
 			exit (1);
 		}
 		tempIndex++;		
