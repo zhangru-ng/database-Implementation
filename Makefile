@@ -1,4 +1,4 @@
-CC = g++ -O2 -Wno-write-strings
+CC = g++ -O2 -Wno-write-strings -std=c++11
 tag = -i
 
 ifdef linux
@@ -9,11 +9,14 @@ GTEST_DIR = ./source/gtest
 USER_DIR = ./source
 BIN_DIR = ./bin
 CPPFLAGS += -isystem $(GTEST_DIR)/include
-CXXFLAGS += -g -pthread -Wno-write-strings  # -Wall -Wextra
+CXXFLAGS += -std=c++11 -g -pthread -Wno-write-strings # -Wall -Wextra
 TESTS = Database_unittest 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
 GTEST_SRCS_ = $(GTEST_DIR)/src/*.cc $(GTEST_DIR)/src/*.h $(GTEST_HEADERS)
+
+a3test.out: Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o BigQ.o RelOp.o Function.o y.tab.o yyfunc.tab.o lex.yy.o lex.yyfunc.o a3test.o
+	$(CC) -o $(BIN_DIR)/a3test.out Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o BigQ.o RelOp.o Function.o y.tab.o yyfunc.tab.o lex.yy.o lex.yyfunc.o a3test.o -lfl -lpthread
 
 a22test.out: Record.o Comparison.o ComparisonEngine.o Schema.o File.o BigQ.o DBFile.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o y.tab.o lex.yy.o a22test.o
 	$(CC) -o $(BIN_DIR)/a22test.out Record.o Comparison.o ComparisonEngine.o Schema.o File.o BigQ.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o y.tab.o lex.yy.o a22test.o -lfl -lpthread
@@ -22,10 +25,13 @@ a2test.out: Record.o Comparison.o ComparisonEngine.o Schema.o File.o BigQ.o DBFi
 	$(CC) -o $(BIN_DIR)/a2test.out Record.o Comparison.o ComparisonEngine.o Schema.o File.o BigQ.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o y.tab.o lex.yy.o a2test.o -lfl -lpthread
 
 a1test.out: Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o Pipe.o BigQ.o GenericDBFile.o HeapDBFile.o SortedDBFile.o y.tab.o lex.yy.o a1test.o
-	$(CC) -o  $(BIN_DIR)/a1test.out Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o Pipe.o BigQ.o GenericDBFile.o HeapDBFile.o SortedDBFile.o y.tab.o lex.yy.o a1test.o -lfl  -lpthread
+	$(CC) -o  $(BIN_DIR)/a1test.out Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o Pipe.o BigQ.o GenericDBFile.o HeapDBFile.o SortedDBFile.o y.tab.o lex.yy.o a1test.o -lfl  
 
 main: Record.o Comparison.o ComparisonEngine.o Schema.o File.o y.tab.o lex.yy.o main.o
 	$(CC) -o main Record.o Comparison.o ComparisonEngine.o Schema.o File.o y.tab.o lex.yy.o main.o -lfl
+
+a3test.o : $(USER_DIR)/a3test.cc $(USER_DIR)/a3test.h $(GTEST_HEADERS)
+	$(CC) $(CPPFLAGS) -Wno-unused-result -c $(USER_DIR)/a3test.cc
 
 a22test.o : $(USER_DIR)/a22test.cc $(USER_DIR)/a22test.h $(GTEST_HEADERS)
 	$(CC) $(CPPFLAGS) -c $(USER_DIR)/a22test.cc
@@ -40,7 +46,7 @@ main.o: $(USER_DIR)/main.cc
 	$(CC) $(CPPFLAGS) -c $(USER_DIR)/main.cc
 
 
-Database_unittest: Database_unittest.o BigQ.o DBFile.o GenericDBFile.o SortedDBFile.o HeapDBFile.o Pipe.o Record.o Comparison.o ComparisonEngine.o Schema.o File.o y.tab.o lex.yy.o gtest_main.a
+Database_unittest: Database_unittest.o Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o Pipe.o BigQ.o RelOp.o Function.o y.tab.o yyfunc.tab.o lex.yy.o lex.yyfunc.o gtest_main.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $(BIN_DIR)/$@
 #	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
 
@@ -59,6 +65,12 @@ SortedDBFile.o : $(USER_DIR)/SortedDBFile.cc $(USER_DIR)/SortedDBFile.h $(GTEST_
 
 HeapDBFile.o : $(USER_DIR)/HeapDBFile.cc $(USER_DIR)/HeapDBFile.h $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/HeapDBFile.cc
+
+RelOp.o : $(USER_DIR)/RelOp.cc $(USER_DIR)/RelOp.h $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/RelOp.cc
+
+Function.o : $(USER_DIR)/Function.cc $(USER_DIR)/Function.h $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/Function.cc
 
 Pipe.o: $(USER_DIR)/Pipe.cc $(USER_DIR)/Pipe.h $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/Pipe.cc
@@ -83,12 +95,21 @@ Schema.o : $(USER_DIR)/Schema.cc $(USER_DIR)/Schema.h $(GTEST_HEADERS)
 
 y.tab.o: $(USER_DIR)/Parser.y
 	yacc -d $(USER_DIR)/Parser.y
-	sed $(tag) y.tab.c -e "s/  __attribute__ ((__unused__))$$/# ifndef __cplusplus\n  __attribute__ ((__unused__));\n# endif/" 
+	#sed $(tag) y.tab.c -e "s/  __attribute__ ((__unused__))$$/# ifndef __cplusplus\n  __attribute__ ((__unused__));\n# endif/" 
 	g++ -Wno-write-strings -c y.tab.c -o y.tab.o
+
+yyfunc.tab.o: $(USER_DIR)/ParserFunc.y
+	yacc -p "yyfunc" -b "yyfunc" -d $(USER_DIR)/ParserFunc.y
+	#sed $(tag) yyfunc.tab.c -e "s/  __attribute__ ((__unused__))$$/# ifndef __cplusplus\n  __attribute__ ((__unused__));\n# endif/" 
+	g++ -Wno-write-strings -c yyfunc.tab.c -o yyfunc.tab.o
 
 lex.yy.o: $(USER_DIR)/Lexer.l
 	lex $(USER_DIR)/Lexer.l
 	gcc -Wno-write-strings -c lex.yy.c -o lex.yy.o
+
+lex.yyfunc.o: $(USER_DIR)/LexerFunc.l
+	lex -Pyyfunc  $(USER_DIR)/LexerFunc.l
+	gcc -Wno-write-strings -c lex.yyfunc.c -o lex.yyfunc.o
 
 gtest_main.a : gtest-all.o gtest_main.o
 	$(AR) $(ARFLAGS) $@ $^
@@ -104,14 +125,17 @@ gtest-all.o : $(GTEST_SRCS_)
 	$(CXX) $(CPPFLAGS) -I$(GTEST_DIR) $(CXXFLAGS) -c \
             $(GTEST_DIR)/src/gtest-all.cc 
 
-all:  a22test.out a2test.out a1test.out main DBFile_unittest
-out:  a22test.out a2test.out a1test.out 
+all:  a3test.out a22test.out a2test.out a1test.out main DBFile_unittest
+out:  a3test.out a22test.out a2test.out a1test.out 
 test: Database_unittest
 
 clean: 
 	rm -f *.o
 	rm -f y.tab.c
 	rm -f lex.yy.c
+	rm -f yyfunc.tab.c
+	rm -f yyfunc.tab.h
+	rm -f lex.yyfunc.c
 	rm -f y.tab.h
 	rm -f gtest.a gtest_main.a
 	rm -f $(BIN_DIR)/main $(BIN_DIR)/*.out

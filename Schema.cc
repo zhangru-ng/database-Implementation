@@ -35,6 +35,30 @@ Attribute *Schema :: GetAtts () {
 	return myAtts;
 }
 
+Schema :: Schema (char *fpath, int num_atts, Attribute *atts) {
+	fileName = strdup (fpath);
+	numAtts = num_atts;
+	myAtts = new Attribute[numAtts];
+	for (int i = 0; i < numAtts; i++ ) {
+		if (atts[i].myType == Int) {
+			myAtts[i].myType = Int;
+		}
+		else if (atts[i].myType == Double) {
+			myAtts[i].myType = Double;
+		}
+		else if (atts[i].myType == String) {
+			myAtts[i].myType = String;
+		} 
+		else {
+			cout << "Bad attribute type for " << atts[i].myType << "\n";
+			delete [] myAtts;
+			exit (1);
+		}
+		myAtts[i].name = strdup (atts[i].name);
+	}
+	free(fileName);
+}
+
 Schema :: Schema (char *fName, char *relName) {
 
 	FILE *foo = fopen (fName, "r");
@@ -126,13 +150,12 @@ Schema :: Schema (char *fName, char *relName) {
 			exit (1);
 		}
 	}
-
+	free(fileName);
 	fclose (foo);
 }
 
 Schema :: ~Schema () {
 	delete [] myAtts;
-	free(fileName);
 	myAtts = 0;
 }
 

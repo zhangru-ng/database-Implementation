@@ -1,4 +1,5 @@
-
+#ifndef PARSETREE_H
+#define PARSETREE_H
 // these are the different types of operators that can appear
 // in a CNF expression
 #define LESS_THAN 1
@@ -52,5 +53,6 @@ struct AndList {
 
 };
 
+#endif
 
 

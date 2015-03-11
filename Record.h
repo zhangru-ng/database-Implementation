@@ -28,6 +28,7 @@ class Record {
 
 friend class ComparisonEngine;
 friend class Page;
+
 friend class HeapFileTest;
 friend class SortedFileTest;
 
@@ -36,12 +37,12 @@ FRIEND_TEST(HeapFileTest, GetNextRecord);
 FRIEND_TEST(HeapFileDeathTest, AddRecordLargerThanPage);
 
 private:
-	char *bits;
 	char* GetBits () const;
 	void SetBits (char *bits);
 	void CopyBits(char *bits, int b_len);
 
 public:
+	char *bits;
 	Record ();
  	Record (const Record &copyme);
 	~Record();
@@ -61,6 +62,7 @@ public:
 	// if there is an error and returns a 1 otherwise
 	int SuckNextRecord (Schema *mySchema, FILE *textFile);
 
+	int ComposeRecord (Schema *mySchema, const char *src);
 	// this projects away various attributes... 
 	// the array attsToKeep should be sorted, and lists all of the attributes
 	// that should still be in the record after Project is called.  numAttsNow
