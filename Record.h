@@ -62,7 +62,9 @@ public:
 	// if there is an error and returns a 1 otherwise
 	int SuckNextRecord (Schema *mySchema, FILE *textFile);
 
+	// compose record using src which is separate by |
 	int ComposeRecord (Schema *mySchema, const char *src);
+	
 	// this projects away various attributes... 
 	// the array attsToKeep should be sorted, and lists all of the attributes
 	// that should still be in the record after Project is called.  numAttsNow
