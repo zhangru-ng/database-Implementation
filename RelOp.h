@@ -6,26 +6,27 @@
 #include "DBFile.h"
 #include "Record.h"
 #include "Function.h"
+#include "Thread.h"
+
 
 class RelationalOp {
-public:
+public:	
 	// blocks the caller until the particular relational operator 
 	// has run to completion
 	virtual void WaitUntilDone () = 0;
 
 	// tell us how much internal memory the operation can use
 	virtual void Use_n_Pages (int n) = 0;
+
 };
 
-class SelectFile : public RelationalOp { 
+class SelectFile : public RelationalOp, public Thread { 
 private:
 	DBFile *inFile;
 	Pipe *outPipe;
 	CNF *selOp;
 	Record *literal;
-	pthread_t thread;
-	static void* thread_wrapper (void* arg);
-   	void* selectFile();
+   	void* InternalThreadEntry();
 public:
 	SelectFile();
 	void Run (DBFile &inFile, Pipe &outPipe, CNF &selOp, Record &literal);
@@ -34,15 +35,13 @@ public:
 
 };
 
-class SelectPipe : public RelationalOp {
+class SelectPipe : public RelationalOp, public Thread {
 private:
 	Pipe *inPipe;
 	Pipe *outPipe;
 	CNF *selOp;
 	Record *literal;	
-	pthread_t thread;
-	static void* thread_wrapper (void* arg);
-   	void* selectPipe();
+   	void* InternalThreadEntry();
 public:
 	SelectPipe();
 	void Run (Pipe &inPipe, Pipe &outPipe, CNF &selOp, Record &literal);
@@ -50,16 +49,14 @@ public:
 	void Use_n_Pages (int n);
 };
 
-class Project : public RelationalOp { 
+class Project : public RelationalOp, public Thread { 
 private:
 	Pipe *inPipe;
 	Pipe *outPipe;
 	int *keepMe;
 	int numAttsInput;
 	int numAttsOutput;
-	pthread_t thread;
-	static void* thread_wrapper (void* arg);
-   	void* project();
+   	void* InternalThreadEntry();
 public:
 	Project();
 	void Run (Pipe &inPipe, Pipe &outPipe, int *keepMe, int numAttsInput, int numAttsOutput);
@@ -67,20 +64,14 @@ public:
 	void Use_n_Pages (int n);
 };
 
-class Join : public RelationalOp { 
+class Join : public RelationalOp, public Thread { 
 private:
 	Pipe *inPipeL;
 	Pipe *inPipeR;
 	Pipe *outPipe;
 	CNF *selOp;
 	Record *literal;
-	Pipe *outputL;
-	Pipe *outputR;
-	BigQ *bqL;
-	BigQ *bqR; 
-	pthread_t thread;
-	static void* thread_wrapper (void* arg);
-	void* join();
+	void* InternalThreadEntry();
 public:
 	Join();
 	void Run (Pipe &inPipeL, Pipe &inPipeR, Pipe &outPipe, CNF &selOp, Record &literal);
@@ -88,16 +79,12 @@ public:
 	void Use_n_Pages (int n);
 };
 
-class DuplicateRemoval : public RelationalOp {
+class DuplicateRemoval : public RelationalOp, public Thread {
 private:
 	Pipe *inPipe;
 	Pipe *outPipe;
 	Schema *mySchema;
-	Pipe *output;
-	BigQ *bq;
-	pthread_t thread;
-	static void* thread_wrapper (void* arg);
-	void* duplicateRemoval();
+	void* InternalThreadEntry();
 public:
 	DuplicateRemoval();
 	void Run (Pipe &inPipe, Pipe &outPipe, Schema &mySchema);
@@ -105,14 +92,12 @@ public:
 	void Use_n_Pages (int n);
 };
 
-class Sum : public RelationalOp {
+class Sum : public RelationalOp, public Thread {
 private:
 	Pipe *inPipe;
 	Pipe *outPipe;
 	Function *computeMe;
-	pthread_t thread;
-	static void* thread_wrapper (void* arg);
-	void* sum();
+	void* InternalThreadEntry();
 public:
 	Sum() ;
 	void Run (Pipe &inPipe, Pipe &outPipe, Function &computeMe);
@@ -120,7 +105,7 @@ public:
 	void Use_n_Pages (int n);
 };
 
-class GroupBy : public RelationalOp {
+class GroupBy : public RelationalOp, public Thread {
 private:
 	Pipe *inPipe; 
 	Pipe *outPipe;
@@ -128,9 +113,7 @@ private:
 	BigQ *bq;
 	OrderMaker *groupAtts;
 	Function *computeMe;
-	pthread_t thread;
-	static void* thread_wrapper (void* arg);
-	void* groupBy();
+	void* InternalThreadEntry();
 public:
 	GroupBy();
 	void Run (Pipe &inPipe, Pipe &outPipe, OrderMaker &groupAtts, Function &computeMe);
@@ -138,14 +121,12 @@ public:
 	void Use_n_Pages (int n);
 };
 
-class WriteOut : public RelationalOp {
+class WriteOut : public RelationalOp, public Thread {
 private:
 	Pipe *inPipe;
 	FILE *outFile;
-	Schema *mySchema;
-	pthread_t thread;
-	static void* thread_wrapper (void* arg);
-	void* writeOut();
+	Schema *mySchema;	
+	void* InternalThreadEntry();
 public:
 	WriteOut();
 	void Run (Pipe &inPipe, FILE *outFile, Schema &mySchema);

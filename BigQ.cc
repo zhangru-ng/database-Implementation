@@ -3,16 +3,8 @@
 
 BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl), runsFileName(NULL), runsFile(), runNum(0), workthread(){
 	if(runlen > 0){
-	//prevent memory leak(_dl_allocate_tls), if workerthread is detached
-	/*pthread_attr_t attr;
-	pthread_attr_init(&attr);
-   	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);*/
-   	//create own worker thread for this BigQ	
- 		pthread_create (&workthread, NULL, &workerthread_wrapper, this); 	
- 	//pthread_attr_destroy(&attr);
- 	//prevent memory leak(_dl_allocate_tls), if workerthread is joinable
- 		//pthread_join (workthread, NULL); 
-	}else{
+		StartInternalThread();
+ 	}else{
 		cerr << "ERROR in BigQ: run length should greater than 0!";
 		exit(1);
 	}
@@ -24,14 +16,10 @@ BigQ::~BigQ () {
 	}
 	free(runsFileName);
 }
-//C++ class member functions have a hidden this parameter passed in, 
-//use a static class method (which has no this parameter) to bootstrap the class
-void* BigQ::workerthread_wrapper (void* arg) {
-    ( reinterpret_cast<BigQ*>(arg) )->TPM_MergeSort();
-}
 
 //two phase multiway merge sort
-void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
+void *BigQ::InternalThreadEntry(){
+// void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
 	runsFileName = strdup("/cise/tmp/rui/tempfile0b0q0x.bin");
 	runsFile.Open(0, runsFileName);
 	vector<Run> runs;

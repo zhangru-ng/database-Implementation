@@ -11,6 +11,7 @@
 #include "File.h"
 #include "Record.h"
 #include "Schema.h"
+#include "Thread.h"
 
 
 
@@ -66,7 +67,7 @@ public:
   }
 };
 
-class BigQ {
+class BigQ : public Thread {
 private:
   Pipe &in;
   Pipe &out;
@@ -77,9 +78,10 @@ private:
   int runNum;
   pthread_t workthread;
   //bootstrap wrapper function
-  static void* workerthread_wrapper (void* arg);
+ // static void* workerthread_wrapper (void* arg);
+  void *InternalThreadEntry();
   //two phase multiway merge sort main function
-  void * TPM_MergeSort();
+  // void * TPM_MergeSort();
   //sort one run record in first phase
   void SortInRun(vector<Record> &oneRunRecords);
   //write one run to temporary file, store the begin and length of current run

@@ -9,22 +9,18 @@ void SelectFile::Run (DBFile &inFile, Pipe &outPipe, CNF &selOp, Record &literal
 	this->outPipe = &outPipe;
 	this->selOp = &selOp;
 	this->literal = &literal;
-	pthread_create (&thread, nullptr, &thread_wrapper, this); 
+	StartInternalThread();
 }
 
 void SelectFile::WaitUntilDone () {
-	pthread_join (thread, nullptr);
+	 WaitForInternalThreadToExit();
 }
 
 void SelectFile::Use_n_Pages (int runlen) {
 
 }
 
-void* SelectFile::thread_wrapper (void* arg) {
-    ( reinterpret_cast<SelectFile*>(arg) )->selectFile();
-}
-
-void* SelectFile::selectFile() {
+void* SelectFile::InternalThreadEntry() {
 	Record tempRec;
 	ComparisonEngine comp;
 	// assume that this file is all set up, it has been opened and is ready to go
@@ -46,22 +42,18 @@ void SelectPipe::Run (Pipe &inPipe, Pipe &outPipe, CNF &selOp, Record &literal) 
 	this->outPipe = &outPipe;
 	this->selOp = &selOp;
 	this->literal = &literal;
-	pthread_create (&thread, nullptr, &thread_wrapper, this); 
+	StartInternalThread();
 }
 
-void SelectPipe::WaitUntilDone () { 
-	pthread_join (thread, nullptr);
+void SelectPipe::WaitUntilDone () {
+	WaitForInternalThreadToExit();
 }
 
 void SelectPipe::Use_n_Pages (int n) { 
 
 }
 
-void* SelectPipe::thread_wrapper (void* arg) {
-    ( reinterpret_cast<SelectPipe*>(arg) )->selectPipe();
-}
-
-void* SelectPipe::selectPipe() {
+void* SelectPipe::InternalThreadEntry() {
 	Record tempRec;
 	ComparisonEngine comp;
 	while( inPipe->Remove(&tempRec) ){
@@ -86,22 +78,18 @@ void Project::Run (Pipe &inPipe, Pipe &outPipe, int *keepMe, int numAttsInput, i
 	this->keepMe = keepMe;
 	this->numAttsInput = numAttsInput;
 	numAttsOutput = numAttsOutput;
-	pthread_create (&thread, nullptr, &thread_wrapper, this); 
+	StartInternalThread();
 }
 
 void Project::WaitUntilDone () {
-	pthread_join (thread, nullptr);
+	WaitForInternalThreadToExit();
 }
 
 void Project::Use_n_Pages (int n) {
 
 }
 
-void* Project::thread_wrapper (void* arg) {
-    ( reinterpret_cast<Project*>(arg) )->project();
-}
-
-void* Project::project() {
+void* Project::InternalThreadEntry() {
 	Record tempRec;
 	while( inPipe->Remove(&tempRec) ){
 		//Project (int *attsToKeep, int numAttsToKeep, int numAttsNow);
@@ -120,7 +108,7 @@ void* Project::project() {
 // the OrderMakers). If you can’t get an appropriate pair of OrderMakers because the
 // CNF can’t be implemented using a sort-merge join (due to the fact it does not have an
 // equality check) then your Join operation should default to a block-nested loops join
-Join::Join() : inPipeL(nullptr), inPipeR(nullptr), outPipe(nullptr), selOp(nullptr), literal(nullptr), outputL(nullptr), outputR(nullptr), bqL(nullptr), bqR(nullptr) { }
+Join::Join() : inPipeL(nullptr), inPipeR(nullptr), outPipe(nullptr), selOp(nullptr), literal(nullptr){ }
 
 void Join::Run (Pipe &inPipeL, Pipe &inPipeR, Pipe &outPipe, CNF &selOp, Record &literal){
 	this->inPipeL = &inPipeL;
@@ -128,11 +116,11 @@ void Join::Run (Pipe &inPipeL, Pipe &inPipeR, Pipe &outPipe, CNF &selOp, Record 
 	this->outPipe = &outPipe;
 	this->selOp = &selOp;
 	this->literal = &literal;
-	pthread_create (&thread, nullptr, &thread_wrapper, this); 
+	StartInternalThread();
 }
 
 void Join::WaitUntilDone (){
-	pthread_join (thread, nullptr);
+	WaitForInternalThreadToExit();
 
 }
 
@@ -140,11 +128,7 @@ void Join::Use_n_Pages (int n){
 
 }
 
-void* Join::thread_wrapper (void* arg) {
-    ( reinterpret_cast<Join*>(arg) )->join();
-}
-
-void* Join::join(){
+void* Join::InternalThreadEntry(){
 	Record tempRecL, tempRecR, joinedRec;
 	ComparisonEngine comp;
 	int buffsz = 100;
@@ -153,10 +137,10 @@ void* Join::join(){
 	if( 0 == selOp->GetSortOrders (sortorderL, sortorderR) ){
 		// block-nested loops join
 	}
-	outputL = new Pipe(buffsz);
-	outputR = new Pipe(buffsz);
-	bqL = new BigQ(*inPipeL, *outputL, sortorderL, runlen);
-	bqR = new BigQ(*inPipeR, *outputR, sortorderR, runlen);
+	Pipe *outputL = new Pipe(buffsz);
+	Pipe *outputR = new Pipe(buffsz);
+	BigQ *bqL = new BigQ(*inPipeL, *outputL, sortorderL, runlen);
+	BigQ *bqR = new BigQ(*inPipeR, *outputR, sortorderR, runlen);
 	while( outputL->Remove(&tempRecL) && outputR->Remove(&tempRecR) ){
 		if( comp.Compare(&tempRecL, &tempRecR, literal, selOp)){
 	//???	joinedRec.MergeRecords (&tempRecL, &tempRecR, int numAttsLeft, int numAttsRight, int *attsToKeep, int numAttsToKeep, int startOfRight);
@@ -172,28 +156,24 @@ void* Join::join(){
 // that somes through the output pipe will be distinct. It will use the BigQ class to do the
 // duplicate removal. The OrderMaker that will be used by the BigQ (which you’ll need
 // to write some code to create) will simply list all of the attributes from the input tuples.
-DuplicateRemoval::DuplicateRemoval() : inPipe(nullptr), outPipe(nullptr), mySchema(nullptr), output(nullptr), bq(nullptr) { }
+DuplicateRemoval::DuplicateRemoval() : inPipe(nullptr), outPipe(nullptr), mySchema(nullptr) { }
 
 void DuplicateRemoval::Run (Pipe &inPipe, Pipe &outPipe, Schema &mySchema){
 	this->inPipe = &inPipe;
 	this->outPipe = &outPipe;
 	this->mySchema = &mySchema; 
-	pthread_create (&thread, nullptr, &thread_wrapper, this); 
+	StartInternalThread();
 }
 
 void DuplicateRemoval::WaitUntilDone (){
-	pthread_join (thread, nullptr);
+	WaitForInternalThreadToExit();
 }
 
 void DuplicateRemoval::Use_n_Pages (int n){
 
 }
 
-void* DuplicateRemoval::thread_wrapper (void* arg) {
-    ( reinterpret_cast<DuplicateRemoval*>(arg) )->duplicateRemoval();
-}
-
-void* DuplicateRemoval::duplicateRemoval(){
+void* DuplicateRemoval::InternalThreadEntry(){
 	Record tempRec;
 	//last unduplicate record
 	Record lastRec;
@@ -201,8 +181,8 @@ void* DuplicateRemoval::duplicateRemoval(){
 	ComparisonEngine comp;
 	int buffsz = 100;
 	int runlen = 10;	
-	output = new Pipe(buffsz);	
-	bq = new BigQ(*inPipe, *output, DRorder, runlen);
+	Pipe *output = new Pipe(buffsz);	
+	BigQ *bq = new BigQ(*inPipe, *output, DRorder, runlen);
 	//initial the first lastRec
 	if(output->Remove(&tempRec)){
 		lastRec	= tempRec;
@@ -229,21 +209,18 @@ void Sum::Run (Pipe &inPipe, Pipe &outPipe, Function &computeMe){
 	this->inPipe = &inPipe;
 	this->outPipe = &outPipe;
 	this->computeMe = &computeMe; 
-	pthread_create (&thread, nullptr, &thread_wrapper, this); 
+	StartInternalThread();
 }
 
 void Sum::WaitUntilDone (){
-	pthread_join (thread, nullptr);
+	WaitForInternalThreadToExit();
 }
 
 void Sum::Use_n_Pages (int n){
 }
 
-void* Sum::thread_wrapper (void* arg) {
-    ( reinterpret_cast<Sum*>(arg) )->sum();
-}
 
-void* Sum::sum(){
+void* Sum::InternalThreadEntry(){
 	// Type Apply (Record &toMe, int &intResult, double &doubleResult);
 	Record tempRec;
 	int intResult;
@@ -284,21 +261,17 @@ void GroupBy::Run (Pipe &inPipe, Pipe &outPipe, OrderMaker &groupAtts, Function 
 	this->outPipe = &outPipe;
 	this->groupAtts = &groupAtts;
 	this->computeMe = &computeMe;
-	pthread_create (&thread, nullptr, &thread_wrapper, this); 
+	StartInternalThread();
 }
 
 void GroupBy::WaitUntilDone (){
-	pthread_join (thread, nullptr);
+	WaitForInternalThreadToExit();
 }
 
 void GroupBy::Use_n_Pages (int n){
 }
 
-void* GroupBy::thread_wrapper (void* arg) {
-    ( reinterpret_cast<GroupBy*>(arg) )->groupBy();
-}
-
-void* GroupBy::groupBy(){
+void* GroupBy::InternalThreadEntry(){
 	Record tempRec, lastRec;
 	ComparisonEngine comp;
 
@@ -339,21 +312,17 @@ void WriteOut::Run (Pipe &inPipe, FILE *outFile, Schema &mySchema){
 	this->inPipe = &inPipe;
 	this->outFile = outFile;
 	this->mySchema = &mySchema;
-	pthread_create (&thread, nullptr, &thread_wrapper, this); 
+	StartInternalThread();
 }
 
 void WriteOut::WaitUntilDone (){
-	pthread_join (thread, nullptr);
+	WaitForInternalThreadToExit();
 }
 
 void WriteOut::Use_n_Pages (int n){
 }
 
-void* WriteOut::thread_wrapper (void* arg) {
-    ( reinterpret_cast<WriteOut*>(arg) )->writeOut();
-}
-
-void* WriteOut::writeOut(){
+void* WriteOut::InternalThreadEntry(){
 	Record tempRec;
 	int n = mySchema->GetNumAtts();
 	Attribute *atts = mySchema->GetAtts();
