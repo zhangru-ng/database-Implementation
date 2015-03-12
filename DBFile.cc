@@ -11,7 +11,7 @@ bool DBFile::AssertInit(){
 		return true;
 	}else{
 		//if the internal pointer is not initialize, all operation on this instant will cause serious problem
-		cerr << "ERROR: DBFile is not initialized or is already closed!\n";
+		cerr << "ERROR: DBFile is not initialized or is closed twice!\n";
 		exit(1);
 	}
 }

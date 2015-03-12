@@ -8,9 +8,14 @@
 #include "Function.h"
 #include "Thread.h"
 
+using namespace std;
 
 class RelationalOp {
+protected:
+	static const int buffsz = 100;	
+ 	int runlen;
 public:	
+	RelationalOp() : runlen(20) { }
 	// blocks the caller until the particular relational operator 
 	// has run to completion
 	virtual void WaitUntilDone () = 0;
@@ -19,6 +24,9 @@ public:
 	virtual void Use_n_Pages (int n) = 0;
 
 };
+
+// Both RelationlOP and Thread are abstract base class, moreover, they are
+// completely irrelavent class, thus use multiple inheritance
 
 class SelectFile : public RelationalOp, public Thread { 
 private:
@@ -109,8 +117,6 @@ class GroupBy : public RelationalOp, public Thread {
 private:
 	Pipe *inPipe; 
 	Pipe *outPipe;
-	Pipe *output;
-	BigQ *bq;
 	OrderMaker *groupAtts;
 	Function *computeMe;
 	void* InternalThreadEntry();

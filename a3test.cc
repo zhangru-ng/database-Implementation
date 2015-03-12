@@ -129,7 +129,7 @@ void q2 () {
 
 	Attribute att3[] = {IA, SA, DA};
 	Schema out_sch ("out_sch", numAttsOut, att3);
-	int cnt = clear_pipe (_p, p->schema (), true);
+	int cnt = clear_pipe (_out, &out_sch, true);
 
 	cout << "\n\n query2 returned " << cnt << " records \n";
 
@@ -157,7 +157,7 @@ void q3 () {
 	SF_s.WaitUntilDone ();
 	T.WaitUntilDone ();
 
-	Schema out_sch ("out_sch", 1, &DA);
+	Schema out_sch ("out_sch", 1, &IA);
 	int cnt = clear_pipe (_out, &out_sch, true);
 
 	cout << "\n\n query3 returned " << cnt << " records \n";
@@ -205,6 +205,7 @@ void q4 () {
 	J.Run (_s, _ps, _s_ps, cnf_p_ps, lit_p_ps);
 	T.Run (_s_ps, _out, func);
 
+	SF_s.WaitUntilDone();
 	SF_ps.WaitUntilDone ();
 	J.WaitUntilDone ();
 	T.WaitUntilDone ();
@@ -217,13 +218,13 @@ void q4 () {
 // select distinct ps_suppkey from partsupp where ps_supplycost < 100.11;
 // expected output: 9996 rows
 void q5 () {
-
-	char *pred_ps = "(ps_supplycost < 100.11)";
+char *pred_ps = "(ps_supplycost > 0.0)";
+	//char *pred_ps = "(ps_supplycost < 100.11)";
 	init_SF_ps (pred_ps, 100);
 
 	Project P_ps;
 		Pipe __ps (pipesz);
-		int keepMe[] = {1};
+		int keepMe[] = {0};
 		int numAttsIn = psAtts;
 		int numAttsOut = 1;
 	P_ps.Use_n_Pages (buffsz);
@@ -242,6 +243,7 @@ void q5 () {
 	P_ps.Run (_ps, __ps, keepMe, numAttsIn, numAttsOut);
 	D.Run (__ps, ___ps,__ps_sch);
 	W.Run (___ps, writefile, __ps_sch);
+
 
 	SF_ps.WaitUntilDone ();
 	P_ps.WaitUntilDone ();
