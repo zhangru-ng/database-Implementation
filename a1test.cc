@@ -2,15 +2,9 @@
 #include "DBFile.h"
 #include "a1test.h"
 
-// make sure that the file path/dir information below is correct
-char *dbfile_dir = "dbfile/"; // dir where binary heap files should be stored
-char *tpch_dir ="/cise/tmp/dbi_sp11/DATA/10M/"; // dir where dbgen tpch files (extension *.tbl) can be found
-char *catalog_path = "catalog"; // full path of the catalog file
-
 using namespace std;
 
 relation *rel;
-
 // load from a tpch file
 void test1 () {
 
@@ -18,11 +12,11 @@ void test1 () {
 	cout << " DBFile will be created at " << rel->path () << endl;
 	dbfile.Create (rel->path(), heap, NULL);
 
-	char tbl_path[100]; // construct path of the tpch flat text file
-	sprintf (tbl_path, "%s%s.tbl", tpch_dir, rel->name()); 
+	string tbl_path = tpch_dir;
+	tbl_path.append(rel->name());
+	tbl_path.append(".tbl");
 	cout << " tpch file will be loaded from " << tbl_path << endl;
-
-	dbfile.Load (*(rel->schema ()), tbl_path);
+	dbfile.Load (*(rel->schema ()), tbl_path.c_str());
 	dbfile.Close ();
 }
 
@@ -76,10 +70,9 @@ void test3 () {
 
 int main () {
 
-	setup (catalog_path, dbfile_dir, tpch_dir);
-
+	setup (tpch_dir);
 	void (*test) ();
-	relation *rel_ptr[] = {n, r, c, p, ps, o, li};
+	relation *rel_ptr[] = {n, r, c, p, ps, s, o, li};
 	void (*test_ptr[]) () = {&test1, &test2, &test3};  
 
 	int tindx = 0;
@@ -91,22 +84,24 @@ int main () {
 		cin >> tindx;
 	}
 
+
 	int findx = 0;
-	while (findx < 1 || findx > 7) {
+	while (findx < 1 || findx > 8) {
 		cout << "\n select table: \n";
 		cout << "\t 1. nation \n";
 		cout << "\t 2. region \n";
 		cout << "\t 3. customer \n";
 		cout << "\t 4. part \n";
 		cout << "\t 5. partsupp \n";
-		cout << "\t 6. orders \n";
-		cout << "\t 7. lineitem \n \t ";
+		cout << "\t 6. supplier \n";
+		cout << "\t 7. orders \n";
+		cout << "\t 8. lineitem \n \t ";
 		cin >> findx;
 	}
 
 	rel = rel_ptr [findx - 1];
 	test = test_ptr [tindx - 1];
-
+	
 	test ();
 
 	cleanup ();

@@ -38,6 +38,7 @@ public:
   Run & operator = (const Run r);
   //get the ID of this run
   int GetRunID();
+  // void MoveFirst();
   //get the next record of this run 
   int GetNext(Record &curRec);
 };

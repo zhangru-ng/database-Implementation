@@ -62,10 +62,10 @@ void HeapDBFile::Load (Schema &f_schema, const char *loadpath) {
 	Page tempPage;
 	int tempIndex = 0;
 	if( nullptr == tableFile ){
-		cerr << "Can't open table file for" << loadpath << "\n";
+		cerr << "Can't open table file for " << loadpath << "\n";
 		exit(1);
 	}
-     while (tempRec.SuckNextRecord (&f_schema, tableFile)) {
+    while (tempRec.SuckNextRecord (&f_schema, tableFile)) {
 		if( 0 == tempPage.Append(&tempRec) ){
 			//if the page is full, create a new page
 			curFile.AddPage(&tempPage, tempIndex);  

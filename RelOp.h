@@ -1,6 +1,7 @@
 #ifndef REL_OP_H
 #define REL_OP_H
 
+#include <vector>
 #include <string>
 #include "Pipe.h"
 #include "DBFile.h"
@@ -79,6 +80,15 @@ private:
 	Pipe *outPipe;
 	CNF *selOp;
 	Record *literal;
+	// number of attributes in left relation
+	int numAttsLeft;
+	// number of attributes in right relation
+	int numAttsRight;
+	// total number of attibutes of relation after join
+	int numAttsToKeep; 
+	int OutputTuple(Record &left, Record &right, Pipe &outputL, Pipe &outputR, OrderMaker &sortorderL, OrderMaker &sortorderR, int *attsToKeep);
+	void BlockNestedJoin();
+	void SortMergeJoin(OrderMaker &sortorderL, OrderMaker &sortorderR);
 	void* InternalThreadEntry();
 public:
 	Join();
@@ -105,6 +115,10 @@ private:
 	Pipe *inPipe;
 	Pipe *outPipe;
 	Function *computeMe;
+	int intSum;
+	double doubleSum;
+	string IntSum();
+	string DoubleSum();
 	void* InternalThreadEntry();
 public:
 	Sum() ;
@@ -119,7 +133,11 @@ private:
 	Pipe *outPipe;
 	OrderMaker *groupAtts;
 	Function *computeMe;
+	int intSum;
+	double doubleSum;
 	void* InternalThreadEntry();
+	void GroupInt(Pipe &output, Record &lastRec, int numAtts, int numGroupAtts, int *Atts, Schema &sumSchema);
+	void GroupDouble(Pipe &output, Record &lastRec, int numAtts, int numGroupAtts, int *Atts, Schema &sumSchema);
 public:
 	GroupBy();
 	void Run (Pipe &inPipe, Pipe &outPipe, OrderMaker &groupAtts, Function &computeMe);

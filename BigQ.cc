@@ -12,7 +12,7 @@ BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortor
 
 BigQ::~BigQ () {
 	if(remove(runsFileName)){
-		cerr << "can't delete" << runsFileName;
+	 	cerr << "can't delete" << runsFileName;
 	}
 	free(runsFileName);
 }
@@ -20,7 +20,9 @@ BigQ::~BigQ () {
 //two phase multiway merge sort
 void *BigQ::InternalThreadEntry(){
 // void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
-	runsFileName = strdup("/cise/tmp/rui/tempfile0b0q0x.bin");
+	char dir[80] = "/cise/tmp/rui/temp/Qtemp_XXXXXX";
+	mkstemp(dir);
+	runsFileName = strdup(dir);
 	runsFile.Open(0, runsFileName);
 	vector<Run> runs;
 	//First Phase of TPMMS
@@ -84,7 +86,7 @@ void BigQ::FirstPhase(vector<Run> &runs){
 	int beg, len;
 	Record tempRec;
 	vector<Record> oneRunRecords;
-	
+	// oneRunRecords.reserve(771);
 	while(in.Remove(&tempRec)){
 		//check if a single record larger than a page
 		if(tempRec.Size() > PAGE_SIZE - sizeof(int)){ 
@@ -259,6 +261,16 @@ void BigQ::PriorityQueue(vector<Run> &runs){
 int Run::GetRunID(){
 	return runID;
 }
+
+// void Run::MoveFirst(){
+// 	runCurIndex = 0;
+// 	if(runsFile->GetLength() > 0){//if the file is not empty
+// 		runsFile->GetPage(&curPage, runCurIndex);
+// 	}else{ //if the file is empty, cause "read past the end of the file"
+// 		cerr << "ERROR: empty run in file";
+// 		exit(1);
+// 	}
+// }
 
 //get the next record of this run 
 int Run::GetNext(Record &curRec){

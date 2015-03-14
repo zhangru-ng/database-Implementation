@@ -121,7 +121,7 @@ int main (int argc, char *argv[]) {
 
 	setup ();
 
-	relation *rel_ptr[] = {n, r, c, p, ps, o, li};
+	relation *rel_ptr[] = {n, r, c, p, ps, s, o, li};
 
 	int tindx = 0;
 	while (tindx < 1 || tindx > 3) {
@@ -133,15 +133,16 @@ int main (int argc, char *argv[]) {
 	}
 
 	int findx = 0;
-	while (findx < 1 || findx > 7) {
-		cout << "\n select dbfile to use: \n";
+	while (findx < 1 || findx > 8) {
+		cout << "\n select table: \n";
 		cout << "\t 1. nation \n";
 		cout << "\t 2. region \n";
 		cout << "\t 3. customer \n";
 		cout << "\t 4. part \n";
 		cout << "\t 5. partsupp \n";
-		cout << "\t 6. orders \n";
-		cout << "\t 7. lineitem \n \t ";
+		cout << "\t 6. supplier \n";
+		cout << "\t 7. orders \n";
+		cout << "\t 8. lineitem \n \t ";
 		cin >> findx;
 	}
 	rel = rel_ptr [findx - 1];
