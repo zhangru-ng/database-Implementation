@@ -492,7 +492,7 @@ void Record :: Print (Schema *mySchema) {
 
 //added by Rui 2015-02-15
 //return the size of this record
-size_t Record :: Size() const {
+size_t Record :: Size () const {
 	if(bits == NULL){
 		return 0;
 	}else{
@@ -501,3 +501,8 @@ size_t Record :: Size() const {
 	
 }
 
+//the firt n+1 slots(int size) store the offset of n attributes
+//the offset of first attribute is (n + 1) * sizeof(int)
+int Record :: GetNumAtts () const {
+	return ((int *) bits)[1] / sizeof(int) - 1;
+}

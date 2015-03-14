@@ -81,7 +81,10 @@ public:
 	void Print (Schema *mySchema);
 
 	//return the size of this record
-	size_t Size() const;
+	size_t Size () const;
+
+	//return the number of attributes of record
+	int GetNumAtts () const;
 };
 
 #endif
