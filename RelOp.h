@@ -10,6 +10,8 @@
 #include "Thread.h"
 
 using namespace std;
+#define LEFT 0
+#define RIGHT 1
 
 class RelationalOp {
 protected:
@@ -87,6 +89,9 @@ private:
 	// total number of attibutes of relation after join
 	int numAttsToKeep; 
 	int OutputTuple(Record &left, Record &right, Pipe &outputL, Pipe &outputR, OrderMaker &sortorderL, OrderMaker &sortorderR, int *attsToKeep);
+	void WriteToFile(vector<Record> &run, DBFile &file);
+	void FitInMemoryJoin(vector<Record> &leftRecords, vector<Record> &rightRecords, int *attsToKeep);
+	void JoinRecInFile(DBFile &outter, DBFile &inner, int * attsToKeep);
 	void BlockNestedJoin();
 	void SortMergeJoin(OrderMaker &sortorderL, OrderMaker &sortorderR);
 	void* InternalThreadEntry();

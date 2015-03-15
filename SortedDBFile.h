@@ -5,8 +5,6 @@
 #include "BigQ.h"
 #include "GenericDBFile.h"
 
-//the current mode of the file: Read or Write
-typedef enum _FileMode{ Read, Write } FileMode;
 
 typedef struct _SortInfo {
 	OrderMaker *order;
@@ -17,8 +15,7 @@ class SortedDBFile : public GenericDBFile{
 	FRIEND_TEST(SortedFileTest, SortedTypeHeaderFile);
 private:
 	OrderMaker myOrder;			//the OrderMaker used to sort this file	
-	int runLength;				//the run lenght used to sort this file
-	FileMode curMode;			//this file's current mode	
+	int runLength;				//the run lenght used to sort this file			
 	string filename;
 	BigQ *bq;					//the internal bigQ of this file
 	Pipe *input;				//input pipe for internal bigQ

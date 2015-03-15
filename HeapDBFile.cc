@@ -59,26 +59,43 @@ int HeapDBFile::Close () {
 void HeapDBFile::Load (Schema &f_schema, const char *loadpath) {
 	FILE *tableFile = fopen (loadpath, "r");
 	Record tempRec;
-	Page tempPage;
-	int tempIndex = 0;
+
+	if(Read == curMode){
+		curMode = Write;
+		//length is 0 for empty file, GetPage(&curPage, 0) will lead to 
+		//read over bound of file	
+		if( 0 == curFile.GetLength() ){
+			curPageIndex = 0;      
+		}
+		//if the file is not empty, file length-2 is the last page
+		else if(curFile.GetLength() > 0){
+			curPageIndex = curFile.GetLength() - 2;
+			curFile.GetPage(&curPage, curPageIndex);		
+		}
+		else{ //length less than 0, something wrong with current file
+			cerr << "File length less than 0 in DBFile add\n";
+			exit (1);
+		}
+	}
+
 	if( nullptr == tableFile ){
 		cerr << "Can't open table file for " << loadpath << "\n";
 		exit(1);
 	}
     while (tempRec.SuckNextRecord (&f_schema, tableFile)) {
-		if( 0 == tempPage.Append(&tempRec) ){
+		if( 0 == curPage.Append(&tempRec) ){
 			//if the page is full, create a new page
-			curFile.AddPage(&tempPage, tempIndex);  
-			tempPage.EmptyItOut();
-			if( 0 == tempPage.Append(&tempRec) ){ //if fail again, record larger than page
+			curFile.AddPage(&curPage, curPageIndex);  
+			curPage.EmptyItOut();
+			if( 0 == curPage.Append(&tempRec) ){ //if fail again, record larger than page
 				cerr << "Can't load " << loadpath << ", a record larger than page" << "\n";
 				exit(1);
 			}
-			tempIndex++;
+			curPageIndex++;
 		}		   
     }
     //the records don't fill a full page, add the page directly
-    curFile.AddPage(&tempPage, tempIndex);
+    curFile.AddPage(&curPage, curPageIndex);
 }
 
 //Each DBfile instance has a pointer to the current record in the file. 
@@ -86,6 +103,7 @@ void HeapDBFile::Load (Schema &f_schema, const char *loadpath) {
 //can move in response to record retrievals.The following function 
 //forces the pointer to correspond to the first record in the file
 void HeapDBFile::MoveFirst () {
+	curMode = Read;
 	curPageIndex = 0;
 	if(curFile.GetLength() > 0){//if the file is not empty
 		curFile.GetPage(&curPage, curPageIndex);
@@ -100,33 +118,36 @@ void HeapDBFile::MoveFirst () {
 //consume addMe, so that after addMe has been put into the file, it 
 //cannot be used again
 void HeapDBFile::Add (Record &addMe) {
-	Page tempPage;
-	int tempIndex;	 
-	//length is 0 for empty file, GetPage(&tempPage, 0) will lead to 
-	//read over bound of file	
-	if( 0 == curFile.GetLength() ){
-		tempIndex = 0;      
+	if(Read == curMode){
+		curMode = Write;
+		//length is 0 for empty file, GetPage(&curPage, 0) will lead to 
+		//read over bound of file	
+		if( 0 == curFile.GetLength() ){
+			curPageIndex = 0;      
+		}
+		//if the file is not empty, file length-2 is the last page
+		else if(curFile.GetLength() > 0){
+			curPageIndex = curFile.GetLength() - 2;
+			curFile.GetPage(&curPage, curPageIndex);		
+		}
+		else{ //length less than 0, something wrong with current file
+			cerr << "File length less than 0 in DBFile add\n";
+			exit (1);
+		}
 	}
-	//if the file is not empty, file length-2 is the last page
-	else if(curFile.GetLength() > 0){
-		tempIndex = curFile.GetLength() - 2;
-		curFile.GetPage(&tempPage, tempIndex);		
-	}
-	else{ //length less than 0, something wrong with current file
-		cerr << "File length less than 0 in DBFile add\n";
-		exit (1);
-	}
-	if( tempPage.Append(&addMe) ){//if the page is not full 
-		curFile.AddPage(&tempPage, tempIndex);  
+	 
+	
+	if( curPage.Append(&addMe) ){//if the page is not full 
+		curFile.AddPage(&curPage, curPageIndex);  
 	}else{ //Page is full or record larger than page
 		//clean the page and add the record that failed before
-		tempPage.EmptyItOut();		
-		if( !tempPage.Append(&addMe) ){ 
+		curPage.EmptyItOut();		
+		if( !curPage.Append(&addMe) ){ 
 			cerr << "This record is larger than a DBFile page\n";
 			exit (1);
 		}
-		tempIndex++;		
-		curFile.AddPage(&tempPage, tempIndex);
+		curPageIndex++;		
+		curFile.AddPage(&curPage, curPageIndex);
 	}	
 }
 
@@ -137,6 +158,11 @@ void HeapDBFile::Add (Record &addMe) {
 //porinter into the file is incremented, the return value is zero if and 
 //only if there is not a valid record returned from the function call
 int HeapDBFile::GetNext (Record &fetchme) {	
+	if(Write == curMode){
+		curMode = Read;
+		cerr << "Switch from write to read, perform MoveFirst automatically\n";
+		MoveFirst();
+	}
 //first time call this function, MoveFirst() is needed 
 	while(1){//if there is no "hole" in the file, while is not necessary
 		 //GetFirst consume fetchme in curPage
@@ -158,6 +184,11 @@ int HeapDBFile::GetNext (Record &fetchme) {
 //The literal record is used to check the selection predicate, and is 
 //created when the parse tree for the CNF is processed
 int HeapDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
+	if(Write == curMode){
+		curMode = Read;
+		cerr << "Switch from write to read, perform MoveFirst automatically\n";
+		MoveFirst();
+	}
 //first time call this function, MoveFirst() is needed 
 	ComparisonEngine comp;
 	while( GetNext(fetchme) ){//fetch record successfully

@@ -1,7 +1,7 @@
 
 #include "SortedDBFile.h"
 
-SortedDBFile::SortedDBFile () : myOrder(), runLength(0), curMode(Read), filename(), bq(nullptr), input(nullptr), output(nullptr), queryOrder(), isNewQuery(true) {	
+SortedDBFile::SortedDBFile () : myOrder(), runLength(0), filename(), bq(nullptr), input(nullptr), output(nullptr), queryOrder(), isNewQuery(true) {	
 }
 
 int SortedDBFile::Create (const char *f_path, fType f_type, void *startup) {

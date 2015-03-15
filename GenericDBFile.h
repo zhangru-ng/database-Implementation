@@ -35,6 +35,7 @@ protected:
 	File curFile;
 	Page curPage;		
     int curPageIndex;
+    FileMode curMode;
 
 public:
 	GenericDBFile (); 

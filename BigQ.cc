@@ -188,7 +188,6 @@ void BigQ::SecondPhase(vector<Run> &runs){
 // }
 
 void BigQ::PriorityQueue(vector<Run> &runs){
-	int count = 0;
 	int minID = 0;
 	Sorter sorter(sortorder);
 	QueueMember tempQM;
@@ -208,10 +207,6 @@ void BigQ::PriorityQueue(vector<Run> &runs){
      	tempQM = pqueue.top();
      	//store the run ID of the smallest record
      	minID = tempQM.runID;
-     	count++;
-     	if(count % 100000 == 0){
-     		cout << "BigQ: sorted " << count << " records" << endl;
-     	}
      	//insert the smallest record to output pipe
       	out.Insert(&tempQM.rec);
       	//pop the minimal record

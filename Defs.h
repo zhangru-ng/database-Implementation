@@ -11,7 +11,8 @@
 enum Target {Left, Right, Literal};
 enum CompOperator {LessThan, GreaterThan, Equals};
 enum Type {Int, Double, String};
-
+//the current mode of the file: Read or Write
+typedef enum _FileMode{ Read, Write } FileMode;
 
 unsigned int Random_Generate();
 

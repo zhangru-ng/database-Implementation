@@ -141,80 +141,182 @@ void Join::Use_n_Pages (int n){
 // equality check) then your Join operation should default to a block-nested loops join
 void* Join::InternalThreadEntry() {
 	OrderMaker sortorderL, sortorderR;
-	if( 0 == selOp->GetSortOrders (sortorderL, sortorderR) ){
+	if (0 == selOp->GetSortOrders (sortorderL, sortorderR)) {
 		BlockNestedJoin(); 
-	}else{
-		SortMergeJoin(sortorderL, sortorderR);
+	} else {
+	 	SortMergeJoin(sortorderL, sortorderR);
 	}	
 	outPipe->ShutDown();
 	pthread_exit(nullptr);
 }
 
 void Join::BlockNestedJoin() {
-	// Record tempRecL, tempRecR, joinRec;
-	// vector<Record> leftRecords;
-	// vector<Record> rightRecords;
-	// ComparisonEngine comp;
-	// bool fitInMemory = true;
+	Record tempRecL, tempRecR, joinRec;
+	vector<Record> leftRecords;
+	vector<Record> rightRecords;
+	leftRecords.reserve(1024);
+	rightRecords.reserve(1024);
 
-	// if( inPipeL->Remove(&tempRecL) && inPipeR->Remove(&tempRecR) ){
-	// 	int numAttsLeft = tempRecL.GetNumAtts();
-	// 	int numAttsRight = tempRecR.GetNumAtts();
-	// 	int *attsToKeep;
-	// 	int numAttsToKeep = InitAttsToKeep(numAttsLeft, numAttsRight, attsToKeep);
+	ComparisonEngine comp;
+	bool fitInMemory = true;
+
+	//create the temporary file to store tuples remove from input pipe
+	char lfname[80] = "/cise/tmp/rui/temp/JLtemp_XXXXXX";
+	char rfname[80] = "/cise/tmp/rui/temp/JRtemp_XXXXXX";
+	mkstemp(lfname);
+	mkstemp(rfname);
+	DBFile leftFile, rightFile;
+	leftFile.Create(lfname, heap, nullptr);
+	rightFile.Create(rfname, heap, nullptr);
+
+	int *attsToKeep;
+
+	if (inPipeL->Remove(&tempRecL) && inPipeR->Remove(&tempRecR)) {
+
+		numAttsLeft = tempRecL.GetNumAtts();
+		numAttsRight = tempRecR.GetNumAtts();		
+		numAttsToKeep = numAttsLeft + numAttsRight;
+		attsToKeep = new int[numAttsToKeep];
+		for (int i = 0; i < numAttsToKeep; ++i) {
+			if (i >= numAttsLeft) {
+				attsToKeep[i] = i - numAttsLeft;
+				continue;
+			}
+			attsToKeep[i] = i;
+		}
 		
-	// 	leftRecords.push_back(tempRecL);
-	// 	rightRecords.push_back(tempRecR);
-	// 	int totSize = tempRecL.Size() + tempRecR.Size();
-	// 	bool smaller;
-	// 	bool left, right;
-	// 	while( left = inPipeL->Remove(&tempRecL) || right = inPipeR->Remove(&tempRecR) ){
-	// 		if(left){
-	// 			leftRecords.push_back(tempRecL);
-	// 			totSize += tempRecL.Size();
-	// 		}
+		leftRecords.push_back(tempRecL);
+		rightRecords.push_back(tempRecR);
+		int totSize = tempRecL.Size() + tempRecR.Size();
+		bool smaller;
+		bool left, right;
+		long maxsize = 2 * runlen * PAGE_SIZE;
 
-	// 		if(right){
-	// 			rightRecords.push_back(tempRecR);
-	// 			totSize += tempRecR.Size();
-	// 		}
+		while (1) {
+			left = inPipeL->Remove(&tempRecL);
+			right = inPipeR->Remove(&tempRecR);
 
-	// 		if(totSize > 2 * runlen){
-	// 			fitInMemory = false;
-	// 			if(left && right){
-	// 				WriteToFile(leftRecords);
-	// 				WriteToFile(rightRecords);
-	// 				leftRecords.clear();
-	// 				rightRecords.clear();
-	// 			}else if(left){
-	// 				WriteToFile(leftRecords);
-	// 				leftRecords.clear();
-	// 			}else if(right){
-	// 				WriteToFile(rightRecords);
-	// 				rightRecords.clear();
-	// 			}				
-	// 			totSize = 0;
-	// 		}
+			//if both left and right relation reach the end 
+			if ( false == (left || right) ) {
+				break;
+			}
 
-	// 		if( false == left && right){
-	// 			smaller = left;
-	// 		}
-	// 	}
+			//if both left and right relation reach the end, test which one is smaller
+			if ( false == left && right) {
+				//left == 0 ? left:right;  0 for left,  1 for right
+				smaller = left == 0 ? LEFT : RIGHT;
+			}
+
+			if (left) {
+				leftRecords.push_back(tempRecL);
+				totSize += tempRecL.Size();
+			}
+
+			if (right) {
+				rightRecords.push_back(tempRecR);
+				totSize += tempRecR.Size();
+			}
+
+			if (totSize > maxsize) {
+				fitInMemory = false;
+				WriteToFile(leftRecords, leftFile);
+				WriteToFile(rightRecords, rightFile);
+				leftRecords.clear();
+				rightRecords.clear();
+				// if(left && right){
+				// 	WriteToFile(leftRecords, leftFile);
+				// 	WriteToFile(rightRecords, rightFile);
+				// 	leftRecords.clear();
+				// 	rightRecords.clear();
+				// }else if(left){
+				// 	WriteToFile(leftRecords, leftFile);
+				// 	leftRecords.clear();
+				// }else if(right){
+				// 	WriteToFile(rightRecords, rightFile);
+				// 	rightRecords.clear();
+				// }				
+				totSize = 0;
+			}			
+		}
 			
-	// 	//if the size of records do not exceed the memory size setting by Use_n_Pages (int n)
-	// 	//nested scan left and right vector to join records accepted by CNF:selOp
-	// 	if( true == fitInMemory ){
-	// 		for(vector<Record>::iterator itL = leftRecords.begin(); itL != leftRecords.end(); ++itL){
-	// 			for(vector<Record>::iterator itR = leftRecords.begin(); itR != leftRecords.end(); ++itR){
-	// 				if(comp.Compare(&(*itL), &(*itR), literal, selOp)){
-	// 						joinRec.MergeRecords (&(*itL), &(*itR), numAttsLeft, numAttsRight, attsToKeep, numAttsToKeep, numAttsLeft);
-	// 						outPipe->Insert(&joinRec);
-	// 					}	
-	// 			}
-	// 		}
-	// 	}		
-	// }				
+		//if the size of records do not exceed the memory size setting by Use_n_Pages (int n)
+		//nested scan left and right vector to join records accepted by CNF:selOp
+		if (true == fitInMemory) {
+			if (RIGHT == smaller) {
+				FitInMemoryJoin(leftRecords, rightRecords, attsToKeep);
+			}else {
+				FitInMemoryJoin(rightRecords, leftRecords, attsToKeep);
+			}			
+		} else {
+			WriteToFile(leftRecords, leftFile);
+			WriteToFile(rightRecords, rightFile);
+			if (RIGHT == smaller) {
+				JoinRecInFile(leftFile, rightFile, attsToKeep);
+			} else {
+				JoinRecInFile(rightFile, leftFile, attsToKeep);
+			}
+		}		
+	}			
+
+	leftFile.Close();
+	rightFile.Close();
+	remove(lfname);
+	remove(rfname);
 }
+
+void Join::WriteToFile(vector<Record> &run, DBFile &file){
+	for (vector<Record>::iterator it = run.begin();it != run.end(); ++it) {
+		file.Add(*it);
+	} 
+}
+
+void Join::FitInMemoryJoin(vector<Record> &leftRecords, vector<Record> &rightRecords, int *attsToKeep) {
+	Record joinRec;
+	ComparisonEngine comp;
+	for(vector<Record>::iterator itL = leftRecords.begin(); itL != leftRecords.end(); ++itL){
+		for(vector<Record>::iterator itR = rightRecords.begin(); itR != rightRecords.end(); ++itR){
+			if(comp.Compare(&(*itL), &(*itR), literal, selOp)){
+				joinRec.MergeRecords (&(*itL), &(*itR), numAttsLeft, numAttsRight, attsToKeep, numAttsToKeep, numAttsLeft);
+				outPipe->Insert(&joinRec);
+			}	
+		}
+	}
+}
+
+void Join::JoinRecInFile(DBFile &outter, DBFile &inner, int * attsToKeep) {
+	Record tempRec, joinRec;
+	ComparisonEngine comp;
+	Page tempPage;
+	vector<Record> block;
+	outter.MoveFirst();
+	inner.MoveFirst();
+	block.reserve(65536);
+
+	size_t index = 0;
+	size_t length = outter.GetLength() - 2;
+	while (index <= length) {
+		FillBlock(outter, block, 2 * runlen - 1, index);
+		while (inner.GetNext(tempRec)) {						
+			for(vector<Record>::iterator it = block.begin(); it != block.end(); ++it){
+				if(comp.Compare(&(*it), &tempRec, literal, selOp)){
+					joinRec.MergeRecords (&(*it), &tempRec, numAttsLeft, numAttsRight, attsToKeep, numAttsToKeep, numAttsLeft);
+					outPipe->Insert(&joinRec);
+				}	
+			}		
+		}
+		inner.MoveFirst();
+	}		
+}
+
+// void Join::FillBlock(File &file, vector<Record> &block, int n, int &index){
+// 	Record tempRec;
+// 	for(int i = 0; i < n; ++i){
+// 		if (index < file.GetLength() - 2) {
+// 			file.GetNext(tempRec)
+// 			block.push_back(tempRec);
+// 		}	
+// 	}
+// }
 
 void Join::SortMergeJoin(OrderMaker &sortorderL, OrderMaker &sortorderR) {
 	Record tempRecL, tempRecR;

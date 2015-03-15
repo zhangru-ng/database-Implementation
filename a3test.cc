@@ -102,9 +102,11 @@ D: stuff only distinct records into the out_pipe discarding duplicates
 W: write out records from in_pipe to a file using out_schema
 */
 
-// select * from partsupp where ps_supplycost <1.03 
+// SELETE * FROM partsupp WHERE ps_supplycost <1.03 
 // expected output: 31 records
 void q1 () {
+	cout << " query1 \n ";
+
 	char *pred_ps = "(ps_supplycost < 1.03)";
 	init_SF_ps (pred_ps, 100);
 
@@ -112,15 +114,17 @@ void q1 () {
 	SF_ps.WaitUntilDone ();
 
 	int cnt = clear_pipe (_ps, ps->schema (), true);
-	cout << "\n\n query1 returned " << cnt << " records \n";
+
+	cout << "\n\n query1 \n\n SELETE * \n FROM partsupp \n WHERE ps_supplycost <1.03 \n\n query1 returned " << cnt << " records (expected 31 records)\n";
 
 	dbf_ps.Close ();
 }
 
 
-// select p_partkey(0), p_name(1), p_retailprice(7) from part where (p_retailprice > 931.01) AND (p_retailprice < 931.3);
+// SELETE p_partkey(0), p_name(1), p_retailprice(7) FROM part WHERE (p_retailprice > 931.01) AND (p_retailprice < 931.3);
 // expected output: 22 records
 void q2 () {
+	cout << " query2 \n ";
 
 	char *pred_p = "(p_retailprice > 931.01) AND (p_retailprice < 931.3)";
 	init_SF_p (pred_p, 100);
@@ -142,14 +146,15 @@ void q2 () {
 	Schema out_sch ("out_sch", numAttsOut, att3);
 	int cnt = clear_pipe (_out, &out_sch, true);
 
-	cout << "\n\n query2 returned " << cnt << " records \n";
+	cout << "\n\n query2 \n\n SELETE p_partkey, p_name, p_retailprice \n FROM part \n WHERE (p_retailprice > 931.01) AND (p_retailprice < 931.3)\n\n query2 returned " << cnt << " records (expected 22 records)\n";
 
 	dbf_p.Close ();
 }
 
-// select sum (s_acctbal + (s_acctbal * 1.05)) from supplier;
+// SELETE sum (s_acctbal + (s_acctbal * 1.05)) FROM supplier;
 // expected output: 9.24623e+07
 void q3 () {
+	cout << " query3 \n\n SELETE sum (s_acctbal + (s_acctbal * 1.05)) \n FROM supplier\n\n";
 
 	char *pred_s = "(s_suppkey = s_suppkey)";
 	init_SF_s (pred_s, 100);
@@ -171,22 +176,22 @@ void q3 () {
 	Schema out_sch ("out_sch", 1, &DA);
 	int cnt = clear_pipe (_out, &out_sch, true);
 
-	cout << "\n\n query3 returned " << cnt << " records \n";
+	cout << "\n\n query3 returned " << cnt << " rec (expected output: 9.24623e+07) \n";
 
 	dbf_s.Close ();
 }
 
 
-// select sum (ps_supplycost) from supplier, partsupp 
-// where s_suppkey = ps_suppkey;
+// SELETE sum (ps_supplycost) FROM supplier, partsupp 
+// WHERE s_suppkey = ps_suppkey;
 // expected output: 4.00406e+08
 void q4 () {
+	cout << " query4 \n\n SELETE sum (ps_supplycost) \n FROM supplier, partsupp \n WHERE s_suppkey = ps_suppkey \n\n";
 
-	cout << " query4 \n";
 	char *pred_s = "(s_suppkey = s_suppkey)";
 	init_SF_s (pred_s, 100);
 	SF_s.Run (dbf_s, _s, cnf_s, lit_s); // 10k recs qualified
-
+	// char *pred_ps = "(ps_supplycost < 1.5)";
 	char *pred_ps = "(ps_suppkey = ps_suppkey)";
 	init_SF_ps (pred_ps, 100);
 
@@ -202,6 +207,7 @@ void q4 () {
 	Attribute ps_supplycost = {"ps_supplycost", Double};
 	Attribute joinatt[] = {IA,SA,SA,IA,SA,DA,SA, IA,IA,IA,ps_supplycost,SA};
 	Schema join_sch ("join_sch", outAtts, joinatt);
+	J.Use_n_Pages (buffsz);
 
 	Sum T;
 		// _s (input pipe)
@@ -223,12 +229,16 @@ void q4 () {
 
 	Schema sum_sch ("sum_sch", 1, &DA);
 	int cnt = clear_pipe (_out, &sum_sch, true);
-	cout << " query4 returned " << cnt << " recs \n";
+	cout << " query4 returned " << cnt << " rec (expected output: 4.00421e+08) \n";
+
+	dbf_s.Close ();
+	dbf_ps.Close ();
 }
 
-// select distinct ps_suppkey from partsupp where ps_supplycost < 100.11;
+// SELETE distinct ps_suppkey FROM partsupp WHERE ps_supplycost < 100.11;
 // expected output: 9996 rows
 void q5 () {
+	cout << " query5 \n\n SELETE distinct ps_suppkey \n FROM partsupp \n WHERE ps_supplycost < 100.11 \n\n";
 
 	char *pred_ps = "(ps_supplycost < 100.11)";
 	init_SF_ps (pred_ps, 100);
@@ -261,16 +271,18 @@ void q5 () {
 	D.WaitUntilDone ();
 	W.WaitUntilDone ();
 
-	cout << " query5 finished..output written to file " << fwpath << "\n";
+	cout << " query5 finished..output written to file " << fwpath << "\n (expected output: 9996 rows) \n";
+
+	dbf_ps.Close ();
 }
 
 
-// select sum (ps_supplycost) from supplier, partsupp 
-// where s_suppkey = ps_suppkey groupby s_nationkey;
+// SELETE sum (ps_supplycost) FROM supplier, partsupp 
+// WHERE s_suppkey = ps_suppkey groupby s_nationkey;
 // expected output: 25 rows
 void q6 () {
+	cout << " query6 \n\n SELETE sum (ps_supplycost) \n FROM supplier, partsupp \n WHERE s_suppkey = ps_suppkey groupby s_nationkey \n\n";
 
-	cout << " query6 \n";
 	char *pred_s = "(s_suppkey = s_suppkey)";
 	init_SF_s (pred_s, 100);	
 
@@ -290,6 +302,8 @@ void q6 () {
 	Attribute ps_supplycost = {"ps_supplycost", Double};
 	Attribute joinatt[] = {IA,SA,SA,s_nationkey,SA,DA,SA,IA,IA,IA,ps_supplycost,SA};
 	Schema join_sch ("join_sch", outAtts, joinatt);
+	J.Use_n_Pages (buffsz);
+
 	GroupBy G;
 		// _s (input pipe)
 		Pipe _out (pipesz);
@@ -315,13 +329,15 @@ void q6 () {
 	Schema sum_sch ("sum_sch", 1, &DA);
 	int cnt = clear_pipe (_out, &sum_sch, true);
 	cout << " query6 returned sum for " << cnt << " groups (expected 25 groups)\n"; 
+
+	dbf_s.Close ();
+	dbf_ps.Close ();
 }
 
-void q7 () { 
 /*
-select sum(ps_supplycost)
-from part, supplier, partsupp
-where p_partkey = ps_partkey and
+SELETE sum(ps_supplycost)
+FROM part, supplier, partsupp
+WHERE p_partkey = ps_partkey and
 s_suppkey = ps_suppkey and
 s_acctbal > 2500;
 
@@ -340,6 +356,9 @@ possible plan:
 	On __s_p_ps:
 		W(__s_p_ps)
 */
+void q7 () { 
+	cout << " query7 \n\n SELETE sum(ps_supplycost) \n FROM part, supplier, partsupp \n WHERE p_partkey = ps_partkey and s_suppkey = ps_suppkey and s_acctbal > 2500 \n\n";
+
 	char *pred_s = "(s_acctbal > 2500.0)";
 	init_SF_s (pred_s, 100);	
 
@@ -359,6 +378,7 @@ possible plan:
 	Attribute ps_supplycost = {"ps_supplycost", Double};
 	Attribute j_pps_att[] = {IA,SA,SA,SA,SA,IA,SA,DA,SA, IA,ps_suppkey,IA,ps_supplycost,SA};
 	Schema pps_sch ("pps_sch", pps_Atts, j_pps_att);
+	J_p_ps.Use_n_Pages (buffsz);
 
 	Join J_s_pps;
 		// left _s
@@ -371,6 +391,7 @@ possible plan:
 	int outAtts = sAtts + pps_Atts;
 	Attribute joinatt[] = {IA,SA,SA,IA,SA,DA,SA,IA, IA,SA,SA,SA,SA,IA,SA,DA,SA, IA,IA,ps_supplycost,SA};
 	Schema join_sch ("join_sch", outAtts, joinatt);
+	J_p_pps.Use_n_Pages (buffsz);
 
 	Sum T;
 		// _s (input pipe)
@@ -396,14 +417,17 @@ possible plan:
 	Schema out_sch ("out_sch", 1, &DA);
 	int cnt = clear_pipe (_out, &out_sch, true);
 
-	cout << "\n\n query7 returned " << cnt << " records \n";
+	cout << "\n\n query7 returned " << cnt << " rec (expected output 2.74252e+08) \n";
+
+	dbf_s.Close ();
+	dbf_p.Close ();
+	dbf_ps.Close ();
 }
 
-void q8 () { 
 /*
-select l_orderkey, l_partkey, l_suppkey
-from lineitem
-where l_returnflag = 'R' and l_discount < 0.04 or 
+SELETE l_orderkey, l_partkey, l_suppkey
+FROM lineitem
+WHERE l_returnflag = 'R' and l_discount < 0.04 or 
 l_returnflag = 'R' and l_shipmode = 'MAIL';
 
 ANSWER: 671392 rows in set (29.45 sec)
@@ -416,7 +440,10 @@ possible plan:
 	On __l:
 		W (__l)
 */
-	char *pred_li = " (l_returnflag = 'R') AND (l_discount < 0.04 OR l_returnflag = 'R') AND (l_shipmode = 'MAIL')";
+void q8 () { 
+	cout << " query8 \n\n SELETE l_orderkey, l_partkey, l_suppkey \n FROM lineitem \n WHERE l_returnflag = 'R' and l_discount < 0.04 or\n       l_returnflag = 'R' and l_shipmode = 'MAIL' \n\n";
+
+	char *pred_li = " (l_returnflag = 'R') AND (l_discount < 0.04 OR l_shipmode = 'MAIL')";
 	init_SF_li (pred_li, 100);
 
 	Project P_li;
@@ -444,7 +471,9 @@ possible plan:
 	P_li.WaitUntilDone ();
 	W.WaitUntilDone ();
 
-	cout << "\n\n query8 finished..output written to file " << fwpath << "\n";
+	cout << "\n\n query8 finished..output written to file " << fwpath << "\n (expected output 671392 rows)" << "\n";
+
+	dbf_li.Close ();
 }
 
 int main (int argc, char *argv[]) {
@@ -461,12 +490,11 @@ int main (int argc, char *argv[]) {
 	if (qindx > 0 && qindx < 9) {
 		setup ();
 		query = query_ptr [qindx - 1];
-		double start = clock();
+		double start_time = clock();
 		query ();
-		double end = clock();
+		double end_time = clock();
 		cleanup ();
-		cout << "\n\n";
-		cout << "This query spent: " << 1000 * (end - start) / CLOCKS_PER_SEC << "ms" << endl;
+		cout << "\n This query spent: " << 1000 * (end_time - start_time) / CLOCKS_PER_SEC << "ms" << endl;
 	}
 	else {
 		cout << " ERROR!!!!\n";
