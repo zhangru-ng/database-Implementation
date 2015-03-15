@@ -25,6 +25,7 @@ void *BigQ::InternalThreadEntry(){
 	runsFileName = strdup(dir);
 	runsFile.Open(0, runsFileName);
 	vector<Run> runs;
+	runs.reserve(200);
 	//First Phase of TPMMS
 	FirstPhase(runs);
 	//Second Phase of TPMMS
@@ -86,7 +87,7 @@ void BigQ::FirstPhase(vector<Run> &runs){
 	int beg, len;
 	Record tempRec;
 	vector<Record> oneRunRecords;
-	// oneRunRecords.reserve(771);
+	oneRunRecords.reserve(800);
 	while(in.Remove(&tempRec)){
 		//check if a single record larger than a page
 		if(tempRec.Size() > PAGE_SIZE - sizeof(int)){ 
@@ -195,8 +196,9 @@ void BigQ::PriorityQueue(vector<Run> &runs){
 	priority_queue<QueueMember, vector<QueueMember>, Sorter>pqueue(sorter);
 
 	//for (it=runs.begin()+0; it!=runs.begin()+runNum; ++it){
-	for (vector<Run>::iterator it=runs.begin(); it!=runs.end(); ++it){
+	for (vector<Run>::iterator it=runs.begin(); it!=runs.end(); ++it) {
 		tempQM.runID = it->GetRunID();
+		it->MoveFirst();
 		it->GetNext(tempQM.rec);
 		pqueue.push(tempQM);
 	}
@@ -223,37 +225,27 @@ void BigQ::PriorityQueue(vector<Run> &runs){
 	}	
 }
 
- Run::Run(int ID, int beg, int rl, File *rf){
- 	runID = ID;
-  	runBegIndex = beg;
-  	runCurIndex = beg;
-  	curRunLen = rl;
-  	runsFile = rf;
-  	runsFile->GetPage(&curPage, runBegIndex);
+ Run::Run(int ID, int beg, int rl, File *rf) : runID(ID), runBegIndex(beg), runCurIndex(beg), curRunLen(rl), runsFile(rf) { 	
  }
 
 //Copy constructer
- Run::Run(const Run &r){
+ Run::Run(const Run &r) {
  	runID = r.runID;
  	curRunLen = r.curRunLen;
   	runBegIndex = r.runBegIndex;
   	runCurIndex = r.runCurIndex;
   	runsFile = r.runsFile;
-  	runsFile->GetPage(&curPage, runCurIndex);
+  	MoveFirst();
  }
 
 //"=" operator
- Run::~Run(){ 	
- }
-
-//"=" operator
- Run& Run::operator = (const Run r){
+ Run& Run::operator = (const Run r) {
  	runID = r.runID;
  	curRunLen = r.curRunLen;
   	runBegIndex = r.runBegIndex;
   	runCurIndex = r.runCurIndex;
   	runsFile = r.runsFile;
-  	runsFile->GetPage(&curPage, runCurIndex);
+  	MoveFirst();
   	return *this;
  }
 
@@ -262,15 +254,15 @@ int Run::GetRunID(){
 	return runID;
 }
 
-// void Run::MoveFirst(){
-// 	runCurIndex = 0;
-// 	if(runsFile->GetLength() > 0){//if the file is not empty
-// 		runsFile->GetPage(&curPage, runCurIndex);
-// 	}else{ //if the file is empty, cause "read past the end of the file"
-// 		cerr << "ERROR: empty run in file";
-// 		exit(1);
-// 	}
-// }
+void Run::MoveFirst(){
+	runCurIndex = runBegIndex;
+	if( runCurIndex + curRunLen - 1 <= runsFile->GetLength() - 2){//if the file is not empty
+		runsFile->GetPage(&curPage, runCurIndex);
+	}else{ //if the file is empty, cause "read past the end of the file"
+		cerr << "ERROR: run exceeds file length";
+		exit(1);
+	}
+}
 
 //get the next record of this run 
 int Run::GetNext(Record &curRec){
