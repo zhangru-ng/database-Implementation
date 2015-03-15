@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <iostream>
 #include <math.h>
+#include <time.h>
 
 #include "Function.h"
 #include "Pipe.h"

@@ -261,7 +261,7 @@ TEST(HeapFileDeathTest, CloseTwice) {
 	DBFile dbfile;
 	dbfile.Create(testFile_path, heap , 0);
 	dbfile.Close();
-	EXPECT_DEATH( dbfile.Close(), "ERROR: DBFile is not initialized or is already closed!");
+	EXPECT_DEATH( dbfile.Close(), "ERROR: DBFile is not initialized or is closed twice!");
 }
 
 /*

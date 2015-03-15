@@ -90,6 +90,17 @@ void init_SF_c (char *pred_str, int numpgs) {
 	SF_c.Use_n_Pages (numpgs);
 }
 
+/*
+Legend:
+SF : select all records that satisfy some simple cnf expr over recs from in_file 
+SP: same as SF but recs come from in_pipe
+J: select all records (from left_pipe x right_pipe) that satisfy a cnf expression
+P: project some atts from in-pipe
+T: apply some aggregate function
+G: same as T but do it over each group identified by ordermaker
+D: stuff only distinct records into the out_pipe discarding duplicates
+W: write out records from in_pipe to a file using out_schema
+*/
 
 // select * from partsupp where ps_supplycost <1.03 
 // expected output: 31 records
@@ -328,18 +339,64 @@ possible plan:
 		S(s_supplycost) => __s_p_ps
 	On __s_p_ps:
 		W(__s_p_ps)
-
-Legend:
-SF : select all records that satisfy some simple cnf expr over recs from in_file 
-SP: same as SF but recs come from in_pipe
-J: select all records (from left_pipe x right_pipe) that satisfy a cnf expression
-P: project some atts from in-pipe
-T: apply some aggregate function
-G: same as T but do it over each group identified by ordermaker
-D: stuff only distinct records into the out_pipe discarding duplicates
-W: write out records from in_pipe to a file using out_schema
 */
-	cout << " TBA\n";
+	char *pred_s = "(s_acctbal > 2500.0)";
+	init_SF_s (pred_s, 100);	
+
+	char *pred_p = "(p_partkey = p_partkey)";
+	init_SF_p (pred_p, 100);
+
+	char *pred_ps = "(ps_suppkey = ps_suppkey)";
+	init_SF_ps (pred_ps, 100);	
+
+	Join J_p_ps;
+		Pipe _p_ps(pipesz);
+		CNF cnf_p_ps;
+		Record lit_p_ps;
+		get_cnf ("(p_partkey = ps_partkey)", p->schema(), ps->schema(), cnf_p_ps, lit_p_ps);
+	int pps_Atts = pAtts + psAtts;
+	Attribute ps_suppkey = {"ps_suppkey", Int};
+	Attribute ps_supplycost = {"ps_supplycost", Double};
+	Attribute j_pps_att[] = {IA,SA,SA,SA,SA,IA,SA,DA,SA, IA,ps_suppkey,IA,ps_supplycost,SA};
+	Schema pps_sch ("pps_sch", pps_Atts, j_pps_att);
+
+	Join J_s_pps;
+		// left _s
+		// right _ps
+		Pipe _s_pps (pipesz);
+		CNF cnf_s_pps;
+		Record lit_s_pps;
+		get_cnf ("(s_suppkey = ps_suppkey)", s->schema(), &pps_sch, cnf_s_pps, lit_s_pps);
+
+	int outAtts = sAtts + pps_Atts;
+	Attribute joinatt[] = {IA,SA,SA,IA,SA,DA,SA,IA, IA,SA,SA,SA,SA,IA,SA,DA,SA, IA,IA,ps_supplycost,SA};
+	Schema join_sch ("join_sch", outAtts, joinatt);
+
+	Sum T;
+		// _s (input pipe)
+		Pipe _out (1);
+		Function func;
+			char *str_sum = "(ps_supplycost)";
+			get_cnf (str_sum, &join_sch, func);
+	T.Use_n_Pages (1);
+
+	SF_s.Run (dbf_s, _s, cnf_s, lit_s); 
+	SF_p.Run (dbf_p, _p, cnf_p, lit_p);
+	SF_ps.Run (dbf_ps, _ps, cnf_ps, lit_ps); 
+	J_p_ps.Run (_p, _ps, _p_ps, cnf_p_ps, lit_p_ps);
+	J_s_pps.Run (_s, _p_ps, _s_pps, cnf_s_pps, lit_s_pps);
+	T.Run (_s_pps, _out, func);
+
+	SF_s.WaitUntilDone ();
+	SF_p.WaitUntilDone();
+	J_p_ps.WaitUntilDone();
+	J_s_pps.WaitUntilDone();
+	T.WaitUntilDone ();
+
+	Schema out_sch ("out_sch", 1, &DA);
+	int cnt = clear_pipe (_out, &out_sch, true);
+
+	cout << "\n\n query7 returned " << cnt << " records \n";
 }
 
 void q8 () { 
@@ -359,7 +416,35 @@ possible plan:
 	On __l:
 		W (__l)
 */
-	cout << " TBA\n";
+	char *pred_li = " (l_returnflag = 'R') AND (l_discount < 0.04 OR l_returnflag = 'R') AND (l_shipmode = 'MAIL')";
+	init_SF_li (pred_li, 100);
+
+	Project P_li;
+		Pipe __li (pipesz);
+		int keepMe[] = {0,1,2};
+		int numAttsIn = liAtts;
+		int numAttsOut = 3;
+	P_li.Use_n_Pages (buffsz);
+
+		
+	WriteOut W;
+		// inpipe = ___ps
+		char *fwpath = "li.w.tmp";
+		FILE *writefile = fopen (fwpath, "w");
+
+	Attribute att3[] = {IA, IA, IA};
+	Schema out_sch ("out_sch", numAttsOut, att3);
+
+	SF_li.Run (dbf_li, _li, cnf_li, lit_li);
+	P_li.Run (_li, __li, keepMe, numAttsIn, numAttsOut);
+	W.Run (__li, writefile, out_sch);
+
+
+	SF_li.WaitUntilDone ();
+	P_li.WaitUntilDone ();
+	W.WaitUntilDone ();
+
+	cout << "\n\n query8 finished..output written to file " << fwpath << "\n";
 }
 
 int main (int argc, char *argv[]) {
@@ -376,9 +461,12 @@ int main (int argc, char *argv[]) {
 	if (qindx > 0 && qindx < 9) {
 		setup ();
 		query = query_ptr [qindx - 1];
+		double start = clock();
 		query ();
+		double end = clock();
 		cleanup ();
 		cout << "\n\n";
+		cout << "This query spent: " << 1000 * (end - start) / CLOCKS_PER_SEC << "ms" << endl;
 	}
 	else {
 		cout << " ERROR!!!!\n";

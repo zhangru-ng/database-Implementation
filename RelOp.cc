@@ -217,22 +217,21 @@ void Join::BlockNestedJoin() {
 }
 
 void Join::SortMergeJoin(OrderMaker &sortorderL, OrderMaker &sortorderR) {
-	sortorderR.Print();
-	sortorderL.Print();
 	Record tempRecL, tempRecR;
 	ComparisonEngine comp;
 	Pipe outputL(buffsz);
 	Pipe outputR(buffsz);
 	BigQ bqL(*inPipeL, outputL, sortorderL, runlen);
 	BigQ bqR(*inPipeR, outputR, sortorderR, runlen);
+	int *attsToKeep = nullptr;
 	//if both the output pipes have at least one record
-	if(outputL.Remove(&tempRecL) && outputR.Remove(&tempRecR) ){
+	if(outputL.Remove(&tempRecL) && outputR.Remove(&tempRecR)) {
 		numAttsLeft = tempRecL.GetNumAtts();
 		numAttsRight = tempRecR.GetNumAtts();
 		numAttsToKeep = numAttsLeft + numAttsRight;
-		int *attsToKeep = new int[numAttsToKeep];
-		for(int i = 0; i < numAttsToKeep; ++i){
-			if(i >= numAttsLeft){
+		attsToKeep = new int[numAttsToKeep];
+		for(int i = 0; i < numAttsToKeep; ++i) {
+			if(i >= numAttsLeft) {
 				attsToKeep[i] = i - numAttsLeft;
 				continue;
 			}
@@ -241,29 +240,30 @@ void Join::SortMergeJoin(OrderMaker &sortorderL, OrderMaker &sortorderR) {
 
 		while(1){
 			// if the left record is less than right record
-			if( comp.Compare(&tempRecL, &sortorderL, &tempRecR, &sortorderR) < 0){
-				//get next record in output pipe for next comparion, if no record left then break
-				if( 0 == outputL.Remove(&tempRecL) ){				
+			if (comp.Compare(&tempRecL, &sortorderL, &tempRecR, &sortorderR) < 0) {
+				//get next record in left output pipe for next comparion, if no record left then break
+				if (0 == outputL.Remove(&tempRecL)) {				
 					break;
 				}
 			}
 			// if the left record is greater than right record
-			else if( comp.Compare(&tempRecL, &sortorderL, &tempRecR, &sortorderR) > 0 ){
-				if( 0 == outputR.Remove(&tempRecR) ){					
+			else if (comp.Compare(&tempRecL, &sortorderL, &tempRecR, &sortorderR) > 0) {
+				//get next record in right output pipe for next comparion, if no record left then break
+				if (0 == outputR.Remove(&tempRecR)) {					
 					break;
 				}
 			}
 			// if left record equal to right record
-			else{
-				int isEnd = OutputTuple(tempRecL, tempRecL, outputL, outputR, sortorderL, sortorderR, attsToKeep);				
+			else {
+				int isEnd = OutputTuple(tempRecL, tempRecR, outputL, outputR, sortorderL, sortorderR, attsToKeep);				
 				//get next right record  for next comparion, if no record left then break
-				if( 0 == isEnd ){					
+				if (0 == isEnd) {					
 					break;
 				}
 			}
-		}
-		delete[] attsToKeep;
+		}		
 	}
+	delete[] attsToKeep;
 }
 
 int Join::OutputTuple(Record &left, Record &right, Pipe &outputL, Pipe &outputR, OrderMaker &sortorderL, OrderMaker &sortorderR, int *attsToKeep) {
@@ -271,6 +271,8 @@ int Join::OutputTuple(Record &left, Record &right, Pipe &outputL, Pipe &outputR,
 	ComparisonEngine comp;
 	vector<Record> leftRecords;
 	vector<Record> rightRecords;
+	leftRecords.reserve(1024);
+	rightRecords.reserve(1024);
 	leftRecords.push_back(left);
 	rightRecords.push_back(right);
 	int isLeftEnd, isRightEnd;
@@ -297,10 +299,14 @@ int Join::OutputTuple(Record &left, Record &right, Pipe &outputL, Pipe &outputR,
 			outPipe->Insert(&joinRec);
 		}
 	}	
-	// assign the first unequal record for next round comparison
-	left.Copy(&tempRecL);
-	right.Copy(&tempRecR);
-	return isLeftEnd && isRightEnd;
+	int isEnd = isLeftEnd && isRightEnd;
+	//if both relations do not reach the end
+	if(isEnd){
+		// assign the first unequal record for next round comparison	
+		left.Copy(&tempRecL);
+		right.Copy(&tempRecR);
+	}
+	return isEnd;
 }
 /***************************************Join*************************************************/
 
