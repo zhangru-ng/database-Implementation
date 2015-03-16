@@ -44,7 +44,7 @@ void test1 () {
 	dbfile.Close ();
 
 	char tbl_path[100];
-	sprintf (tbl_path, "%s%s.tbl", tpch_dir, rel->name()); 
+	sprintf (tbl_path, "%s%s.tbl", tpch_dir.c_str(), rel->name()); 
 	cout << " input from file : " << tbl_path << endl;
 
         FILE *tblfile = fopen (tbl_path, "r");
@@ -123,7 +123,7 @@ void test3 () {
 
 int main (int argc, char *argv[]) {
 
-	setup ();
+	setup (tpch_dir);
 
 	relation *rel_ptr[] = {n, r, c, p, ps, s, o, li};
 	void (*test_ptr[]) () = {&test1, &test2, &test3};  

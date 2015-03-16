@@ -7,15 +7,14 @@
 #include "DBFile.h"
 #include "Record.h"
 #include <fstream>
-
 using namespace std;
 
-// make sure that the information below is correct
+// test settings file should have the 
+// catalog_path, dbfile_dir and tpch_dir information in separate lines
+const char *settings = "test.cat";
 
-char *catalog_path = "catalog"; 
-char *tpch_dir ="/cise/tmp/dbi_sp11/DATA/10M/"; // dir where dbgen tpch files (extension *.tbl) can be found
-char *dbfile_dir = "dbfile/"; 
-
+// donot change this information here
+string catalog_path, dbfile_dir, tpch_dir;
 
 extern "C" {
 	int yyparse(void);   // defined in y.tab.c
@@ -33,11 +32,11 @@ class relation {
 
 private:
 	char *rname;
-	char *prefix;
+	const char *prefix;
 	char rpath[100]; 
 	Schema *rschema;
 public:
-	relation (char *_name, Schema *_schema, char *_prefix) :
+	relation (char *_name, Schema *_schema, const char *_prefix) :
 		rname (_name), rschema (_schema), prefix (_prefix) {
 		sprintf (rpath, "%s%s.bin", prefix, rname);
 	}
@@ -94,6 +93,21 @@ relation *s, *p, *ps, *n, *li, *r, *o, *c;
 Schema *ssc, *psc, *pssc, *nsc, *lisc, *rsc, *osc, *csc;
 
 void setup () {
+	ifstream test;
+	test.open(settings);
+	if(test.is_open()){
+		test >> catalog_path;
+		test >> dbfile_dir;
+		test >> tpch_dir;
+		if (! (catalog_path.size() && dbfile_dir.size() && tpch_dir.size())) {
+			cerr << " Test settings file 'test.cat' not in correct format.\n";
+			exit (1);
+		}
+	}else {
+		cerr << " Test settings files 'test.cat' missing \n";
+		exit (1);
+	}
+
 	cout << " \n** IMPORTANT: MAKE SURE THE INFORMATION BELOW IS CORRECT **\n";
 	cout << " catalog location: \t" << catalog_path << endl;
 	cout << " tpch files dir: \t" << tpch_dir << endl;
@@ -101,23 +115,23 @@ void setup () {
 	cout << " \n\n";
 
 	//added by rui, prevent memory leak
-	ssc = new Schema (catalog_path, supplier);
-	pssc = new Schema (catalog_path, partsupp);
-	psc = new Schema (catalog_path, part); 
-	nsc = new Schema (catalog_path, nation);
-	lisc = new Schema (catalog_path, lineitem);
-	rsc= new Schema (catalog_path, region);
-	osc = new Schema (catalog_path, orders);
-	csc = new Schema (catalog_path, customer);
+	ssc = new Schema (catalog_path.c_str(), supplier);
+	pssc = new Schema (catalog_path.c_str(), partsupp);
+	psc = new Schema (catalog_path.c_str(), part); 
+	nsc = new Schema (catalog_path.c_str(), nation);
+	lisc = new Schema (catalog_path.c_str(), lineitem);
+	rsc= new Schema (catalog_path.c_str(), region);
+	osc = new Schema (catalog_path.c_str(), orders);
+	csc = new Schema (catalog_path.c_str(), customer);
 
-	s = new relation (supplier, ssc, dbfile_dir);
-	ps = new relation (partsupp, pssc, dbfile_dir);
-	p = new relation (part, psc, dbfile_dir);
-	n = new relation (nation, nsc, dbfile_dir);
-	li = new relation (lineitem, lisc, dbfile_dir);
-	r = new relation (region, rsc, dbfile_dir);
-	o = new relation (orders, osc, dbfile_dir);
-	c = new relation (customer, csc, dbfile_dir);
+	s = new relation (supplier, ssc, dbfile_dir.c_str());
+	ps = new relation (partsupp, pssc, dbfile_dir.c_str());
+	p = new relation (part, psc, dbfile_dir.c_str());
+	n = new relation (nation, nsc, dbfile_dir.c_str());
+	li = new relation (lineitem, lisc, dbfile_dir.c_str());
+	r = new relation (region, rsc, dbfile_dir.c_str());
+	o = new relation (orders, osc, dbfile_dir.c_str());
+	c = new relation (customer, csc, dbfile_dir.c_str());
 }
 
 void cleanup () {
