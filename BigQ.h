@@ -67,7 +67,7 @@ private:
 public:
   Run(int ID, int beg, int rl, File *rf);
   Run(const Run &r);
-  Run & operator = (const Run r);
+  Run & operator = (const Run &r);
   //get the ID of this run
   int GetRunID();
   //rewind to first record of this run
@@ -82,7 +82,7 @@ private:
   OrderMaker &sortorder;
   ComparisonEngine comp;
 public:
-  Sorter(OrderMaker s) : sortorder(s),comp() {}
+  Sorter(OrderMaker &s) : sortorder(s),comp() {}
   //compare operator for phase one vecter<Record>
   bool operator()(const Record &r1, const Record &r2){   
     if(comp.Compare (&r1, &r2, &sortorder) < 0){

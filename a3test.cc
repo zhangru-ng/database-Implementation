@@ -391,7 +391,7 @@ void q7 () {
 	int outAtts = sAtts + pps_Atts;
 	Attribute joinatt[] = {IA,SA,SA,IA,SA,DA,SA,IA, IA,SA,SA,SA,SA,IA,SA,DA,SA, IA,IA,ps_supplycost,SA};
 	Schema join_sch ("join_sch", outAtts, joinatt);
-	J_p_pps.Use_n_Pages (buffsz);
+	J_s_pps.Use_n_Pages (buffsz);
 
 	Sum T;
 		// _s (input pipe)

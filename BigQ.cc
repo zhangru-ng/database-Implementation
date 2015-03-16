@@ -234,7 +234,7 @@ void BigQ::PriorityQueue(vector<Run> &runs){
  }
 
 //"=" operator
- Run& Run::operator = (const Run r) {
+ Run& Run::operator = (const Run &r) {
  	runID = r.runID;
  	curRunLen = r.curRunLen;
   	runBegIndex = r.runBegIndex;
