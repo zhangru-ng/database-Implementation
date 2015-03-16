@@ -10,7 +10,9 @@ friend class HeapFileTest;
 	FRIEND_TEST(HeapFileTest, LoadFile);
 	FRIEND_TEST(HeapFileTest, MoveFirst);
 	FRIEND_TEST(HeapFileTest, AddRecord);
-
+private:
+	void ChModToWrite();
+	void ChModToRead();
 public:
 	HeapDBFile (); 
 
@@ -27,4 +29,5 @@ public:
 
 
 };
+
 #endif

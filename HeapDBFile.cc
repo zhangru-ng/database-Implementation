@@ -43,6 +43,9 @@ int HeapDBFile::Open (const char *f_path) {
 //Simply close the file. The return value is a one on success and a zero 
 //on failure
 int HeapDBFile::Close () {
+	if(Write == curMode){
+		ChModToRead();
+	}
 	off_t f_flag = curFile.Close ();
 	if(f_flag < 0){
 		return 0;
@@ -61,21 +64,7 @@ void HeapDBFile::Load (Schema &f_schema, const char *loadpath) {
 	Record tempRec;
 
 	if(Read == curMode){
-		curMode = Write;
-		//length is 0 for empty file, GetPage(&curPage, 0) will lead to 
-		//read over bound of file	
-		if( 0 == curFile.GetLength() ){
-			curPageIndex = 0;      
-		}
-		//if the file is not empty, file length-2 is the last page
-		else if(curFile.GetLength() > 0){
-			curPageIndex = curFile.GetLength() - 2;
-			curFile.GetPage(&curPage, curPageIndex);		
-		}
-		else{ //length less than 0, something wrong with current file
-			cerr << "File length less than 0 in DBFile add\n";
-			exit (1);
-		}
+		ChModToWrite();
 	}
 
 	if( nullptr == tableFile ){
@@ -103,7 +92,12 @@ void HeapDBFile::Load (Schema &f_schema, const char *loadpath) {
 //can move in response to record retrievals.The following function 
 //forces the pointer to correspond to the first record in the file
 void HeapDBFile::MoveFirst () {
-	curMode = Read;
+	if (Write == curMode) {
+		curMode = Read;
+		curFile.AddPage(&curPage, curPageIndex);  
+		cerr << "Switch from write to read\n";
+	}
+	
 	curPageIndex = 0;
 	if(curFile.GetLength() > 0){//if the file is not empty
 		curFile.GetPage(&curPage, curPageIndex);
@@ -119,35 +113,18 @@ void HeapDBFile::MoveFirst () {
 //cannot be used again
 void HeapDBFile::Add (Record &addMe) {
 	if(Read == curMode){
-		curMode = Write;
-		//length is 0 for empty file, GetPage(&curPage, 0) will lead to 
-		//read over bound of file	
-		if( 0 == curFile.GetLength() ){
-			curPageIndex = 0;      
-		}
-		//if the file is not empty, file length-2 is the last page
-		else if(curFile.GetLength() > 0){
-			curPageIndex = curFile.GetLength() - 2;
-			curFile.GetPage(&curPage, curPageIndex);		
-		}
-		else{ //length less than 0, something wrong with current file
-			cerr << "File length less than 0 in DBFile add\n";
-			exit (1);
-		}
-	}
-	 
-	
-	if( curPage.Append(&addMe) ){//if the page is not full 
-		curFile.AddPage(&curPage, curPageIndex);  
-	}else{ //Page is full or record larger than page
-		//clean the page and add the record that failed before
+		ChModToWrite();
+	}	 
+	//Page is full or record larger than page
+	//clean the page and add the record that failed before
+	if( 0 == curPage.Append(&addMe) ){ 
 		curPage.EmptyItOut();		
 		if( !curPage.Append(&addMe) ){ 
 			cerr << "This record is larger than a DBFile page\n";
 			exit (1);
 		}
-		curPageIndex++;		
 		curFile.AddPage(&curPage, curPageIndex);
+		curPageIndex++;		
 	}	
 }
 
@@ -159,9 +136,7 @@ void HeapDBFile::Add (Record &addMe) {
 //only if there is not a valid record returned from the function call
 int HeapDBFile::GetNext (Record &fetchme) {	
 	if(Write == curMode){
-		curMode = Read;
-		cerr << "Switch from write to read, perform MoveFirst automatically\n";
-		MoveFirst();
+		ChModToRead();
 	}
 //first time call this function, MoveFirst() is needed 
 	while(1){//if there is no "hole" in the file, while is not necessary
@@ -185,9 +160,7 @@ int HeapDBFile::GetNext (Record &fetchme) {
 //created when the parse tree for the CNF is processed
 int HeapDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 	if(Write == curMode){
-		curMode = Read;
-		cerr << "Switch from write to read, perform MoveFirst automatically\n";
-		MoveFirst();
+		ChModToRead();
 	}
 //first time call this function, MoveFirst() is needed 
 	ComparisonEngine comp;
@@ -199,4 +172,29 @@ int HeapDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 	return 0;
 }
 
+void HeapDBFile::ChModToWrite() {
+	curMode = Write;
 
+	off_t length = curFile.GetLength();	
+	//length is 0 for empty file, GetPage(&curPage, 0) will lead to 
+	//read over bound of file	
+	if( 0 == length ){
+		curPageIndex = 0;      
+	}
+	//if the file is not empty, file length-2 is the last page
+	else if(length > 0){
+		curPageIndex = length - 2;
+		curFile.GetPage(&curPage, curPageIndex);		
+	}
+	else{ //length less than 0, something wrong with current file
+		cerr << "File length less than 0 in DBFile add\n";
+		exit (1);
+	}
+}
+
+void HeapDBFile::ChModToRead() {
+	curMode = Read;
+	curFile.AddPage(&curPage, curPageIndex);  
+	// cerr << "Switch from write to read\n";
+	MoveFirst();
+}

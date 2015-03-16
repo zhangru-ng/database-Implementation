@@ -148,12 +148,15 @@ TEST_F(HeapFileTest, GetNextRecord) {
 TEST_F(HeapFileTest, AddRecord) {
 	EXPECT_EQ( 0, dbfile.myInernalPoniter->curFile.GetLength() );
 	ASSERT_TRUE(AddRecord(PAGE_SIZE/2));	
+	dbfile.MoveFirst();
 	EXPECT_EQ( 2, dbfile.myInernalPoniter->curFile.GetLength() );
 	
 	ASSERT_TRUE(AddRecord(PAGE_SIZE/4));	
+	dbfile.MoveFirst();
 	EXPECT_EQ( 2, dbfile.myInernalPoniter->curFile.GetLength() );
 	
 	ASSERT_TRUE(AddRecord(PAGE_SIZE/4));	
+	dbfile.MoveFirst();
 	EXPECT_EQ( 3, dbfile.myInernalPoniter->curFile.GetLength() );
 }
 

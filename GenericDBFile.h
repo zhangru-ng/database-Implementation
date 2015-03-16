@@ -18,9 +18,8 @@
 
 #include "gtest/gtest.h"
 
-typedef enum {heap, sorted, tree} fType;
-
 class GenericDBFile {	
+
 friend class HeapFileTest;
 friend class SortedFileTest;
 
