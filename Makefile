@@ -1,4 +1,4 @@
-CC = g++ -O2 -Wno-write-strings -std=c++11
+CC = g++ -O2 -std=c++11 -pthread -Wno-unused-result -Wno-write-strings
 tag = -i
 
 ifdef linux
@@ -16,13 +16,13 @@ GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
 GTEST_SRCS_ = $(GTEST_DIR)/src/*.cc $(GTEST_DIR)/src/*.h $(GTEST_HEADERS)
 
 a3test.out: Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o BigQ.o RelOp.o Function.o y.tab.o yyfunc.tab.o lex.yy.o lex.yyfunc.o a3test.o
-	$(CC) -o $(BIN_DIR)/a3test.out Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o BigQ.o RelOp.o Function.o y.tab.o yyfunc.tab.o lex.yy.o lex.yyfunc.o a3test.o -lfl -lpthread
+	$(CC) -o $(BIN_DIR)/a3test.out Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o BigQ.o RelOp.o Function.o y.tab.o yyfunc.tab.o lex.yy.o lex.yyfunc.o a3test.o -lfl 
 
 a22test.out: Record.o Comparison.o ComparisonEngine.o Schema.o File.o BigQ.o DBFile.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o y.tab.o lex.yy.o a22test.o
-	$(CC) -o $(BIN_DIR)/a22test.out Record.o Comparison.o ComparisonEngine.o Schema.o File.o BigQ.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o y.tab.o lex.yy.o a22test.o -lfl -lpthread
+	$(CC) -o $(BIN_DIR)/a22test.out Record.o Comparison.o ComparisonEngine.o Schema.o File.o BigQ.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o y.tab.o lex.yy.o a22test.o -lfl 
 
 a2test.out: Record.o Comparison.o ComparisonEngine.o Schema.o File.o BigQ.o DBFile.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o y.tab.o lex.yy.o a2test.o
-	$(CC) -o $(BIN_DIR)/a2test.out Record.o Comparison.o ComparisonEngine.o Schema.o File.o BigQ.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o y.tab.o lex.yy.o a2test.o -lfl -lpthread
+	$(CC) -o $(BIN_DIR)/a2test.out Record.o Comparison.o ComparisonEngine.o Schema.o File.o BigQ.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o y.tab.o lex.yy.o a2test.o -lfl 
 
 a1test.out: Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o Pipe.o BigQ.o GenericDBFile.o HeapDBFile.o SortedDBFile.o y.tab.o lex.yy.o a1test.o
 	$(CC) -o  $(BIN_DIR)/a1test.out Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o Pipe.o BigQ.o GenericDBFile.o HeapDBFile.o SortedDBFile.o y.tab.o lex.yy.o a1test.o -lfl  
@@ -31,22 +31,22 @@ main: Record.o Comparison.o ComparisonEngine.o Schema.o File.o y.tab.o lex.yy.o 
 	$(CC) -o main Record.o Comparison.o ComparisonEngine.o Schema.o File.o y.tab.o lex.yy.o main.o -lfl
 
 a3test.o : $(USER_DIR)/a3test.cc $(USER_DIR)/a3test.h $(GTEST_HEADERS)
-	$(CC) $(CPPFLAGS) -Wno-unused-result -c $(USER_DIR)/a3test.cc
+	$(CC) $(CPPFLAGS) -g -c $(USER_DIR)/a3test.cc
 
 a22test.o : $(USER_DIR)/a22test.cc $(USER_DIR)/a22test.h $(GTEST_HEADERS)
-	$(CC) $(CPPFLAGS) -c $(USER_DIR)/a22test.cc
+	$(CC) $(CPPFLAGS) -g -c $(USER_DIR)/a22test.cc
 
 a2test.o : $(USER_DIR)/a2test.cc $(USER_DIR)/a2test.h $(GTEST_HEADERS)
-	$(CC) $(CPPFLAGS) -c $(USER_DIR)/a2test.cc
+	$(CC) $(CPPFLAGS) -g -c $(USER_DIR)/a2test.cc
 
 a1test.o : $(USER_DIR)/a1test.cc $(USER_DIR)/a1test.h $(GTEST_HEADERS)
-	$(CC) $(CPPFLAGS) -c $(USER_DIR)/a1test.cc
+	$(CC) $(CPPFLAGS) -g -c $(USER_DIR)/a1test.cc
 
 main.o: $(USER_DIR)/main.cc
 	$(CC) $(CPPFLAGS) -c $(USER_DIR)/main.cc
 
 
-Database_unittest: Database_unittest.o Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o Pipe.o BigQ.o RelOp.o Function.o y.tab.o yyfunc.tab.o lex.yy.o lex.yyfunc.o gtest_main.a
+Database_unittest: Database_unittest.o Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o BigQ.o RelOp.o Function.o y.tab.o yyfunc.tab.o lex.yy.o lex.yyfunc.o gtest_main.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $(BIN_DIR)/$@
 #	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
 

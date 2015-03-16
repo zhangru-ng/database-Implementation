@@ -35,7 +35,7 @@ Attribute *Schema :: GetAtts () {
 	return myAtts;
 }
 
-Schema :: Schema (char *fpath, int num_atts, Attribute *atts) {
+Schema :: Schema (const char *fpath, int num_atts, Attribute *atts) {
 	fileName = strdup (fpath);
 	numAtts = num_atts;
 	myAtts = new Attribute[numAtts];
@@ -59,7 +59,7 @@ Schema :: Schema (char *fpath, int num_atts, Attribute *atts) {
 	free(fileName);
 }
 
-Schema :: Schema (char *fName, char *relName) {
+Schema :: Schema (const char *fName, const char *relName) {
 
 	FILE *foo = fopen (fName, "r");
 	

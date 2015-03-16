@@ -46,14 +46,14 @@ void BigQ::WriteRunToFile(vector<Record> &oneRunRecords, int &beg, int &len){
 	Page tempPage;
 	Record tempRec;
 	int tempIndex;
-	int recIndex = 0;
-	if(runsFile.GetLength() == 0){
+	off_t length = runsFile.GetLength();
+	if(0 == length){
 		tempIndex = 0;      
 	}
 	//if the file is not empty, file length-2 is the last page, will not 
 	//write two oneRunRecords to the same page
-	else if(runsFile.GetLength() > 0){
-		tempIndex = runsFile.GetLength() - 1;
+	else if(length > 0){
+		tempIndex = length - 1;
 	}
 	else{ //length less than 0, something wrong with current file
 		cerr << "ERROR in BigQ tempFile: File length less than 0\n";
@@ -62,14 +62,11 @@ void BigQ::WriteRunToFile(vector<Record> &oneRunRecords, int &beg, int &len){
 	beg = tempIndex;
 	for(vector<Record>::iterator it = oneRunRecords.begin(); it != oneRunRecords.end(); ++it){
 		tempRec.Consume(&(*it));
-		if( tempPage.Append(&tempRec) == 1){
-			recIndex++;
-		}else{
+		if( 0 == tempPage.Append(&tempRec)){
 			//if the page is full, create a new page
 			runsFile.AddPage(&tempPage, tempIndex);  
 			tempPage.EmptyItOut();
 			tempPage.Append(&tempRec);
-			recIndex++;
 			tempIndex++;
 		}
 	}		 
