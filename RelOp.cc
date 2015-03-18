@@ -143,11 +143,11 @@ void Join::Use_n_Pages (int n) {
 // equality check) then your Join operation should default to a block-nested loops join
 void* Join::InternalThreadEntry() {
 	OrderMaker sortorderL, sortorderR;
-	// if (0 == selOp->GetSortOrders (sortorderL, sortorderR)) {
+	if (0 == selOp->GetSortOrders (sortorderL, sortorderR)) {
 		BlockNestedJoin(); 
-	// } else {
-	 	// SortMergeJoin(sortorderL, sortorderR);
-	// }	
+	} else {
+	 	SortMergeJoin(sortorderL, sortorderR);
+	}	
 	outPipe->ShutDown();
 	pthread_exit(nullptr);
 }
@@ -272,7 +272,7 @@ void Join::WriteToFile (vector<Record> &run, File &file) {
 		tempIndex = length - 2;
 		file.GetPage(&tempPage, tempIndex);
 	}
-	for (vector<Record>::iterator it = run.begin();it != run.end(); ++it) {
+	for (auto it = run.begin();it != run.end(); ++it) {
 		tempRec.Consume(&(*it));
 		if (0 == tempPage.Append(&tempRec)) {
 			//if the page is full, create a new page
@@ -314,8 +314,8 @@ void Join::FitInMemoryJoin (vector<Record> &leftRecords, vector<Record> &rightRe
 		JoinRec = &Join::JoinRecordRL;
 	}
 	// nested loop scan
-	for (vector<Record>::iterator itL = leftRecords.begin(); itL != leftRecords.end(); ++itL) {
-		for (vector<Record>::iterator itR = rightRecords.begin(); itR != rightRecords.end(); ++itR) {
+	for (auto itL = leftRecords.begin(); itL != leftRecords.end(); ++itL) {
+		for (auto itR = rightRecords.begin(); itR != rightRecords.end(); ++itR) {
 			(this->*JoinRec)(*itL, *itR);
 		}
 	}	
@@ -350,10 +350,10 @@ void Join::JoinRecInFile (File &outter, File &inner, int smaller) {
 					inner.GetPage(&tempPage, innerIndex);
 					while (tempPage.GetFirst(&tempRecR)) {
 						(this->*JoinRec)(tempRecL, tempRecR);
-						count++;
-						if(count % 1000000 == 0){
-							cerr << count << "\n";
-						}
+						// count++;
+						// if(count % 1000000 == 0){
+						// 	cerr << count << "\n";
+						// }
 					}																									
 				}
 			}
@@ -463,8 +463,8 @@ int Join::OutputTuple (Record &left, Record &right, Pipe &outputL, Pipe &outputR
 		}
 	}
 	//merge all matched records
-	for (vector<Record>::iterator itL = leftRecords.begin(); itL != leftRecords.end(); ++itL) {
-		for (vector<Record>::iterator itR = rightRecords.begin(); itR != rightRecords.end(); ++itR) {
+	for (auto itL = leftRecords.begin(); itL != leftRecords.end(); ++itL) {
+		for (auto itR = rightRecords.begin(); itR != rightRecords.end(); ++itR) {
 			joinRec.MergeRecords (&(*itL), &(*itR), numAttsLeft, numAttsRight, attsToKeep, numAttsToKeep, numAttsLeft);
 			outPipe->Insert(&joinRec);
 		}

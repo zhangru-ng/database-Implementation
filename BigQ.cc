@@ -1,26 +1,26 @@
 #include "BigQ.h"
 
 
-BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl), runsFileName(NULL), runsFile(), runNum(0), workthread(){
-	if(runlen > 0){
+BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl), runsFileName(NULL), runsFile(), runNum(0), workthread() {
+	if (runlen > 0) {
 		StartInternalThread();
- 	}else{
+ 	} else {
 		cerr << "ERROR in BigQ: run length should greater than 0!";
 		exit(1);
 	}
 }
 
 BigQ::~BigQ () {
-	if(remove(runsFileName)){
+	if (remove(runsFileName)) {
 	 	cerr << "can't delete" << runsFileName;
 	}
 	free(runsFileName);
 }
 
 //two phase multiway merge sort
-void *BigQ::InternalThreadEntry(){
+void *BigQ::InternalThreadEntry () {
 // void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
-	char dir[80] = "/cise/tmp/rui/temp/Qtemp_XXXXXX";
+	char dir[80] = "/cise/tmp/rui/temp/BigQtemp_XXXXXX";
 	mkstemp(dir);
 	runsFileName = strdup(dir);
 	runsFile.Open(0, runsFileName);
@@ -36,33 +36,34 @@ void *BigQ::InternalThreadEntry(){
 	pthread_exit(NULL);
 }
 
-void BigQ::SortInRun(vector<Record> &oneRunRecords){
-	Sorter runSorter(sortorder);
-	sort(oneRunRecords.begin(), oneRunRecords.end(), runSorter);
+void BigQ::SortInRun (vector<Record> &oneRunRecords) {
+	ComparisonEngine comp;
+	//use funny lambda function                                 [capture] (papameter) {body}
+	sort(oneRunRecords.begin(), oneRunRecords.end(), [comp, this](const Record &r1, const Record &r2) { return comp.Compare (&r1, &r2, &sortorder) < 0; });
 }
 
 //write one run to temporary file, store the begin and length of current run
-void BigQ::WriteRunToFile(vector<Record> &oneRunRecords, int &beg, int &len){	
+void BigQ::WriteRunToFile (vector<Record> &oneRunRecords, int &beg, int &len) {	
 	Page tempPage;
 	Record tempRec;
 	int tempIndex;
 	off_t length = runsFile.GetLength();
-	if(0 == length){
+	if (0 == length) {
 		tempIndex = 0;      
 	}
 	//if the file is not empty, file length-2 is the last page, will not 
 	//write two oneRunRecords to the same page
-	else if(length > 0){
+	else if (length > 0) {
 		tempIndex = length - 1;
 	}
-	else{ //length less than 0, something wrong with current file
+	else { //length less than 0, something wrong with current file
 		cerr << "ERROR in BigQ tempFile: File length less than 0\n";
 		exit (1);
 	}
 	beg = tempIndex;
-	for(vector<Record>::iterator it = oneRunRecords.begin(); it != oneRunRecords.end(); ++it){
+	for (vector<Record>::iterator it = oneRunRecords.begin(); it != oneRunRecords.end(); ++it) {
 		tempRec.Consume(&(*it));
-		if( 0 == tempPage.Append(&tempRec)){
+		if (0 == tempPage.Append(&tempRec)) {
 			//if the page is full, create a new page
 			runsFile.AddPage(&tempPage, tempIndex);  
 			tempPage.EmptyItOut();
@@ -77,7 +78,7 @@ void BigQ::WriteRunToFile(vector<Record> &oneRunRecords, int &beg, int &len){
 }
 
 //First phase of TPMMS
-void BigQ::FirstPhase(vector<Run> &runs){ 
+void BigQ::FirstPhase (vector<Run> &runs) { 
 	int curLen = 0;
 	int curSize = sizeof(int);
 	//int runNum = 0;
@@ -85,9 +86,9 @@ void BigQ::FirstPhase(vector<Run> &runs){
 	Record tempRec;
 	vector<Record> oneRunRecords;
 	oneRunRecords.reserve(800);
-	while(in.Remove(&tempRec)){
+	while (in.Remove(&tempRec)) {
 		//check if a single record larger than a page
-		if(tempRec.Size() > PAGE_SIZE - sizeof(int)){ 
+		if (tempRec.Size() > PAGE_SIZE - sizeof(int)) { 
 			cerr << "record larger than a page in TPMMS first phase\n";
 			exit(1);
 		}
@@ -95,13 +96,13 @@ void BigQ::FirstPhase(vector<Run> &runs){
 		//the sum of record size is larger than oneRunRecords size
 		curSize += tempRec.Size();
 
-		if(curSize > PAGE_SIZE ){ //Page class initially allocate size of int to store curSizeInBytes 
+		if (curSize > PAGE_SIZE ) { //Page class initially allocate size of int to store curSizeInBytes 
 			curLen++;			
 			curSize = sizeof(int) + tempRec.Size();
 		}
 	
 		//current length equal to oneRunRecords length, the current oneRunRecords is full
-		if(curLen == runlen){
+		if (curLen == runlen) {
 			//sort the current run **sort exchange record positions, if run length greater than one page,
 			//the new page of record after sorting may not fit in one page as before
 			SortInRun(oneRunRecords);
@@ -120,7 +121,7 @@ void BigQ::FirstPhase(vector<Run> &runs){
 		oneRunRecords.push_back(tempRec);
 	}   
 	//the size of last oneRunRecords may be less than one run
-	if(oneRunRecords.size() > 0){
+	if (oneRunRecords.size() > 0) {
 		SortInRun(oneRunRecords);
 		WriteRunToFile(oneRunRecords, beg, len);
 		//add as a run, the last page count as one page, current run length plus 1
@@ -131,74 +132,67 @@ void BigQ::FirstPhase(vector<Run> &runs){
 }
 
 //Second phase of TPMMS
-void BigQ::SecondPhase(vector<Run> &runs){	
-//	double start, end;
-//	double cpu_time_used;
-	
-//	start = clock(); 		
-	PriorityQueue(runs);
-	//LinearScan(runs);  //Linear scan is much slower than priority queue when run number large
-//	end = clock();
-//	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-	//cout << "second phase spent " << cpu_time_used << " seconds cpu time" << endl;
-	//cout << "LinearScan:" << cpu_time_used2 << endl;
+void BigQ::SecondPhase (vector<Run> &runs) {	
+	// double start, end;
+	// double cpu_time_used;
+	// start = clock();
+	//Linear scan is much slower than priority queue when run number large
+	if (runNum >= THRESHOLD) {
+		PriorityQueue(runs);
+	}
+	// Linear scan is faster than priority queue when when run number small
+	else {
+		LinearScan(runs);
+	}
+	// end = clock();
+	// cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+	// cout << "second phase spent " << cpu_time_used << " seconds cpu time" << endl;
+	// cout << "PriorityQueue: spent " << cpu_time_used * 1000 <<" ms" << endl;
+	// cout << "LinearScan: spent " << cpu_time_used * 1000 <<" ms" << endl;
 }
 
-// void BigQ::LinearScan(vector<Run> &runs){
-// 	int runCount = 0;
-// 	int minID = 0;
-// 	Sorter sorter(sortorder);
-// 	QueueMember tempQM;
-// 	Record minRec;
-// 	vector<QueueMember> qm;
-		
-// 	for (vector<Run>::iterator it=runs.begin(); it!=runs.end(); ++it){
-// 		tempQM.runID = it->GetRunID();
-// 		it->GetNext(tempQM.rec);
-// 		qm.push_back(tempQM);
-// 	}
-// 	while( runCount < runNum ){
-// 		for (vector<QueueMember>::iterator itq=qm.begin(); itq!=qm.end(); ++itq){
-// 			if(itq->runID >=0){
-// 				minRec = itq->rec;
-// 				minID = itq->runID;
-// 				break;
-// 			}			
-// 		}	
-// 		for (vector<QueueMember>::iterator itq=qm.begin(); itq!=qm.end(); ++itq){
-// 			if(itq->runID >=0){
-// 				if(sorter(minRec, itq->rec) ){
-// 					minRec = itq->rec;
-// 					minID = itq->runID;
-// 				}
-// 			}			
-// 		}		
-// 		out.Insert(&minRec);
-// 		if(qm[minID].runID >= 0 && runs[minID].GetNext(tempQM.rec)){
-// 			tempQM.runID = minID;
-// 			qm[minID] = tempQM;
-//  		}else{
-//  			qm[minID].runID = -1;
-//  			runCount++;
-//  		}	
-// 	}
-// }
-
-void BigQ::PriorityQueue(vector<Run> &runs){
-	int minID = 0;
+void BigQ::LinearScan(vector<Run> &runs){
+	ComparisonEngine comp;
 	Sorter sorter(sortorder);
+	ListMember tempLM;
+	Record *minRec;
+	list<ListMember> run_list;
+	for (auto it=runs.begin(); it!=runs.end(); ++it){
+		tempLM.myRun = &(*it);
+		it->GetNext(tempLM.rec);
+		run_list.push_front(tempLM);
+	}
+	list<ListMember>::iterator itl;
+	auto minIt = run_list.begin();
+	while (0 == run_list.empty()) {
+		minRec = &(minIt->rec);
+		for (itl = run_list.begin(); itl != run_list.end(); ++itl){
+			if (comp.Compare (minRec, &(itl->rec), &sortorder) > 0) {
+				minRec = &(itl->rec);
+				minIt = itl;
+			}
+		}
+		out.Insert(minRec);
+		if (false == (minIt->myRun)->GetNext(minIt->rec)) {
+ 			run_list.erase(minIt);
+ 			minIt = run_list.begin();
+ 		}
+	}
+}
+
+void BigQ::PriorityQueue (vector<Run> &runs) {
+	int minID = 0;	
 	QueueMember tempQM;
+	Sorter sorter(sortorder);
 	//priority queue of first record of each run
 	priority_queue<QueueMember, vector<QueueMember>, Sorter>pqueue(sorter);
 
 	//for (it=runs.begin()+0; it!=runs.begin()+runNum; ++it){
-	for (vector<Run>::iterator it=runs.begin(); it!=runs.end(); ++it) {
+	for (auto it=runs.begin(); it!=runs.end(); ++it) {
 		tempQM.runID = it->GetRunID();
-		it->MoveFirst();
 		it->GetNext(tempQM.rec);
 		pqueue.push(tempQM);
 	}
-
 	while (! pqueue.empty()) {
 		//get the minimal record
      	tempQM = pqueue.top();
@@ -217,11 +211,12 @@ void BigQ::PriorityQueue(vector<Run> &runs){
 	}	
 }
 
- Run::Run(int ID, int beg, int rl, File *rf) : runID(ID), runBegIndex(beg), runCurIndex(beg), curRunLen(rl), runsFile(rf) { 	
+ Run::Run (int ID, int beg, int rl, File *rf) : runID(ID), runBegIndex(beg), runCurIndex(beg), curRunLen(rl), runsFile(rf) { 
+	MoveFirst();
  }
 
 //Copy constructer
- Run::Run(const Run &r) {
+ Run::Run (const Run &r) {
  	runID = r.runID;
  	curRunLen = r.curRunLen;
   	runBegIndex = r.runBegIndex;
@@ -242,30 +237,30 @@ void BigQ::PriorityQueue(vector<Run> &runs){
  }
 
 //get the ID of this run
-int Run::GetRunID(){
+int Run::GetRunID () {
 	return runID;
 }
 
-void Run::MoveFirst(){
+void Run::MoveFirst () {
 	runCurIndex = runBegIndex;
-	if( runCurIndex + curRunLen - 1 <= runsFile->GetLength() - 2){//if the file is not empty
+	if (runCurIndex + curRunLen - 1 <= runsFile->GetLength() - 2) {//if the file is not empty
 		runsFile->GetPage(&curPage, runCurIndex);
-	}else{ //if the file is empty, cause "read past the end of the file"
+	} else { //if the file is empty, cause "read past the end of the file"
 		cerr << "ERROR: run exceeds file length";
 		exit(1);
 	}
 }
 
 //get the next record of this run 
-int Run::GetNext(Record &curRec){
- 	while(1){
- 		if(curPage.GetFirst(&curRec)){
+int Run::GetNext (Record &curRec) {
+ 	while (1) {
+ 		if (curPage.GetFirst(&curRec)) {
  			return 1;
- 		}else{
- 			if(++runCurIndex < runBegIndex + curRunLen){
+ 		} else {
+ 			if (++runCurIndex < runBegIndex + curRunLen) {
  				curPage.EmptyItOut();
  				runsFile->GetPage(&curPage, runCurIndex); 
- 			}else{
+ 			} else {
  				break;
  			}			
  		}

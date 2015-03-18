@@ -44,6 +44,7 @@ class OrderMaker {
 
 	friend class ComparisonEngine;
 	friend class CNF;
+	friend class Set_member;
 
 	int numAtts;		//the number of attributes in the ordermaker(schema)
 

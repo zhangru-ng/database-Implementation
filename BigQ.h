@@ -4,25 +4,32 @@
 #include <iostream>
 #include <vector>
 #include <queue>
+#include <list>
 #include <algorithm>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "Pipe.h"
 #include "File.h"
 #include "Record.h"
 #include "Schema.h"
 #include "Thread.h"
 
-
-
 using namespace std;
+
+#define THRESHOLD 120
 
 class Run;
 //struct to store priority queue member
-typedef struct _QueueMember{
+typedef struct Queue_Member{
   int runID;        //run ID which the record from 
   Record rec;       
 }QueueMember;
+
+typedef struct List_Member{
+  Record rec;
+  Run *myRun;
+}ListMember;
 
 class BigQ : public Thread {
 private:
@@ -34,7 +41,6 @@ private:
   File runsFile;
   int runNum;
   pthread_t workthread;
-  //bootstrap wrapper function
  // static void* workerthread_wrapper (void* arg);
   void *InternalThreadEntry();
   //two phase multiway merge sort main function
@@ -83,21 +89,9 @@ private:
   ComparisonEngine comp;
 public:
   Sorter(OrderMaker &s) : sortorder(s),comp() {}
-  //compare operator for phase one vecter<Record>
-  bool operator()(const Record &r1, const Record &r2){   
-    if(comp.Compare (&r1, &r2, &sortorder) < 0){
-      return true;
-    }else{
-      return false;
-    }      
-  }
   //compare operator for phase two priority queue
-  bool operator()(const QueueMember &qm1, const QueueMember &qm2){   
-    if(comp.Compare (&(qm1.rec), &(qm2.rec), &sortorder) > 0){
-      return true;
-    }else{
-      return false;
-    }
+  bool operator()(const QueueMember &qm1, const QueueMember &qm2) const {   
+    return comp.Compare (&(qm1.rec), &(qm2.rec), &sortorder) > 0;
   }
 };
 

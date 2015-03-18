@@ -95,7 +95,7 @@ void HeapDBFile::MoveFirst () {
 	if (Write == curMode) {
 		curMode = Read;
 		curFile.AddPage(&curPage, curPageIndex);  
-		cerr << "Switch from write to read\n";
+		// cerr << "Switch from write to read\n";
 	}
 	
 	curPageIndex = 0;

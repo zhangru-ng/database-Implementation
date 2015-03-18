@@ -9,7 +9,7 @@
 
 // returns a -1, 0, or 1 depending upon whether left is less then, equal to, or greater
 // than right, depending upon the OrderMaker
-int ComparisonEngine :: Compare(const Record * const left, const Record * const right, const OrderMaker * const orderUs) {
+int ComparisonEngine :: Compare(const Record *left, const Record *right, const OrderMaker *orderUs) const {
 
 	char *val1, *val2;
 
@@ -74,7 +74,7 @@ int ComparisonEngine :: Compare(const Record * const left, const Record * const 
 }
 /********************Added by Rui: 2015.2.28**********************************/
 //use to compare record and literal in sorted file binary search
-int ComparisonEngine :: Compare(const Record * const left, const Record * const literal, const OrderMaker * const orderUs, const int * const litOrder) {
+int ComparisonEngine :: Compare(const Record *left, const Record *literal, const OrderMaker *orderUs, const int *litOrder) const {
 
 	char *val1, *val2;
 
@@ -142,7 +142,7 @@ int ComparisonEngine :: Compare(const Record * const left, const Record * const 
 // returns a -1, 0, or 1 depending upon whether left is less then, equal to, or greater
 // than right, depending upon the OrderMakers that are passed in.  This one is used for
 // joins, where you have to compare records *across* two input tables
-int ComparisonEngine :: Compare (Record *left, OrderMaker *order_left, Record *right, OrderMaker *order_right) {
+int ComparisonEngine :: Compare (const Record *left, const OrderMaker *order_left, const Record *right, const OrderMaker *order_right) const {
 
 	char *val1, *val2;
 
@@ -209,7 +209,7 @@ int ComparisonEngine :: Compare (Record *left, OrderMaker *order_left, Record *r
 
 // Here we apply a CNF to a single record; this function either returns true or false
 // dpending upon wheter or not the CNF expression accepts the record
-int ComparisonEngine :: Compare (Record *left, Record *literal, CNF *myComparison) {
+int ComparisonEngine :: Compare (const Record *left, const Record *literal, const CNF *myComparison)const {
 
 	for (int i = 0; i < myComparison->numAnds; i++) {
 
@@ -239,7 +239,7 @@ int ComparisonEngine :: Compare (Record *left, Record *literal, CNF *myCompariso
 
 
 // this is just like the last one, except that it deals with a pair of records
-int ComparisonEngine :: Compare (Record *left, Record *right, Record *literal, CNF *myComparison) {
+int ComparisonEngine :: Compare (const Record *left, const Record *right, const Record *literal, const CNF *myComparison)const {
 
 	for (int i = 0; i < myComparison->numAnds; i++) {
 
@@ -268,7 +268,7 @@ int ComparisonEngine :: Compare (Record *left, Record *right, Record *literal, C
 }
 
 // This is an internal function used by the comparison engine
-int ComparisonEngine :: Run (Record *left, Record *literal, Comparison *c) {
+int ComparisonEngine :: Run(const Record *left, const Record *literal, const Comparison *c)const {
 
 	char *val1, *val2;
 
@@ -366,7 +366,7 @@ int ComparisonEngine :: Run (Record *left, Record *literal, Comparison *c) {
 }
 
 // This is an internal function used by the comparison engine
-int ComparisonEngine :: Run (Record *left, Record *right, Record *literal, Comparison *c) {
+int ComparisonEngine :: Run (const Record *left, const Record *right, const Record *literal, const Comparison *c)const {
 
 	char *val1, *val2;
 

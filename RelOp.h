@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include <algorithm>
 #include "Pipe.h"
 #include "DBFile.h"
 #include "Record.h"
@@ -82,17 +83,12 @@ private:
 	Pipe *inPipeR;
 	Pipe *outPipe;
 	CNF *selOp;
-	Record *literal;
-	// number of attributes in left relation
-	int numAttsLeft;
-	// number of attributes in right relation
-	int numAttsRight;
-	// total number of attibutes of relation after join
-	int numAttsToKeep; 
-	// array that store subscript of which attributes to keep
-	int *attsToKeep;
-	// ComparionEngine instance used in most member function
-	ComparisonEngine comp;
+	Record *literal;	
+	int numAttsLeft;	// number of attributes in left relation	
+	int numAttsRight;	// number of attributes in right relation	
+	int numAttsToKeep; 	// total number of attibutes of relation after join	
+	int *attsToKeep;	// array that store subscript of which attributes to keep	
+	ComparisonEngine comp;	// ComparionEngine instance used in most member function
 	//block-nested loop join algorithm
 	void BlockNestedJoin();
 	//write in memory records to file
@@ -138,11 +134,9 @@ class Sum : public RelationalOp, public Thread {
 private:
 	Pipe *inPipe;
 	Pipe *outPipe;
-	Function *computeMe;
-	//store aggregation result for int attribute
-	int intSum;
-	//store aggregation result for double attribute
-	double doubleSum;
+	Function *computeMe;	
+	int intSum;			//store aggregation result for int attribute	
+	double doubleSum;	//store aggregation result for double attribute
 	//compute aggregation for int attributes
 	string IntSum();
 	//compute aggregation for double attributes
@@ -160,11 +154,9 @@ private:
 	Pipe *inPipe; 
 	Pipe *outPipe;
 	OrderMaker *groupAtts;
-	Function *computeMe;
-	//store aggregation result for int attribute
-	int intSum;
-	//store aggregation result for double attribute
-	double doubleSum;
+	Function *computeMe;	
+	int intSum;			//store aggregation result for int attribute	
+	double doubleSum;	//store aggregation result for double attribute
 	//group by int attirbutes
 	void GroupInt(Pipe &output, Record &lastRec, int numAtts, int numGroupAtts, int *Atts, Schema &sumSchema);
 	//group by double attirbutes
@@ -191,3 +183,5 @@ public:
 };
 
 #endif
+
+
