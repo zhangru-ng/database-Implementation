@@ -26,10 +26,16 @@ void *BigQ::InternalThreadEntry () {
 	runsFile.Open(0, runsFileName);
 	vector<Run> runs;
 	runs.reserve(200);
+	// double start, end;
+	// double cpu_time_used;
+	// start = clock();		
 	//First Phase of TPMMS
 	FirstPhase(runs);
 	//Second Phase of TPMMS
 	SecondPhase(runs);
+	// end = clock();
+	// cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+	// cout << "sort spent " << cpu_time_used << " seconds cpu time" << endl;
 	out.ShutDown ();		
 	runsFile.Close();
 	//cout << "TPMMS spent totally " << cpu_time_used << " senconds cpu time" << endl;		
@@ -81,7 +87,6 @@ void BigQ::WriteRunToFile (vector<Record> &oneRunRecords, int &beg, int &len) {
 void BigQ::FirstPhase (vector<Run> &runs) { 
 	int curLen = 0;
 	int curSize = sizeof(int);
-	//int runNum = 0;
 	int beg, len;
 	Record tempRec;
 	vector<Record> oneRunRecords;
@@ -127,7 +132,8 @@ void BigQ::FirstPhase (vector<Run> &runs) {
 		//add as a run, the last page count as one page, current run length plus 1
 		curLen++;
 		runs.push_back(Run(runNum, beg, len, &runsFile));
-		runNum++;		
+		//increase run number
+		runNum++;				
 	}
 }
 
@@ -159,6 +165,7 @@ void BigQ::LinearScan(vector<Run> &runs){
 	list<ListMember> run_list;
 	for (auto it=runs.begin(); it!=runs.end(); ++it){
 		tempLM.myRun = &(*it);
+		it->MoveFirst();
 		it->GetNext(tempLM.rec);
 		run_list.push_front(tempLM);
 	}
@@ -190,51 +197,51 @@ void BigQ::PriorityQueue (vector<Run> &runs) {
 	//for (it=runs.begin()+0; it!=runs.begin()+runNum; ++it){
 	for (auto it=runs.begin(); it!=runs.end(); ++it) {
 		tempQM.runID = it->GetRunID();
+		it->MoveFirst();
 		it->GetNext(tempQM.rec);
 		pqueue.push(tempQM);
 	}
 	while (! pqueue.empty()) {
 		//get the minimal record
-     	tempQM = pqueue.top();
-     	//store the run ID of the smallest record
-     	minID = tempQM.runID;
-     	//insert the smallest record to output pipe
-      	out.Insert(&tempQM.rec);
-      	//pop the minimal record
-      	pqueue.pop();
-      	//if there are more record in the run which has just extracted the minimal record
-     	if(runs[minID].GetNext(tempQM.rec)){
+		tempQM = pqueue.top();
+		//store the run ID of the smallest record
+		minID = tempQM.runID;
+		//insert the smallest record to output pipe
+		out.Insert(&tempQM.rec);
+		//pop the minimal record
+		pqueue.pop();
+		//if there are more record in the run which has just extracted the minimal record
+		if(runs[minID].GetNext(tempQM.rec)){
 			tempQM.runID = minID;
 			//push the next record of this run in queue
 			pqueue.push(tempQM);
- 		}
+		}
 	}	
 }
 
- Run::Run (int ID, int beg, int rl, File *rf) : runID(ID), runBegIndex(beg), runCurIndex(beg), curRunLen(rl), runsFile(rf) { 
-	MoveFirst();
- }
+Run::Run (int ID, int beg, int rl, File *rf) : runID(ID), runBegIndex(beg), runCurIndex(beg), curRunLen(rl), runsFile(rf) ,curPage(){ 
+}
 
 //Copy constructer
- Run::Run (const Run &r) {
+Run::Run (const Run &r) {
  	runID = r.runID;
  	curRunLen = r.curRunLen;
   	runBegIndex = r.runBegIndex;
   	runCurIndex = r.runCurIndex;
   	runsFile = r.runsFile;
-  	MoveFirst();
- }
+  	curPage = r.curPage;
+}
 
 //"=" operator
- Run& Run::operator = (const Run &r) {
+Run& Run::operator = (const Run &r) {
  	runID = r.runID;
  	curRunLen = r.curRunLen;
   	runBegIndex = r.runBegIndex;
   	runCurIndex = r.runCurIndex;
   	runsFile = r.runsFile;
-  	MoveFirst();
+  	curPage = r.curPage;
   	return *this;
- }
+}
 
 //get the ID of this run
 int Run::GetRunID () {

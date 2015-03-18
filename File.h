@@ -22,7 +22,9 @@ private:
 public:
 	// constructor
 	Page ();
+	Page (const Page &copyme);
 	virtual ~Page ();
+	Page & operator = (const Page &other);
 
 	// this takes a page and writes its binary representation to bits
 	void ToBinary (char *bits);

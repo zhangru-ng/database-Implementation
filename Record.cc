@@ -34,9 +34,7 @@ Record & Record :: operator = (const Record &other){
 }
 
 Record :: ~Record () {
-	if (bits != NULL) {
-		delete [] bits;
-	}
+	delete [] bits;
 	bits = NULL;
 
 }

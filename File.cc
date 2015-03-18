@@ -27,6 +27,36 @@ Page :: ~Page () {
 	delete myRecs;
 }
 
+Page :: Page  (const Page &copyme){
+	curSizeInBytes = copyme.curSizeInBytes;
+	numRecs = copyme.numRecs;
+	myRecs = new (std::nothrow) TwoWayList<Record>;
+	if (myRecs == NULL)
+	{
+		cout << "ERROR : Not enough memory. EXIT !!!\n";
+		exit(1);
+	}
+	if (numRecs > 0){
+		myRecs->Copy(*(copyme.myRecs));
+	}
+}
+
+Page & Page :: operator = (const Page &other){	
+	delete myRecs;
+	curSizeInBytes = other.curSizeInBytes;
+	numRecs = other.numRecs;
+	myRecs = new (std::nothrow) TwoWayList<Record>;
+	if (myRecs == NULL)
+	{
+		cout << "ERROR : Not enough memory. EXIT !!!\n";
+		exit(1);
+	}
+	if (numRecs > 0){
+		myRecs->Copy(*(other.myRecs));
+	}
+	return *this;
+}
+
 void Page :: EmptyItOut () {
 
 	// get rid of all of the records
