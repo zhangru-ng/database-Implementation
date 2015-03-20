@@ -90,24 +90,27 @@ private:
 	int *attsToKeep;	// array that store subscript of which attributes to keep	
 	ComparisonEngine comp;	// ComparionEngine instance used in most member function
 	//block-nested loop join algorithm
-	void BlockNestedJoin();
+	void NestedLoopJoin();
 	//write in memory records to file
-	void WriteToFile(vector<Record> &run, File &file);
+	void WriteToFile(vector<Record> &run, DBFile &file);
 	//join function for left relation as outter loop
 	void JoinRecordLR(Record &left, Record &right);
 	//join function for right relation as outter loop
 	void JoinRecordRL(Record &right, Record &left);
-	// external block nested loop join
-	void JoinRecInFile(File &outter, File &inner, int smaller);
+	// external nested loop join
+	void JoinRecInFile(DBFile &outter, DBFile &inner, int smaller);	
 	// nested loop scan the relation and join records
-	void FitInMemoryJoin(vector<Record> &leftRecords, vector<Record> &rightRecords, int smaller);
-	// Fill M-1 blocks for the outter loop of block nested join
-	int FillBlock(File &file, Page block[], off_t &index);
+	void FitInMemoryJoin(vector<Record> &leftRecords, vector<Record> &rightRecords, int smaller);	
 	// sort-merge join algorithm
 	void SortMergeJoin(OrderMaker &sortorderL, OrderMaker &sortorderR);
 	// output all possible joinable tuples start from where the sort-merge join find matched tuples
 	int OutputTuple(Record &left, Record &right, Pipe &outputL, Pipe &outputR, OrderMaker &sortorderL, OrderMaker &sortorderR);
 	void* InternalThreadEntry();
+	//function for block nested join
+	// void WriteToFile(vector<Record> &run, File &file);
+	// void JoinRecInFile(File &outter, File &inner, int smaller);
+	// Fill M-1 blocks for the outter loop of block nested join
+	// int FillBlock(File &file, Page block[], off_t &index);
 public:
 	Join();
 	void Run (Pipe &inPipeL, Pipe &inPipeR, Pipe &outPipe, CNF &selOp, Record &literal);

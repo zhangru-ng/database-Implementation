@@ -144,7 +144,7 @@ void Join::Use_n_Pages (int n) {
 void* Join::InternalThreadEntry() {
 	OrderMaker sortorderL, sortorderR;
 	if (0 == selOp->GetSortOrders (sortorderL, sortorderR)) {
-		BlockNestedJoin(); 
+		NestedLoopJoin(); 
 	} else {
 	 	SortMergeJoin(sortorderL, sortorderR);
 	}	
@@ -152,7 +152,7 @@ void* Join::InternalThreadEntry() {
 	pthread_exit(nullptr);
 }
 
-void Join::BlockNestedJoin() {
+void Join::NestedLoopJoin() {
 	Record tempRecL, tempRecR, joinRec;
 	vector<Record> leftRecords;
 	vector<Record> rightRecords;
@@ -162,13 +162,16 @@ void Join::BlockNestedJoin() {
 	bool fitInMemory = true;
 
 	//create the temporary file for external block nested join
-	char lfname[80] = "/cise/tmp/rui/temp/JLtemp_XXXXXX";
-	char rfname[80] = "/cise/tmp/rui/temp/JRtemp_XXXXXX";
+	char lfname[80] = "dbfile/temp/JLtemp_XXXXXX";
+	char rfname[80] = "dbfile/temp/JRtemp_XXXXXX";
 	mkstemp(lfname);
 	mkstemp(rfname);
-	File leftFile, rightFile;
-	leftFile.Open(0, lfname);
-	rightFile.Open(0, rfname);
+	// File leftFile, rightFile;
+	// leftFile.Open(0, lfname);
+	// rightFile.Open(0, rfname);
+	DBFile leftFile, rightFile;
+	leftFile.Create(lfname, heap, nullptr);
+	rightFile.Create(rfname, heap, nullptr);
 
 	if (inPipeL->Remove(&tempRecL) && inPipeR->Remove(&tempRecR)) {
 		//initial parameters for MergeRecord
@@ -185,7 +188,7 @@ void Join::BlockNestedJoin() {
 				}
 				attsToKeep[i] = i;
 			}
-		}		
+		}
 		
 		leftRecords.push_back(tempRecL);
 		rightRecords.push_back(tempRecR);
@@ -261,28 +264,10 @@ void Join::BlockNestedJoin() {
 }
 
 //write in memory records to file
-void Join::WriteToFile (vector<Record> &run, File &file) {
-	Page tempPage;
-	Record tempRec;
-	off_t tempIndex;
-	off_t length = file.GetLength();
-	if (0 == length) {
-		tempIndex = 0;
-	} else {
-		tempIndex = length - 2;
-		file.GetPage(&tempPage, tempIndex);
+void Join::WriteToFile (vector<Record> &run, DBFile &file) {
+	for (auto it = run.begin(); it != run.end(); ++it) {
+		file.Add(*it);
 	}
-	for (auto it = run.begin();it != run.end(); ++it) {
-		tempRec.Consume(&(*it));
-		if (0 == tempPage.Append(&tempRec)) {
-			//if the page is full, create a new page
-			file.AddPage(&tempPage, tempIndex);  
-			tempPage.EmptyItOut();
-			tempPage.Append(&tempRec);
-			tempIndex++;
-		}
-	} 
-	file.AddPage(&tempPage, tempIndex);  
 }
 
 //join function for left relation as outter loop
@@ -321,65 +306,24 @@ void Join::FitInMemoryJoin (vector<Record> &leftRecords, vector<Record> &rightRe
 	}	
 }
 
-//external block nested loop join
-void Join::JoinRecInFile (File &outter, File &inner, int smaller) {
-	Record tempRecL, tempRecR, joinRec;
-	Page tempPage;
-	Page block[2 * runlen - 1];
-
-	off_t outterIndex = 0;
-	off_t outterLength = outter.GetLength() - 2;
-	off_t innerLength = inner.GetLength() - 2;
-	// pointer-to-member-function, typedef right after class Join
+void Join::JoinRecInFile (DBFile &outter, DBFile &inner, int smaller) {
+	Record tempRecL, tempRecR;
+	outter.MoveFirst();
+	inner.MoveFirst();
 	JoinRecFn JoinRec;
-	size_t count = 0;
-	//check which relation is smaller, use corresponding join function
+	// check which relation is smaller, use corresponding join function
 	if (LEFT == smaller) {
 		JoinRec = &Join::JoinRecordLR;
-	} else {
+	}else {
 		JoinRec = &Join::JoinRecordRL;
-	}	
-	while (outterIndex <= outterLength) {
-		//fill M-1 block of records into memory
-		int size = FillBlock(outter, block, outterIndex);	
-		for (int i = 0; i < size; i++) {
-			//for each record in outter block
-			while (block[i].GetFirst(&tempRecL)) {
-				//scan the whole inner relation to find match records
-				for (off_t innerIndex = 0; innerIndex <= innerLength; ++innerIndex) {
-					inner.GetPage(&tempPage, innerIndex);
-					while (tempPage.GetFirst(&tempRecR)) {
-						(this->*JoinRec)(tempRecL, tempRecR);
-						// count++;
-						// if(count % 1000000 == 0){
-						// 	cerr << count << "\n";
-						// }
-					}																									
-				}
-			}
-		}				
-	}		
-}
-
-// Fill M-1 blocks for the outter loop of block nested join
-int Join::FillBlock (File &file, Page block[], off_t &index){
-	Record tempRec;
-	Page tempPage;
-	// puump records of the smaller relation into M-1 pages
-	int n = 2 * runlen - 1;
-	off_t length = file.GetLength() - 2; 
-	for (int i = 0; i < n; ++i) {
-		// if current index less than file lenght, fill the blocks
-		if (index <= length) {
-			file.GetPage(&block[i], index);			
-			++index;			
-		}
-		// otherwise return number of blocks that has been filled
-		else {
-			return i;
-		}
 	}
-	return n;
+	while (outter.GetNext(tempRecL)) {
+		while (inner.GetNext(tempRecR)) {
+			(this->*JoinRec)(tempRecL, tempRecR);
+		}
+		inner.MoveFirst();
+	}
+
 }
 
 //sort-merge join algorithm
@@ -802,3 +746,92 @@ void* WriteOut::InternalThreadEntry() {
 	pthread_exit(nullptr);
 }
 /*************************************WriteOut***********************************************/
+
+
+/*********************************BlockNestedJoin********************************************
+void Join::WriteToFile (vector<Record> &run, File &file) {
+	Page tempPage;
+	Record tempRec;
+	off_t tempIndex;
+	off_t length = file.GetLength();
+	if (0 == length) {
+		tempIndex = 0;
+	} else {
+		tempIndex = length - 2;
+		file.GetPage(&tempPage, tempIndex);
+	}
+	for (auto it = run.begin();it != run.end(); ++it) {
+		tempRec.Consume(&(*it));
+		if (0 == tempPage.Append(&tempRec)) {
+			//if the page is full, create a new page
+			file.AddPage(&tempPage, tempIndex);  
+			tempPage.EmptyItOut();
+			tempPage.Append(&tempRec);
+			tempIndex++;
+		}
+	} 
+	file.AddPage(&tempPage, tempIndex);  
+}
+
+
+//external block nested loop join
+void Join::JoinRecInFile (File &outter, File &inner, int smaller) {
+	Record tempRecL, tempRecR, joinRec;
+	Page tempPage;
+	Page block[2 * runlen - 1];
+
+	off_t outterIndex = 0;
+	off_t outterLength = outter.GetLength() - 2;
+	off_t innerLength = inner.GetLength() - 2;
+	// pointer-to-member-function, typedef right after class Join
+	JoinRecFn JoinRec;
+	size_t count = 0;
+	//check which relation is smaller, use corresponding join function
+	if (LEFT == smaller) {
+		JoinRec = &Join::JoinRecordLR;
+	} else {
+		JoinRec = &Join::JoinRecordRL;
+	}	
+	while (outterIndex <= outterLength) {
+		//fill M-1 block of records into memory
+		int size = FillBlock(outter, block, outterIndex);	
+		for (int i = 0; i < size; i++) {
+			//for each record in outter block
+			while (block[i].GetFirst(&tempRecL)) {
+				//scan the whole inner relation to find match records
+				for (off_t innerIndex = 0; innerIndex <= innerLength; ++innerIndex) {
+					inner.GetPage(&tempPage, innerIndex);
+					while (tempPage.GetFirst(&tempRecR)) {
+						(this->*JoinRec)(tempRecL, tempRecR);
+						// count++;
+						// if(count % 1000000 == 0){
+						// 	cerr << count << "\n";
+						// }
+					}																									
+				}
+			}
+		}				
+	}		
+}
+
+// Fill M-1 blocks for the outter loop of block nested join
+int Join::FillBlock (File &file, Page block[], off_t &index){
+	Record tempRec;
+	Page tempPage;
+	// puump records of the smaller relation into M-1 pages
+	int n = 2 * runlen - 1;
+	off_t length = file.GetLength() - 2; 
+	for (int i = 0; i < n; ++i) {
+		// if current index less than file lenght, fill the blocks
+		if (index <= length) {
+			file.GetPage(&block[i], index);			
+			++index;			
+		}
+		// otherwise return number of blocks that has been filled
+		else {
+			return i;
+		}
+	}
+	return n;
+}
+**********************************BlockNestedJoin********************************************/

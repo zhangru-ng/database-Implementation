@@ -20,7 +20,7 @@ BigQ::~BigQ () {
 //two phase multiway merge sort
 void *BigQ::InternalThreadEntry () {
 // void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
-	char dir[80] = "/cise/tmp/rui/temp/BigQtemp_XXXXXX";
+	char dir[80] = "dbfile/temp/BigQtemp_XXXXXX";
 	mkstemp(dir);
 	runsFileName = strdup(dir);
 	runsFile.Open(0, runsFileName);
@@ -67,7 +67,7 @@ void BigQ::WriteRunToFile (vector<Record> &oneRunRecords, int &beg, int &len) {
 		exit (1);
 	}
 	beg = tempIndex;
-	for (vector<Record>::iterator it = oneRunRecords.begin(); it != oneRunRecords.end(); ++it) {
+	for (auto it = oneRunRecords.begin(); it != oneRunRecords.end(); ++it) {
 		tempRec.Consume(&(*it));
 		if (0 == tempPage.Append(&tempRec)) {
 			//if the page is full, create a new page
@@ -169,11 +169,10 @@ void BigQ::LinearScan(vector<Run> &runs){
 		it->GetNext(tempLM.rec);
 		run_list.push_front(tempLM);
 	}
-	list<ListMember>::iterator itl;
 	auto minIt = run_list.begin();
 	while (0 == run_list.empty()) {
 		minRec = &(minIt->rec);
-		for (itl = run_list.begin(); itl != run_list.end(); ++itl){
+		for (auto itl = run_list.begin(); itl != run_list.end(); ++itl){
 			if (comp.Compare (minRec, &(itl->rec), &sortorder) > 0) {
 				minRec = &(itl->rec);
 				minIt = itl;

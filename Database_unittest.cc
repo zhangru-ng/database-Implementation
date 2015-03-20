@@ -160,6 +160,25 @@ TEST_F(HeapFileTest, AddRecord) {
 	EXPECT_EQ( 3, dbfile.myInernalPoniter->curFile.GetLength() );
 }
 
+TEST_F(HeapFileTest, AddAndGetRecord) {
+	Record tempRec;
+	Schema f_schema(catalog_path, tbl_name);
+	FILE *tableFile = fopen (tbl_dir, "r");
+	ASSERT_TRUE(tableFile != NULL);
+	int count1 = 0;
+	while(tempRec.SuckNextRecord (&f_schema, tableFile)){
+		dbfile.Add(tempRec);
+		++count1;
+	}
+	dbfile.MoveFirst();
+	int count2 = 0;
+	while (dbfile.GetNext(tempRec)){
+		++count2;
+	}
+	fclose(tableFile);
+	EXPECT_EQ( count1, count2); 
+}
+
 TEST_F(HeapFileTest, GetNextFilterInt) {
 	int err = 0;
 	Record tempRec;

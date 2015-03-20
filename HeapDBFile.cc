@@ -118,12 +118,12 @@ void HeapDBFile::Add (Record &addMe) {
 	//Page is full or record larger than page
 	//clean the page and add the record that failed before
 	if( 0 == curPage.Append(&addMe) ){ 
+		curFile.AddPage(&curPage, curPageIndex);
 		curPage.EmptyItOut();		
 		if( !curPage.Append(&addMe) ){ 
 			cerr << "This record is larger than a DBFile page\n";
 			exit (1);
-		}
-		curFile.AddPage(&curPage, curPageIndex);
+		}		
 		curPageIndex++;		
 	}	
 }
