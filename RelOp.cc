@@ -716,7 +716,7 @@ void* WriteOut::InternalThreadEntry() {
 		// loop through all of the attributes
 		for (int i = 0; i < n; i++) {
 			// print the attribute name
-			fprintf(outFile, "%s: [", atts[i].name);
+			//*fprintf(outFile, "%s: [", atts[i].name);
 			// use the i^th slot at the head of the record to get the
 			// offset to the correct attribute in the record
 			int pointer = ((int *) tempRec.bits)[i + 1];
@@ -726,28 +726,36 @@ void* WriteOut::InternalThreadEntry() {
 			if (atts[i].myType == Int) {
 				int *myInt = (int *) &(tempRec.bits[pointer]);
 				fprintf(outFile, "%d", *myInt);
+				fprintf(outFile, "|");
 			// then is a double
 			} else if (atts[i].myType == Double) {
 				double *myDouble = (double *) &(tempRec.bits[pointer]);
 				fprintf(outFile, "%f", *myDouble);
+				fprintf(outFile, "|");
 			// then is a character string
 			} else if (atts[i].myType == String) {
 				char *myString = (char *) &(tempRec.bits[pointer]);
 				fprintf(outFile, "%s", myString);
+				fprintf(outFile, "|");
 			} 
-			fprintf(outFile, "]");
-			// print out a comma as needed to make things pretty
-			if (i != n - 1) {
-				fprintf(outFile, ", ");
-			}
+			// *fprintf(outFile, "]");
+			// *print out a comma as needed to make things pretty
+			// *if (i != n - 1) {
+			// *	fprintf(outFile, ", ");
+			// *}
 		}
-		fprintf(outFile, "\n");		
+		fprintf(outFile, "\n");	
 	}		
 	pthread_exit(nullptr);
 }
 /*************************************WriteOut***********************************************/
 
 
+/*
+ *Discard 2015.03.20
+ *The performance difference is little
+ *but the code is much longer
+ */
 /*********************************BlockNestedJoin********************************************
 void Join::WriteToFile (vector<Record> &run, File &file) {
 	Page tempPage;
