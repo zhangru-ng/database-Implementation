@@ -4,26 +4,41 @@
 #include <assert.h>
 #include "DBFile.h"
 #include "BigQ.h"
+#include "RelOp.h"
 #include "gtest/gtest.h"
-
-extern "C" {
-	int yyparse(void);   // defined in y.tab.c
-}
-extern FILE * yyin;
-extern struct AndList *final;
 
 char tbl_dir[256] = "/cise/tmp/dbi_sp11/DATA/10M/lineitem.tbl"; 
 char tbl_name[50] = "lineitem";
 char catalog_path[100] = "catalog";
-char cnf_dir[100] = "filterCNF/";
 char testFile_path[100] = "/cise/tmp/rui/testFile.bin";
 char headFile_path[100] = "/cise/tmp/rui/testFile.bin.header";
+
+extern "C" {
+	int yyparse (void);   // defined in y.tab.c
+	int yyfuncparse (void);   // defined in yyfunc.tab.c
+	void init_lexical_parser (char *); // defined in lex.yy.c (from Lexer.l)
+	void close_lexical_parser (); // defined in lex.yy.c
+	void init_lexical_parser_func (char *); // defined in lex.yyfunc.c (from Lexerfunc.l)
+	void close_lexical_parser_func (); // defined in lex.yyfunc.c
+}
+extern FILE * yyin;
+extern struct AndList *final;
+extern struct FuncOperator *finalfunc;
 
 /*
  * Heap DBFile unit test
  * Written by Rui 2015.02.06	
  */ 
- 
+ void get_cnf (char *input, Schema *f_schema, CNF &cnf_pred, Record &literal) {
+	init_lexical_parser (input);
+  	if (yyparse() != 0) {
+		cout << " Error: can't parse your CNF " << input << endl;
+		exit (1);
+	}
+	cnf_pred.GrowFromParseTree (final, f_schema, literal); // constructs CNF predicate
+	close_lexical_parser ();
+}
+/*
 class HeapFileTest : public ::testing::Test {
 protected:
 	virtual void SetUp() {
@@ -55,29 +70,6 @@ int HeapFileTest::AddRecord(int size){
 	tempRec.SetBits(tempBits); //SetBits is pointer operation and Add
 	dbfile.Add (tempRec);		//consume rec, namely consume tempBits
 	return 1;
-}
-
-void initCNF(CNF &cnf_pred, Record &literal, char* cnf_name, char* tbl_name){
-	char cnf_file[100];
-	sprintf (cnf_file, "%s%s", cnf_dir , cnf_name);
-	FILE *fp = fopen(cnf_file, "r");
-	// make sure it is valid:
-	if (!fp) {
-		cout << "Can't open" << cnf_file << endl;
-		exit(1);
-	}
-	// set lex to read from it instead of defaulting to STDIN:
-	yyin = fp;
-	// parse through the input until there is no more:
-	do {
-		if(yyparse()){
-			cerr << "Can't parse test filter CNF\n";
-			exit(1);
-		}
-	} while (!feof(yyin));
-	Schema lisc(catalog_path, tbl_name);
-	cnf_pred.GrowFromParseTree (final, &lisc, literal); // constructs CNF predicate
-	fclose(fp);
 }
 
 TEST_F(HeapFileTest, CreateFile) {
@@ -182,9 +174,8 @@ TEST_F(HeapFileTest, AddAndGetRecord) {
 TEST_F(HeapFileTest, GetNextFilterInt) {
 	int err = 0;
 	Record tempRec;
-
 	Schema f_schema(catalog_path, tbl_name);
-	initCNF(cnf_pred, literal, "cnf1", tbl_name);
+	get_cnf ("(l_orderkey < 27)", &f_schema, cnf_pred, literal);
 	dbfile.Load (f_schema, tbl_dir);
 	dbfile.MoveFirst();
 	
@@ -199,9 +190,8 @@ TEST_F(HeapFileTest, GetNextFilterInt) {
 TEST_F(HeapFileTest, GetNextFilterDouble) {
 	int err = 0;
 	Record tempRec;
-
 	Schema f_schema(catalog_path, tbl_name);
-	initCNF(cnf_pred, literal, "cnf2", tbl_name);
+	get_cnf ("(l_extendedprice > 15000.0) AND (l_extendedprice < 17000.0)", &f_schema, cnf_pred, literal);
 	dbfile.Load (f_schema, tbl_dir);
 	dbfile.MoveFirst();
 	
@@ -216,9 +206,8 @@ TEST_F(HeapFileTest, GetNextFilterDouble) {
 TEST_F(HeapFileTest, GetNextFilterString) {
 	int err = 0;
 	Record tempRec;
-
 	Schema f_schema(catalog_path, tbl_name);
-	initCNF(cnf_pred, literal, "cnf3", tbl_name);
+	get_cnf ("(l_comment > 'c') AND (l_comment < 'e')", &f_schema, cnf_pred, literal);
 	dbfile.Load (f_schema, tbl_dir);
 	dbfile.MoveFirst();
 	
@@ -233,9 +222,8 @@ TEST_F(HeapFileTest, GetNextFilterString) {
 TEST_F(HeapFileTest, GetNextFilterMixed1) {
 	int err = 0;
 	Record tempRec;
-
 	Schema f_schema(catalog_path, tbl_name);
-	initCNF(cnf_pred, literal, "cnf4", tbl_name);
+	get_cnf ("(l_orderkey > 100) AND (l_orderkey < 1000) AND (l_partkey > 100) AND (l_partkey < 5000) AND (l_shipmode = 'AIR') AND (l_linestatus = 'F') AND (l_tax < 0.07)", &f_schema, cnf_pred, literal);
 	dbfile.Load (f_schema, tbl_dir);
 	dbfile.MoveFirst();
 	
@@ -250,9 +238,8 @@ TEST_F(HeapFileTest, GetNextFilterMixed1) {
 TEST_F(HeapFileTest, GetNextFilterMixed2) {
 	int err = 0;
 	Record tempRec;
-
 	Schema f_schema(catalog_path, tbl_name);
-	initCNF(cnf_pred, literal, "cnf5", tbl_name);
+	get_cnf ("(l_shipdate > '1994-01-01') AND (l_shipdate < '1994-01-07') AND (l_discount > 0.05) AND (l_discount < 0.06) AND (l_quantity > 4.0) ", &f_schema, cnf_pred, literal);
 	dbfile.Load (f_schema, tbl_dir);
 	dbfile.MoveFirst();
 	
@@ -284,15 +271,28 @@ TEST(HeapFileDeathTest, CloseTwice) {
 	dbfile.Create(testFile_path, heap , 0);
 	dbfile.Close();
 	EXPECT_DEATH( dbfile.Close(), "ERROR: DBFile is not initialized or is closed twice!");
-}
+}*/
 
 /*
  * Big queue unit test
  * Written by Rui 2015.02.21	
  */ 
 
-char sort_cnf_dir[100] = "sortCNF/";
+void get_sort_order (char *input, Schema *f_schema, OrderMaker &sortorder) {		
+	init_lexical_parser (input);
+  	if (yyparse() != 0) {
+		cout << " Error: can't parse your CNF " << input << endl;
+		exit (1);
+	}
+	Record literal;
+	CNF sort_pred;
+	sort_pred.GrowFromParseTree (final, f_schema, literal); // constructs CNF predicate
+	OrderMaker dummy;
+	sort_pred.GetSortOrders (sortorder, dummy);
+	close_lexical_parser ();
+}
 
+/*
  typedef struct {
 	Pipe *pipe;
 	OrderMaker *order;
@@ -306,7 +306,7 @@ protected:
 		runlen = 10;
 		input = new Pipe(buffsz);
 		output = new Pipe(buffsz);		
-		//pthread_create (&thread1, NULL, producer, (void *)input);		
+		f_schema = new Schema(catalog_path, tbl_name);
 		tutil.pipe = output;
 		tutil.order = &sortorder;
 		tutil.errnum = 0;	
@@ -314,6 +314,7 @@ protected:
 	virtual void TearDown() {
 		delete input;
 		delete output;
+		delete f_schema;
 		remove(testFile_path);
 		remove(headFile_path);
 	}	
@@ -327,6 +328,7 @@ protected:
 	testutil tutil; 
 	ComparisonEngine ceng;
 	DBFile dbfile;
+	Schema *f_schema;
 };
 
 void *producer (void *arg) {
@@ -342,7 +344,6 @@ void *producer (void *arg) {
 	}
 	tdbfile.Close ();
 	myPipe->ShutDown ();
-	//pthread_exit(NULL);
 }
 
 void *consumer (void *arg) {	
@@ -363,39 +364,11 @@ void *consumer (void *arg) {
 		i++;	
 	}
 	t->errnum = err;
-	//pthread_exit(NULL);
-}
-
-void initOrderMaker(OrderMaker &sortorder, char* sortname, char* tbl_name){
-	char sortfile[100];
-	sprintf (sortfile, "%s%s", sort_cnf_dir , sortname);
-	FILE *fp = fopen(sortfile, "r");
-	// make sure it is valid:
-	if (!fp) {
-		cout << "Can't open" << sortfile << endl;
-		exit(1);
-	}
-	// set lex to read from it instead of defaulting to STDIN:
-	yyin = fp;
-	// parse through the input until there is no more:
-	do {
-		if(yyparse()){
-			cerr << "Can't parse test sort CNF\n";
-			exit(1);
-		}
-	} while (!feof(yyin));
-	Record literal;
-	CNF sort_pred;
-	Schema lisc(catalog_path, tbl_name);
-	sort_pred.GrowFromParseTree (final, &lisc, literal); // constructs CNF predicate
-	OrderMaker dummy;
-	sort_pred.GetSortOrders (sortorder, dummy);
-	fclose(fp);
 }
 
 TEST_F(BigQTest, SortIntAttribute) {
-	pthread_create (&thread1, NULL, producer, (void *)input);		
-	initOrderMaker(sortorder, "sort1", tbl_name);
+	pthread_create (&thread1, NULL, producer, (void *)input);	
+	get_sort_order ("(l_suppkey)", f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -404,8 +377,8 @@ TEST_F(BigQTest, SortIntAttribute) {
 }
 
 TEST_F(BigQTest, SortDoubleAttribute) {
-	pthread_create (&thread1, NULL, producer, (void *)input);		
-	initOrderMaker(sortorder, "sort2", tbl_name);
+	pthread_create (&thread1, NULL, producer, (void *)input);
+	get_sort_order ("(l_quantity)", f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -414,8 +387,8 @@ TEST_F(BigQTest, SortDoubleAttribute) {
 }
 
 TEST_F(BigQTest, SortStringAttribute) {
-	pthread_create (&thread1, NULL, producer, (void *)input);		
-	initOrderMaker(sortorder, "sort3", tbl_name);
+	pthread_create (&thread1, NULL, producer, (void *)input);	
+	get_sort_order ("(l_shipdate)", f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -424,8 +397,8 @@ TEST_F(BigQTest, SortStringAttribute) {
 }
 
 TEST_F(BigQTest, SortTwoLiterals) {
-	pthread_create (&thread1, NULL, producer, (void *)input);		
-	initOrderMaker(sortorder, "sort4", tbl_name);
+	pthread_create (&thread1, NULL, producer, (void *)input);	
+	get_sort_order ("(l_partkey) AND (l_extendedprice)", f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -434,8 +407,8 @@ TEST_F(BigQTest, SortTwoLiterals) {
 }
 
 TEST_F(BigQTest, SortThreeLiterals) {
-	pthread_create (&thread1, NULL, producer, (void *)input);		
-	initOrderMaker(sortorder, "sort5", tbl_name);
+	pthread_create (&thread1, NULL, producer, (void *)input);	
+	get_sort_order ("(l_suppkey) AND (l_discount) AND (l_returnflag)", f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -445,7 +418,7 @@ TEST_F(BigQTest, SortThreeLiterals) {
 
 TEST_F(BigQTest, SortSixLiterals) {
 	pthread_create (&thread1, NULL, producer, (void *)input);		
-	initOrderMaker(sortorder, "sort6", tbl_name);
+	get_sort_order ("(l_suppkey) AND (l_shipmode) AND (l_commitdate) AND (l_receiptdate) AND (l_shipinstruct) AND (l_tax)", f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -456,7 +429,7 @@ TEST_F(BigQTest, SortSixLiterals) {
 TEST_F(BigQTest, RunLengthOne) {
 	runlen = 1;
 	pthread_create (&thread1, NULL, producer, (void *)input);		
-	initOrderMaker(sortorder, "sort1", tbl_name);
+	get_sort_order ("(l_suppkey)", f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -467,7 +440,7 @@ TEST_F(BigQTest, RunLengthOne) {
 TEST_F(BigQTest, RunLengthTwo) {
 	runlen = 2;
 	pthread_create (&thread1, NULL, producer, (void *)input);		
-	initOrderMaker(sortorder, "sort1", tbl_name);
+	get_sort_order ("(l_suppkey)", f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -478,7 +451,7 @@ TEST_F(BigQTest, RunLengthTwo) {
 TEST_F(BigQTest, RunLengthSeven) {
 	runlen = 7;
 	pthread_create (&thread1, NULL, producer, (void *)input);		
-	initOrderMaker(sortorder, "sort1", tbl_name);
+	get_sort_order ("(l_suppkey)", f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -489,7 +462,7 @@ TEST_F(BigQTest, RunLengthSeven) {
 TEST_F(BigQTest, RunLengthTwenty) {
 	runlen = 20;
 	pthread_create (&thread1, NULL, producer, (void *)input);		
-	initOrderMaker(sortorder, "sort1", tbl_name);
+	get_sort_order ("(l_suppkey)", f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -500,30 +473,32 @@ TEST_F(BigQTest, RunLengthTwenty) {
 TEST_F(BigQTest, RunLengthFifty) {
 	runlen = 50;
 	pthread_create (&thread1, NULL, producer, (void *)input);		
-	initOrderMaker(sortorder, "sort1", tbl_name);
+	get_sort_order ("(l_suppkey)", f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
 	pthread_join (thread2, NULL);
 	EXPECT_EQ( 0, tutil.errnum );
-}
+}*/
 
 
 /*
  * Sorted DBFile unit test
  * Written by Rui 2015.03.08	
  */ 
-
+/*
 class SortedFileTest : public ::testing::Test {
 protected:
 	virtual void SetUp() {
 		runlen = 10;
-		initOrderMaker(sortorder, "sort1", tbl_name);
+		f_schema = new Schema(catalog_path, tbl_name);
+		get_sort_order ("(l_suppkey)", f_schema, sortorder);
 		startup.order = &sortorder;  //can be initailized as startup = {&sortorder, runlen}; in C++ 11
-		startup.runlen = runlen;
+		startup.runlen = runlen;		
 	}
 
 	virtual void TearDown() {
+		delete f_schema;
 		dbfile.Close();
 		remove(testFile_path);
 		remove(headFile_path);
@@ -535,6 +510,7 @@ protected:
 	int runlen;
 	OrderMaker sortorder;
 	SortInfo startup;
+	Schema *f_schema;
 public:
 	int checkOrder(OrderMaker &sortorder);
 };
@@ -610,11 +586,10 @@ TEST_F(SortedFileTest, MoveFirst) {
 
 TEST_F(SortedFileTest, AddRecord) {
 	Record tempRec;
-	Schema f_schema(catalog_path, tbl_name);
 	FILE *tableFile = fopen (tbl_dir, "r");
 	ASSERT_TRUE(tableFile != NULL);	
 	dbfile.Create(testFile_path, sorted , &startup);		
-	while (tempRec.SuckNextRecord (&f_schema, tableFile)){
+	while (tempRec.SuckNextRecord (f_schema, tableFile)){
 		dbfile.Add(tempRec);
 	}
 	fclose(tableFile);
@@ -624,62 +599,56 @@ TEST_F(SortedFileTest, AddRecord) {
 
 TEST_F(SortedFileTest, LoadFile) {
 	dbfile.Create(testFile_path, sorted , &startup);
-	Schema f_schema(catalog_path, tbl_name);
 	EXPECT_EQ( 0, dbfile.myInernalPoniter->curFile.GetLength() );
-	dbfile.Load (f_schema, tbl_dir);
+	dbfile.Load (*f_schema, tbl_dir);
 	dbfile.MoveFirst();
 	EXPECT_LE( 2, dbfile.myInernalPoniter->curFile.GetLength() );
 }
 
 TEST_F(SortedFileTest, GetNextRecord) {
 	dbfile.Create(testFile_path, sorted , &startup);	
-	Schema f_schema(catalog_path, tbl_name);
-	dbfile.Load (f_schema, tbl_dir);
+	dbfile.Load (*f_schema, tbl_dir);
 	dbfile.MoveFirst();
 	EXPECT_EQ( 0, checkOrder(sortorder) );
 }	
 
 TEST_F(SortedFileTest, SortOneLiterals) {			
-	initOrderMaker(sortorder, "sort2", tbl_name);
+	get_sort_order ("(l_quantity)", f_schema, sortorder);
 	startup.order = &sortorder;
 	startup.runlen = runlen;
 	dbfile.Create(testFile_path, sorted , &startup);	
-	Schema f_schema(catalog_path, tbl_name);
-	dbfile.Load (f_schema, tbl_dir);
+	dbfile.Load (*f_schema, tbl_dir);
 	dbfile.MoveFirst();
 	EXPECT_EQ( 0, checkOrder(sortorder) );
 }
 
 TEST_F(SortedFileTest, SortTwoLiterals) {		
-	initOrderMaker(sortorder, "sort4", tbl_name);
+	get_sort_order ("(l_partkey) AND (l_extendedprice)", f_schema, sortorder);
 	startup.order = &sortorder;
 	startup.runlen = runlen;
 	dbfile.Create(testFile_path, sorted , &startup);	
-	Schema f_schema(catalog_path, tbl_name);
-	dbfile.Load (f_schema, tbl_dir);
+	dbfile.Load (*f_schema, tbl_dir);
 	dbfile.MoveFirst();
 	EXPECT_EQ( 0, checkOrder(sortorder) );
 }
 
 TEST_F(SortedFileTest, SortSixLiterals) {		
-	initOrderMaker(sortorder, "sort6", tbl_name);
+	get_sort_order ("(l_suppkey) AND (l_shipmode) AND (l_commitdate) AND (l_receiptdate) AND (l_shipinstruct) AND (l_tax)", f_schema, sortorder);
 	startup.order = &sortorder;
 	startup.runlen = runlen;
 	dbfile.Create(testFile_path, sorted , &startup);
-	Schema f_schema(catalog_path, tbl_name);	
-	dbfile.Load (f_schema, tbl_dir);
+	dbfile.Load (*f_schema, tbl_dir);
 	dbfile.MoveFirst();
 	EXPECT_EQ( 0, checkOrder(sortorder) );
 }
 
 TEST_F(SortedFileTest, GetNextFilterMixed1) {
 	int err = 0;
-	Schema f_schema(catalog_path, tbl_name);
 	dbfile.Create(testFile_path, sorted , &startup);	
-	dbfile.Load (f_schema, tbl_dir);
+	dbfile.Load (*f_schema, tbl_dir);
 	dbfile.MoveFirst();	
 	Record tempRec;
-	initCNF(cnf_pred, literal, "cnf4", tbl_name);
+	get_cnf ("(l_orderkey > 100) AND (l_orderkey < 1000) AND (l_partkey > 100) AND (l_partkey < 5000) AND (l_shipmode = 'AIR') AND (l_linestatus = 'F') AND (l_tax < 0.07)", f_schema, cnf_pred, literal);
 	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
 		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
 				err++;
@@ -690,12 +659,11 @@ TEST_F(SortedFileTest, GetNextFilterMixed1) {
 
 TEST_F(SortedFileTest, GetNextFilterMixed2) {
 	int err = 0;
-	Schema f_schema(catalog_path, tbl_name);
 	dbfile.Create(testFile_path, sorted , &startup);		
-	dbfile.Load (f_schema, tbl_dir);
+	dbfile.Load (*f_schema, tbl_dir);
 	dbfile.MoveFirst();	
 	Record tempRec;
-	initCNF(cnf_pred, literal, "cnf5", tbl_name);
+	get_cnf ("(l_shipdate > '1994-01-01') AND (l_shipdate < '1994-01-07') AND (l_discount > 0.05) AND (l_discount < 0.06) AND (l_quantity > 4.0) ", f_schema, cnf_pred, literal);
 	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
 		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
 				err++;
@@ -706,16 +674,15 @@ TEST_F(SortedFileTest, GetNextFilterMixed2) {
 
 
 TEST_F(SortedFileTest, FilterMatchSortAtts) {
-	initOrderMaker(sortorder, "sort7", tbl_name);
+	get_sort_order (" (l_quantity)", f_schema, sortorder);
 	startup.order = &sortorder;
 	startup.runlen = runlen;
 	dbfile.Create(testFile_path, sorted , &startup);	
-	Schema f_schema(catalog_path, tbl_name);
-	dbfile.Load (f_schema, tbl_dir);
+	dbfile.Load (*f_schema, tbl_dir);
 	dbfile.MoveFirst();	
 	Record tempRec;
 	int err = 0;
-	initCNF(cnf_pred, literal, "cnf6", tbl_name);
+	get_cnf ("(l_shipdate > '1994-01-01') AND (l_shipdate < '1994-01-07') AND (l_discount > 0.05) AND (l_discount < 0.06) AND (l_quantity > 4.0) ", f_schema, cnf_pred, literal);
 	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
 		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
 				err++;
@@ -726,17 +693,223 @@ TEST_F(SortedFileTest, FilterMatchSortAtts) {
 
 TEST_F(SortedFileTest, FilterNotMatchSortAtts) {	
 	dbfile.Create(testFile_path, sorted , &startup);	
-	Schema f_schema(catalog_path, tbl_name);
-	dbfile.Load (f_schema, tbl_dir);
+	dbfile.Load (*f_schema, tbl_dir);
 	dbfile.MoveFirst();	
 	Record tempRec;
 	int err = 0;
-	initCNF(cnf_pred, literal, "cnf6", tbl_name);
+	get_cnf ("(l_shipdate > '1994-01-01') AND (l_shipdate < '1994-01-07') AND (l_discount > 0.05) AND (l_discount < 0.06) AND (l_quantity > 4.0) ", f_schema, cnf_pred, literal);
 	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
 		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
 				err++;
 		}		
 	}
 	EXPECT_EQ( 0 , err );	
+}*/
+
+/*
+ * RelOp unit test
+ * Written by Rui 2015.03.20	
+ */ 
+void get_cnf (char *input, Schema *left, Schema *right, CNF &cnf_pred, Record &literal) {
+	init_lexical_parser (input);
+  	if (yyparse() != 0) {
+		cout << " Error: can't parse your CNF " << input << endl;
+		exit (1);
+	}
+	cnf_pred.GrowFromParseTree (final, left, right, literal); // constructs CNF predicate
+	close_lexical_parser ();
 }
 
+void get_cnf (char *input, Schema *left, Function &fn_pred) {
+	init_lexical_parser_func (input);
+		if (yyfuncparse() != 0) {
+		cout << " Error: can't parse your arithmetic expr. " << input << endl;
+		exit (1);
+	}
+	fn_pred.GrowFromParseTree (finalfunc, *left); // constructs CNF predicate
+	close_lexical_parser_func ();
+}
+
+class RelOpTest : public ::testing::Test {
+protected:
+	virtual void SetUp() {
+		dbfile.Create(testFile_path, heap , 0);
+		f_schema = new Schema(catalog_path, tbl_name);
+		dbfile.Load (*f_schema, tbl_dir);
+		
+	}
+
+	virtual void TearDown() {
+		dbfile.Close();
+		delete f_schema;
+		remove(testFile_path);
+		remove(headFile_path);
+	}
+	DBFile dbfile;
+	Schema *f_schema;	
+	ComparisonEngine comp;	
+	OrderMaker sortorder;
+	static const int numpgs = 100;
+public:
+	int clear_pipe(Pipe &input, CNF &cnf_pred, Record &literal);
+	int check_atts_num (Pipe &input, int numAtts);
+	int check_tuple_num(Pipe &input);
+};
+
+int RelOpTest::clear_pipe (Pipe &input, CNF &cnf_pred, Record &literal){
+	Record rec;
+	int err = 0;
+	while (input.Remove (&rec)) {
+		if (0 == comp.Compare(&rec, &literal, &cnf_pred)) {
+			err++;
+		}	
+	}
+	return err;
+}
+
+int RelOpTest::check_atts_num (Pipe &input, int numAtts){
+	Record rec;
+	int err = 0;
+	while (input.Remove (&rec)) {
+		if (rec.GetNumAtts() != numAtts) {
+			err++;
+		}	
+	}
+	return err;
+}
+
+int RelOpTest::check_tuple_num(Pipe &input){
+	Record rec;
+	int count = 0;
+	while (input.Remove (&rec)) {
+		++count;	
+	}
+	return count;
+}
+
+
+
+
+TEST_F(RelOpTest, SelectFile1) {
+	CNF cnf_pred;
+	Record literal;	
+	SelectFile SF;	
+	get_cnf ("(l_orderkey < 27)", f_schema, cnf_pred, literal);
+	Pipe output(100);
+	SF.Run (dbfile, output, cnf_pred, literal);
+	int err =  clear_pipe (output, cnf_pred, literal);
+	SF.WaitUntilDone ();
+	EXPECT_EQ( 0, err );
+}
+
+
+TEST_F(RelOpTest, SelectFile2) {
+	CNF cnf_pred;
+	Record literal;
+	SelectFile SF;	
+	get_cnf ("(l_partkey < 5000) AND (l_shipmode = 'AIR') AND (l_linestatus = 'F')", f_schema, cnf_pred, literal);
+	Pipe output(100);
+	SF.Run (dbfile, output, cnf_pred, literal);
+	int err =  clear_pipe (output, cnf_pred, literal);
+	SF.WaitUntilDone ();
+	EXPECT_EQ( 0, err );
+}
+
+TEST_F(RelOpTest, SelectPipe1) {
+	CNF sf_pred, sp_pred;
+	Record lit_sf, lit_sp;
+	SelectFile SF;
+	SelectPipe SP;	
+	get_cnf ("(l_orderkey < 1000)", f_schema, sf_pred, lit_sf);
+	Pipe li(100);
+	SF.Run (dbfile, li, sf_pred, lit_sf);
+	get_cnf ("(l_orderkey < 100)", f_schema, sp_pred, lit_sp);
+	Pipe output(100);
+	SP.Run (li, output, sp_pred, lit_sp);
+	int err =  clear_pipe (output, sp_pred, lit_sp);
+	SF.WaitUntilDone();
+	SP.WaitUntilDone();
+	EXPECT_EQ( 0, err );
+}
+
+TEST_F(RelOpTest, SelectPipe2) {
+	CNF sf_pred, sp_pred, out_pred;
+	Record lit_sf, lit_sp, lit_out;
+	SelectFile SF;
+	SelectPipe SP;	
+	get_cnf ("(l_partkey < 5000)", f_schema, sf_pred, lit_sf);
+	Pipe li(100);
+	SF.Run (dbfile, li, sf_pred, lit_sf);
+	get_cnf ("(l_shipmode = 'AIR')", f_schema, sp_pred, lit_sp);
+	Pipe output(100);
+	SP.Run (li, output, sp_pred, lit_sp);
+	get_cnf ("(l_partkey < 5000) AND (l_shipmode = 'AIR')", f_schema, out_pred, lit_out);	
+	int err =  clear_pipe (output, out_pred, lit_out);
+	SF.WaitUntilDone();
+	SP.WaitUntilDone();
+	EXPECT_EQ( 0, err );
+}
+
+TEST_F(RelOpTest, Project1) {
+	CNF sf_pred, p_pred;
+	Record lit_sf, lit_p;
+	SelectFile SF;
+	get_cnf ("(l_orderkey < 1000) AND (l_orderkey >800)", f_schema, sf_pred, lit_sf);
+	Pipe li(100);
+	SF.Run (dbfile, li, sf_pred, lit_sf);
+	Project P;
+		Pipe output(100);
+		int keepMe[] = {0,1,5};
+		int numAttsIn = 16;
+		int numAttsOut = 3;
+	P.Run (li, output, keepMe, numAttsIn, numAttsOut);
+	int err = check_atts_num(output, numAttsOut);
+	SF.WaitUntilDone();
+	P.WaitUntilDone();
+	EXPECT_EQ( 0, err );
+}
+
+TEST_F(RelOpTest, Project2) {
+	CNF sf_pred, p_pred;
+	Record lit_sf, lit_p;
+	SelectFile SF;
+	get_cnf ("(l_partkey < 2000)", f_schema, sf_pred, lit_sf);
+	Pipe li(100);
+	SF.Run (dbfile, li, sf_pred, lit_sf);
+	Project P;
+		Pipe output(100);
+		int keepMe[] = {0,1,5,7,9};
+		int numAttsIn = 16;
+		int numAttsOut = 5;
+	P.Run (li, output, keepMe, numAttsIn, numAttsOut);
+	int err = check_atts_num(output, numAttsOut);
+	SF.WaitUntilDone();
+	P.WaitUntilDone();
+	EXPECT_EQ( 0, err );
+}
+
+TEST_F(RelOpTest, DuplicateRemoval) {
+	CNF sf_pred, p_pred;
+	Record lit_sf, lit_p;
+	SelectFile SF;
+	get_cnf ("(l_orderkey = l_orderkey)", f_schema, sf_pred, lit_sf);
+	Pipe li(100);
+	SF.Run (dbfile, li, sf_pred, lit_sf);
+	Project P;
+		int keepMe[] = {3};
+		int numAttsIn = 16;
+		int numAttsOut = 1;
+		Pipe pl(100);
+	P.Run (li, pl, keepMe, numAttsIn, numAttsOut);
+	DuplicateRemoval D;
+		// inpipe = __ps
+		Pipe output(100);
+		Attribute IA = {"l_linenumber", Int};
+		Schema out_sch ("test", 1, &IA);
+	D.Run (pl, output, out_sch);
+	int count = check_tuple_num(output);
+	SF.WaitUntilDone();
+	P.WaitUntilDone();
+	D.WaitUntilDone();
+	EXPECT_EQ( 7, count );
+}
