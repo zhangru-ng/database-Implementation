@@ -27,16 +27,16 @@ void *BigQ::InternalThreadEntry () {
 	//vector to store run information
 	vector<Run> runs;
 	runs.reserve(200);
-	double start, end;
-	double cpu_time_used;
-	start = clock();		
+	// double start, end;
+	// double cpu_time_used;
+	// start = clock();		
 	//First Phase of TPMMS
 	FirstPhase(runs);
 	//Second Phase of TPMMS
 	SecondPhase(runs);
-	end = clock();
-	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-	cout << "sort spent " << cpu_time_used << " seconds cpu time" << endl;
+	// end = clock();
+	// cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+	// cout << "sort spent " << cpu_time_used << " seconds cpu time" << endl;
 	out.ShutDown ();		
 	runsFile.Close();
 	//cout << "TPMMS spent totally " << cpu_time_used << " senconds cpu time" << endl;		
@@ -141,10 +141,10 @@ void BigQ::FirstPhase (vector<Run> &runs) {
 
 //Second phase of TPMMS
 void BigQ::SecondPhase (vector<Run> &runs) {	
-	double start, end;
-	double cpu_time_used;
-	start = clock();
-	//Linear scan is much slower than priority queue when run number large
+	// double start, end;
+	// double cpu_time_used;
+	// start = clock();
+	// Linear scan is much slower than priority queue when run number large
 	if (runNum >= THRESHOLD) {
 		PriorityQueue(runs);
 	}
@@ -152,37 +152,43 @@ void BigQ::SecondPhase (vector<Run> &runs) {
 	else {
 		LinearScan(runs);
 	}
-	end = clock();
-	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-	cout << "second phase spent " << cpu_time_used << " seconds cpu time" << endl;
+	// end = clock();
+	// cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+	// cout << "second phase spent " << cpu_time_used << " seconds cpu time" << endl;
+	// ofstream metafile("time.txt",ofstream::app);
+	// metafile << "run num is " << runNum << endl;
+	// metafile << "phase two spent(priority queue) " << cpu_time_used << endl;
+	// metafile << "\n";
 	// cout << "PriorityQueue: spent " << cpu_time_used * 1000 <<" ms" << endl;
 	// cout << "LinearScan: spent " << cpu_time_used * 1000 <<" ms" << endl;
 }
 
-// class ListMember {
+
+// class LinearScanMember {
 //     Run *myRun;       
 //     Record rec;  } 
 void BigQ::LinearScan(vector<Run> &runs){
 	ComparisonEngine comp;
 	Sorter sorter(sortorder);
-	ListMember tempLM;
+	LinearScanMember tempLSM;
 	Record *minRec;
-	//list to store tagged runs for linear scan
-	list<ListMember> run_list;
-	//traverse runs vector to initial the list
+	//vector to store tagged runs for linear scan
+	vector<LinearScanMember> run_vector;
+	run_vector.reserve(runNum);
+	//traverse runs vector to initial the vector
 	for (auto it=runs.begin(); it!=runs.end(); ++it){
-		tempLM.myRun = &(*it);
+		tempLSM.myRun = &(*it);
 		//perform move first to get first page
 		it->MoveFirst();
-		it->GetNext(tempLM.rec);
-		run_list.push_front(move(tempLM));
+		it->GetNext(tempLSM.rec);
+		run_vector.push_back(move(tempLSM));
 	}
 	//iterator to store the minimal node for later use
-	auto minIt = run_list.begin();
-	while (0 == run_list.empty()) {
+	auto minIt = run_vector.begin();
+	while (0 == run_vector.empty()) {
 		minRec = &(minIt->rec);
-		//linear scan the list
-		for (auto itl = run_list.begin(); itl != run_list.end(); ++itl){
+		//linear scan the vector
+		for (auto itl = run_vector.begin(); itl != run_vector.end(); ++itl){
 			//if the current record less than the min record
 			if (comp.Compare (minRec, &(itl->rec), &sortorder) > 0) {
 				//make it to min record and store the min node(iterator)
@@ -194,9 +200,9 @@ void BigQ::LinearScan(vector<Run> &runs){
 		//if the run with minimal record is empty
 		if (0 == (minIt->myRun)->GetNext(minIt->rec)) {
 			//erase the run
- 			run_list.erase(minIt);
+ 			run_vector.erase(minIt);
  			//set the minimal node to the begin node
- 			minIt = run_list.begin();
+ 			minIt = run_vector.begin();
  		}
 	}
 }
@@ -353,20 +359,66 @@ QueueMember & QueueMember::operator = (QueueMember &&qm) {
     return *this;
 }
 
-ListMember::ListMember () : myRun(nullptr), rec() { }
+LinearScanMember::LinearScanMember () : myRun(nullptr), rec() { }
 
 //move constructor
-ListMember::ListMember (ListMember &&lm) {
+LinearScanMember::LinearScanMember (LinearScanMember &&lm) {
 	myRun = lm.myRun;
 	lm.myRun = nullptr;
 	rec = move(lm.rec);
 }
 
 //move assignment operator
-ListMember & ListMember::operator = (ListMember &&lm) {
+LinearScanMember & LinearScanMember::operator = (LinearScanMember &&lm) {
 	myRun = lm.myRun;
 	lm.myRun = nullptr;
 	rec = move(lm.rec);
 	return *this;
 }
 
+/*
+ *Discard 2015.03.21
+ *Slower than vector linear scan
+ *because the main overhead is scan, not delete
+ *and vector has less cache miss
+ */
+/******************************linear scan with list*********************************
+void BigQ::LinearScan(vector<Run> &runs){
+	ComparisonEngine comp;
+	Sorter sorter(sortorder);
+	LinearScanMember tempLM;
+	Record *minRec;
+	//list to store tagged runs for linear scan
+	list<LinearScanMember> run_vector;
+	//traverse runs vector to initial the list
+	for (auto it=runs.begin(); it!=runs.end(); ++it){
+		tempLM.myRun = &(*it);
+		//perform move first to get first page
+		it->MoveFirst();
+		it->GetNext(tempLM.rec);
+		run_vector.push_front(move(tempLM));
+	}
+	//iterator to store the minimal node for later use
+	auto minIt = run_vector.begin();
+	while (0 == run_vector.empty()) {
+		minRec = &(minIt->rec);
+		//linear scan the list
+		for (auto itl = run_vector.begin(); itl != run_vector.end(); ++itl){
+			//if the current record less than the min record
+			if (comp.Compare (minRec, &(itl->rec), &sortorder) > 0) {
+				//make it to min record and store the min node(iterator)
+				minRec = &(itl->rec);
+				minIt = itl;
+			}
+		}
+		out.Insert(minRec);
+		//if the run with minimal record is empty
+		if (0 == (minIt->myRun)->GetNext(minIt->rec)) {
+			//erase the run
+ 			run_vector.erase(minIt);
+ 			//set the minimal node to the begin node
+ 			minIt = run_vector.begin();
+ 		}
+	}
+}
+******************************linear scan with list*********************************/

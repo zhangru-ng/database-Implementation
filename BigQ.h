@@ -18,7 +18,7 @@
 
 using namespace std;
 
-#define THRESHOLD 120
+#define THRESHOLD 30
 
 class Run;
 //struct to store priority queue member
@@ -31,13 +31,13 @@ public:
     QueueMember & operator = (QueueMember &&qm);
 };
 
-class ListMember{
+class LinearScanMember{
 public:
     Run *myRun;       //bind a run to this list member
     Record rec;       //current first record
-    ListMember();
-    ListMember(ListMember &&lm);
-    ListMember & operator = (ListMember &&lm);
+    LinearScanMember();
+    LinearScanMember(LinearScanMember &&lm);
+    LinearScanMember & operator = (LinearScanMember &&lm);
 };
 
 class BigQ : public Thread {
