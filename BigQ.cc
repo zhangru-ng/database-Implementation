@@ -1,5 +1,5 @@
 #include "BigQ.h"
-
+#include <utility>
 
 BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl), runsFileName(NULL), runsFile(), runNum(0), workthread() {
 	if (runlen > 0) {
@@ -19,23 +19,24 @@ BigQ::~BigQ () {
 
 //two phase multiway merge sort
 void *BigQ::InternalThreadEntry () {
-// void * BigQ::TPM_MergeSort(){//two phase multiway merge sort
 	char dir[80] = "dbfile/temp/BigQtemp_XXXXXX";
+	//generate random file name, replace XXXXXX with random string
 	mkstemp(dir);
 	runsFileName = strdup(dir);
 	runsFile.Open(0, runsFileName);
+	//vector to store run information
 	vector<Run> runs;
 	runs.reserve(200);
-	// double start, end;
-	// double cpu_time_used;
-	// start = clock();		
+	double start, end;
+	double cpu_time_used;
+	start = clock();		
 	//First Phase of TPMMS
 	FirstPhase(runs);
 	//Second Phase of TPMMS
 	SecondPhase(runs);
-	// end = clock();
-	// cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-	// cout << "sort spent " << cpu_time_used << " seconds cpu time" << endl;
+	end = clock();
+	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+	cout << "sort spent " << cpu_time_used << " seconds cpu time" << endl;
 	out.ShutDown ();		
 	runsFile.Close();
 	//cout << "TPMMS spent totally " << cpu_time_used << " senconds cpu time" << endl;		
@@ -113,8 +114,8 @@ void BigQ::FirstPhase (vector<Run> &runs) {
 			SortInRun(oneRunRecords);
 			//write the sorted run to temporary file
 			WriteRunToFile(oneRunRecords, beg, len);
-			//add a new run to vector<Run> runs
-			runs.push_back(Run(runNum, beg, len, &runsFile));
+			//add a new run to vector<Run> runs, use move to avoid copy
+			runs.push_back(move(Run(runNum, beg, len, &runsFile)));
 			//clear the current run which has written to file
 			oneRunRecords.clear();
 			//clear current run counter
@@ -122,8 +123,8 @@ void BigQ::FirstPhase (vector<Run> &runs) {
 			//run number plus 1
 			runNum++;			
 		}
-		//add the record to this run
-		oneRunRecords.push_back(tempRec);
+		//add the record to this run,  use move to avoid copy
+		oneRunRecords.push_back(move(tempRec));
 	}   
 	//the size of last oneRunRecords may be less than one run
 	if (oneRunRecords.size() > 0) {
@@ -131,7 +132,8 @@ void BigQ::FirstPhase (vector<Run> &runs) {
 		WriteRunToFile(oneRunRecords, beg, len);
 		//add as a run, the last page count as one page, current run length plus 1
 		curLen++;
-		runs.push_back(Run(runNum, beg, len, &runsFile));
+		//add a new run to vector<Run> runs, use move to avoid copy
+		runs.push_back(move(Run(runNum, beg, len, &runsFile)));
 		//increase run number
 		runNum++;				
 	}
@@ -139,9 +141,9 @@ void BigQ::FirstPhase (vector<Run> &runs) {
 
 //Second phase of TPMMS
 void BigQ::SecondPhase (vector<Run> &runs) {	
-	// double start, end;
-	// double cpu_time_used;
-	// start = clock();
+	double start, end;
+	double cpu_time_used;
+	start = clock();
 	//Linear scan is much slower than priority queue when run number large
 	if (runNum >= THRESHOLD) {
 		PriorityQueue(runs);
@@ -150,65 +152,84 @@ void BigQ::SecondPhase (vector<Run> &runs) {
 	else {
 		LinearScan(runs);
 	}
-	// end = clock();
-	// cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-	// cout << "second phase spent " << cpu_time_used << " seconds cpu time" << endl;
+	end = clock();
+	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+	cout << "second phase spent " << cpu_time_used << " seconds cpu time" << endl;
 	// cout << "PriorityQueue: spent " << cpu_time_used * 1000 <<" ms" << endl;
 	// cout << "LinearScan: spent " << cpu_time_used * 1000 <<" ms" << endl;
 }
 
+// class ListMember {
+//     Run *myRun;       
+//     Record rec;  } 
 void BigQ::LinearScan(vector<Run> &runs){
 	ComparisonEngine comp;
 	Sorter sorter(sortorder);
 	ListMember tempLM;
 	Record *minRec;
+	//list to store tagged runs for linear scan
 	list<ListMember> run_list;
+	//traverse runs vector to initial the list
 	for (auto it=runs.begin(); it!=runs.end(); ++it){
 		tempLM.myRun = &(*it);
+		//perform move first to get first page
 		it->MoveFirst();
 		it->GetNext(tempLM.rec);
-		run_list.push_front(tempLM);
+		run_list.push_front(move(tempLM));
 	}
+	//iterator to store the minimal node for later use
 	auto minIt = run_list.begin();
 	while (0 == run_list.empty()) {
 		minRec = &(minIt->rec);
+		//linear scan the list
 		for (auto itl = run_list.begin(); itl != run_list.end(); ++itl){
+			//if the current record less than the min record
 			if (comp.Compare (minRec, &(itl->rec), &sortorder) > 0) {
+				//make it to min record and store the min node(iterator)
 				minRec = &(itl->rec);
 				minIt = itl;
 			}
 		}
 		out.Insert(minRec);
-		if (false == (minIt->myRun)->GetNext(minIt->rec)) {
+		//if the run with minimal record is empty
+		if (0 == (minIt->myRun)->GetNext(minIt->rec)) {
+			//erase the run
  			run_list.erase(minIt);
+ 			//set the minimal node to the begin node
  			minIt = run_list.begin();
  		}
 	}
 }
 
+// class QueueMember {
+//     int runID;        
+//     Record rec; 	 } 
 void BigQ::PriorityQueue (vector<Run> &runs) {
 	int minID = 0;	
 	QueueMember tempQM;
 	Sorter sorter(sortorder);
 	//priority queue of first record of each run
-	priority_queue<QueueMember, vector<QueueMember>, Sorter>pqueue(sorter);
-
-	//for (it=runs.begin()+0; it!=runs.begin()+runNum; ++it){
+	//std priority queue don't support "move" semantic pop in 2015
+	Queue pqueue(sorter);
+	//reserve place for internal vector in queue
+	pqueue.reserve(runNum);
+	//traverse runs vector to initial the priority queue
 	for (auto it=runs.begin(); it!=runs.end(); ++it) {
 		tempQM.runID = it->GetRunID();
+		//perform move first to get first page
 		it->MoveFirst();
 		it->GetNext(tempQM.rec);
+		//"move" semantic push
 		pqueue.push(tempQM);
 	}
-	while (! pqueue.empty()) {
-		//get the minimal record
-		tempQM = pqueue.top();
+	while (0 == pqueue.empty()) {
+		//"move" semantic pop, pop the top element and return move(element)
+		tempQM = pqueue.pop();
 		//store the run ID of the smallest record
 		minID = tempQM.runID;
 		//insert the smallest record to output pipe
 		out.Insert(&tempQM.rec);
 		//pop the minimal record
-		pqueue.pop();
 		//if there are more record in the run which has just extracted the minimal record
 		if(runs[minID].GetNext(tempQM.rec)){
 			tempQM.runID = minID;
@@ -231,7 +252,7 @@ Run::Run (const Run &r) {
   	curPage = r.curPage;
 }
 
-//"=" operator
+//copy assignment operator
 Run& Run::operator = (const Run &r) {
  	runID = r.runID;
  	curRunLen = r.curRunLen;
@@ -239,6 +260,27 @@ Run& Run::operator = (const Run &r) {
   	runCurIndex = r.runCurIndex;
   	runsFile = r.runsFile;
   	curPage = r.curPage;
+  	return *this;
+}
+
+//move constructor
+Run::Run (Run &&r) {
+ 	runID = r.runID;
+ 	curRunLen = r.curRunLen;
+  	runBegIndex = r.runBegIndex;
+  	runCurIndex = r.runCurIndex;
+  	runsFile = r.runsFile;
+  	curPage = move(r.curPage);
+}
+
+//move assignment operator
+Run& Run::operator = (Run &&r) {
+ 	runID = r.runID;
+ 	curRunLen = r.curRunLen;
+  	runBegIndex = r.runBegIndex;
+  	runCurIndex = r.runCurIndex;
+  	runsFile = r.runsFile;
+  	curPage = move(r.curPage);
   	return *this;
 }
 
@@ -273,4 +315,58 @@ int Run::GetNext (Record &curRec) {
  	}
  	return 0;
  }
+
+Queue::Queue(Sorter &s) : sorter(s) { }
+    //reserve place in vector to increase performance
+void Queue::reserve(int n) {
+    qm.reserve(n);
+}
+//return if the queue if empty
+bool Queue::empty() {
+    return qm.empty();
+}
+//push element into queue
+void Queue::push(QueueMember &element) {
+    qm.push_back(move(element));        
+    push_heap(qm.begin(), qm.end(), sorter);
+}
+//pop element from queue
+QueueMember Queue::pop() {
+    pop_heap(qm.begin(), qm.end(), sorter);
+    QueueMember result = move(qm.back());
+    qm.pop_back();
+    return move(result);
+}
+
+QueueMember::QueueMember () : runID(0), rec() { }   
+
+//move constructor
+QueueMember::QueueMember (QueueMember &&qm){
+	runID = qm.runID;       
+    rec = move(qm.rec);
+}
+
+//move assignment operator
+QueueMember & QueueMember::operator = (QueueMember &&qm) {
+	runID = qm.runID;       
+    rec = move(qm.rec);
+    return *this;
+}
+
+ListMember::ListMember () : myRun(nullptr), rec() { }
+
+//move constructor
+ListMember::ListMember (ListMember &&lm) {
+	myRun = lm.myRun;
+	lm.myRun = nullptr;
+	rec = move(lm.rec);
+}
+
+//move assignment operator
+ListMember & ListMember::operator = (ListMember &&lm) {
+	myRun = lm.myRun;
+	lm.myRun = nullptr;
+	rec = move(lm.rec);
+	return *this;
+}
 

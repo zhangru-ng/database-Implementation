@@ -5,6 +5,7 @@
 #include <vector>
 #include <queue>
 #include <list>
+#include <utility>
 #include <algorithm>
 #include <stdlib.h>
 #include <string.h>
@@ -21,15 +22,23 @@ using namespace std;
 
 class Run;
 //struct to store priority queue member
-typedef struct Queue_Member{
+class QueueMember{
+public:
     int runID;        //run ID which the record from 
-    Record rec;       
-}QueueMember;
+    Record rec;       //current first record
+    QueueMember();      
+    QueueMember(QueueMember &&qm);
+    QueueMember & operator = (QueueMember &&qm);
+};
 
-typedef struct List_Member{
-    Record rec;
-    Run *myRun;
-}ListMember;
+class ListMember{
+public:
+    Run *myRun;       //bind a run to this list member
+    Record rec;       //current first record
+    ListMember();
+    ListMember(ListMember &&lm);
+    ListMember & operator = (ListMember &&lm);
+};
 
 class BigQ : public Thread {
 private:
@@ -72,6 +81,8 @@ public:
     Run(int ID, int beg, int rl, File *rf);
     Run(const Run &r);
     Run & operator = (const Run &r);
+    Run (Run &&r);
+    Run & operator = (Run &&r);
     //get the ID of this run
     int GetRunID();
     //rewind to first record of this run
@@ -91,6 +102,22 @@ public:
     bool operator()(const QueueMember &qm1, const QueueMember &qm2) const {   
       return comp.Compare (&(qm1.rec), &(qm2.rec), &sortorder) > 0;
     }
+};
+
+class Queue {
+private:
+    vector<QueueMember> qm;     //internal container 
+    Sorter &sorter;             //comparison class
+public:
+    Queue(Sorter &s);
+    //reserve place in vector to increase performance
+    void reserve(int n);
+    //return if the queue if empty
+    bool empty();
+    //push element into queue
+    void push(QueueMember &element);
+    //pop element from queue
+    QueueMember pop();
 };
 
 #endif

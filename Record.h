@@ -47,6 +47,8 @@ public:
  	Record (const Record &copyme);
 	~Record();
 	Record & operator = (const Record &other);
+	Record (Record &&moveme);
+	Record &  operator = (Record &&other);
 
 	// suck the contents of the record fromMe into this; note that after
 	// this call, fromMe will no longer have anything inside of it

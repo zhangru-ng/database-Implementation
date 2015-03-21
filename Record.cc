@@ -20,6 +20,7 @@ Record :: Record (const Record &copyme) {
 	}
 }
 
+//Copy assignment operator
 Record & Record :: operator = (const Record &other){
 	int b_len; 
     if (this != &other){ 
@@ -30,6 +31,19 @@ Record & Record :: operator = (const Record &other){
 			this -> CopyBits(other.bits , b_len);
 		}
     }
+    return *this;
+}
+
+//move constructor
+Record :: Record (Record &&moveme): bits (NULL) {
+	bits = moveme.bits;
+	moveme.bits = NULL;
+}
+
+//move assignment operator
+Record & Record :: operator = (Record &&other){
+	bits = other.bits;
+	other.bits = NULL;
     return *this;
 }
 

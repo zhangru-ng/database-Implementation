@@ -27,7 +27,8 @@ Page :: ~Page () {
 	delete myRecs;
 }
 
-Page :: Page  (const Page &copyme){
+//copy constructor
+Page :: Page (const Page &copyme) {
 	curSizeInBytes = copyme.curSizeInBytes;
 	numRecs = copyme.numRecs;
 	myRecs = new (std::nothrow) TwoWayList<Record>;
@@ -41,7 +42,8 @@ Page :: Page  (const Page &copyme){
 	}
 }
 
-Page & Page :: operator = (const Page &other){	
+//copy assignment operator
+Page & Page :: operator = (const Page &other) {	
 	delete myRecs;
 	curSizeInBytes = other.curSizeInBytes;
 	numRecs = other.numRecs;
@@ -56,6 +58,24 @@ Page & Page :: operator = (const Page &other){
 	}
 	return *this;
 }
+
+//move constructor
+Page :: Page (Page &&moveme) {
+	curSizeInBytes = moveme.curSizeInBytes;
+	numRecs = moveme.numRecs;
+	myRecs = moveme.myRecs;
+	moveme.myRecs = NULL;
+}
+
+//move assignment operator
+Page & Page :: operator = (Page &&other) {
+	curSizeInBytes = other.curSizeInBytes;
+	numRecs = other.numRecs;
+	myRecs = other.myRecs;
+	other.myRecs = NULL;
+	return *this;
+}
+
 
 void Page :: EmptyItOut () {
 
