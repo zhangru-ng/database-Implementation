@@ -42,11 +42,6 @@ class TwoWayList {
 		void MoveToStart ();
 		void MoveToFinish (); 
 
-		//deep copy the two way list(expensive operation)
-		void Copy(const TwoWayList & List);
-		//complete destroy the two way list
-		void Destroy();
-
 		TwoWayList (TwoWayList & List);
 	private:
 

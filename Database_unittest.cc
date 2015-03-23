@@ -117,14 +117,14 @@ TEST_F(HeapFileTest, CreateHeapTypeHeader) {
 }
 
 TEST_F(HeapFileTest, LoadFile) {
-	EXPECT_EQ( 0, dbfile.myInernalPoniter->curFile.GetLength() );
+	EXPECT_EQ( 0, dbfile.myInternalPoniter->curFile.GetLength() );
 	dbfile.Load (*f_schema, tbl_dir.c_str());
-	EXPECT_LE( 2, dbfile.myInernalPoniter->curFile.GetLength() );
+	EXPECT_LE( 2, dbfile.myInternalPoniter->curFile.GetLength() );
 }
 
 TEST_F(HeapFileTest, MoveFirst) {
 	dbfile.MoveFirst();
-	EXPECT_EQ( 0, dbfile.myInernalPoniter->curPageIndex );
+	EXPECT_EQ( 0, dbfile.myInternalPoniter->curPageIndex );
 }
 
 TEST_F(HeapFileTest, GetNextRecord) {
@@ -143,18 +143,18 @@ TEST_F(HeapFileTest, GetNextRecord) {
 }
 
 TEST_F(HeapFileTest, AddRecord) {
-	EXPECT_EQ( 0, dbfile.myInernalPoniter->curFile.GetLength() );
+	EXPECT_EQ( 0, dbfile.myInternalPoniter->curFile.GetLength() );
 	ASSERT_TRUE(AddRecord(PAGE_SIZE/2));	
 	dbfile.MoveFirst();
-	EXPECT_EQ( 2, dbfile.myInernalPoniter->curFile.GetLength() );
+	EXPECT_EQ( 2, dbfile.myInternalPoniter->curFile.GetLength() );
 	
 	ASSERT_TRUE(AddRecord(PAGE_SIZE/4));	
 	dbfile.MoveFirst();
-	EXPECT_EQ( 2, dbfile.myInernalPoniter->curFile.GetLength() );
+	EXPECT_EQ( 2, dbfile.myInternalPoniter->curFile.GetLength() );
 	
 	ASSERT_TRUE(AddRecord(PAGE_SIZE/4));	
 	dbfile.MoveFirst();
-	EXPECT_EQ( 3, dbfile.myInernalPoniter->curFile.GetLength() );
+	EXPECT_EQ( 3, dbfile.myInternalPoniter->curFile.GetLength() );
 }
 
 TEST_F(HeapFileTest, AddAndGetRecord) {
@@ -261,15 +261,6 @@ TEST(HeapFileDeathTest, AddRecordLargerThanPage) {
 	((int *) tempBits)[0] = PAGE_SIZE;
 	tempRec1.SetBits(tempBits); 
 	EXPECT_DEATH( dbfile.Add (tempRec1), "This record is larger than a DBFile page");
-}
-
-
-TEST(HeapFileDeathTest, CloseTwice) {
-	::testing::FLAGS_gtest_death_test_style = "threadsafe";
-	DBFile dbfile;
-	dbfile.Create(testFile_path[0].c_str(), heap , 0);
-	dbfile.Close();
-	EXPECT_DEATH( dbfile.Close(), "ERROR: DBFile is not initialized or is closed twice!");
 }
 
 /*
@@ -587,7 +578,7 @@ TEST_F(SortedFileTest, OpenNonExistFile) {
 TEST_F(SortedFileTest, MoveFirst) {
 	dbfile.Create(testFile_path[0].c_str(), sorted , &startup);
 	dbfile.MoveFirst();
-	EXPECT_EQ( 0, dbfile.myInernalPoniter->curPageIndex );
+	EXPECT_EQ( 0, dbfile.myInternalPoniter->curPageIndex );
 }
 
 TEST_F(SortedFileTest, AddRecord) {
@@ -605,10 +596,10 @@ TEST_F(SortedFileTest, AddRecord) {
 
 TEST_F(SortedFileTest, LoadFile) {
 	dbfile.Create(testFile_path[0].c_str(), sorted , &startup);
-	EXPECT_EQ( 0, dbfile.myInernalPoniter->curFile.GetLength() );
+	EXPECT_EQ( 0, dbfile.myInternalPoniter->curFile.GetLength() );
 	dbfile.Load (*f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();
-	EXPECT_LE( 2, dbfile.myInernalPoniter->curFile.GetLength() );
+	EXPECT_LE( 2, dbfile.myInternalPoniter->curFile.GetLength() );
 }
 
 TEST_F(SortedFileTest, GetNextRecord) {
@@ -1127,4 +1118,5 @@ TEST_F(RelOpTest, WriteOut) {
 		count++;
 	}
 	EXPECT_EQ( 1500, count );
+	remove(fwpath);
 }

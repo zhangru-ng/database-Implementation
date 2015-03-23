@@ -14,15 +14,14 @@ int SortedDBFile::Create (const char *f_path, fType f_type, void *startup) {
 	//generate header file name	
 	header += ".header";
 	//create the associated text file
-	ofstream metafile;
-	metafile.open( header.c_str() );
+	ofstream metafile(header.c_str());
 	if ( false == metafile.is_open() ){
 		cerr << "Can't open associated file for " << f_path << "\n";
 		return 0;
 	}
-	metafile << (int)f_type << endl;
+	metafile << static_cast<int>(f_type) << endl;
 	//read data from startup	
-	SortInfo* sip = reinterpret_cast<SortInfo*> (startup);
+	SortInfo* sip = static_cast<SortInfo*> (startup);
 	if( nullptr == sip -> order ){
 		cerr << "ERROR: Can't create sorted file, startup configuration is wrong\n";
 		return 0;
@@ -37,7 +36,6 @@ int SortedDBFile::Create (const char *f_path, fType f_type, void *startup) {
 	//ofstream operater << is overloaded for OrderMaker
 	metafile << myOrder;
 	metafile << runLength;
-	metafile.close();
 
 	//create the binary DBfile
 	curFile.Open (0, f_path);
@@ -51,8 +49,7 @@ int SortedDBFile::Open (const char *f_path) {
 	//generate header file name	
 	header += ".header";
 	//open the exist associate file
-	ifstream metafile;
-	metafile.open( header.c_str() );
+	ifstream metafile(header.c_str());
 	if ( !metafile.is_open () ){
 		cerr << "Can't open associated file for Sorted File: " << f_path << "\n";
 		return 0;
@@ -63,7 +60,6 @@ int SortedDBFile::Open (const char *f_path) {
 	//ifstream operater >> is overloaded for OrderMaker
 	metafile >> myOrder;
 	metafile >> runLength;
-	metafile.close ();
 	//someone may externally modify the header file and make attribute number or run length <= 0
 	if(myOrder.GetNumAtts() <= 0 || runLength <= 0){
 		cerr << "ERROR: Can't open sorted file, startup configuration is wrong in header file\n";
@@ -127,10 +123,7 @@ int SortedDBFile::Close () {
 		curMode = Read;
 		MergeSortedParts();
 	}
-	curFile.Close ();
-	delete input;
-	delete output;	
-	delete bq;			
+	curFile.Close ();			
 	return 1;
 }
 
@@ -199,12 +192,9 @@ int SortedDBFile::GetNext (Record &fetchme, CNF &cnf, Record &literal) {
 //initial the internal BigQ of this file
 void SortedDBFile::initBigQ(){
 	//there is no way to activate pipes after they are shut down, delete old pipes&BigQ, allocte new pipes when next write occur
-	delete input;
-	delete output;	
-	delete bq;	
-	input = new Pipe (buffsz);
-	output = new Pipe (buffsz);
-	bq = new BigQ (*input, *output, myOrder, runLength);
+	input.reset(new Pipe (buffsz));
+	output.reset(new Pipe (buffsz));
+	bq.reset(new BigQ(*input, *output, myOrder, runLength));
 }	
 
 //merge the file's internal BigQ with its other sorted data when change from write to read or close the file

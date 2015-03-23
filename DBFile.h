@@ -3,6 +3,9 @@
 
 #include "HeapDBFile.h"
 #include "SortedDBFile.h"
+#include <memory>
+
+using std::unique_ptr;
 
 class DBFile {
 
@@ -17,7 +20,7 @@ FRIEND_TEST(SortedFileTest, AddRecord);
 FRIEND_TEST(SortedFileTest, MoveFirst);
 
 private:
-	GenericDBFile *myInernalPoniter;
+	unique_ptr<GenericDBFile> myInternalPoniter;
 	//check if the internal pointer is initialize
 	bool AssertInit();
 public:

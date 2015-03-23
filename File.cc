@@ -27,52 +27,19 @@ Page :: ~Page () {
 	delete myRecs;
 }
 
-//copy constructor
-Page :: Page (const Page &copyme) {
-	curSizeInBytes = copyme.curSizeInBytes;
-	numRecs = copyme.numRecs;
-	myRecs = new (std::nothrow) TwoWayList<Record>;
-	if (myRecs == NULL)
-	{
-		cout << "ERROR : Not enough memory. EXIT !!!\n";
-		exit(1);
-	}
-	if (numRecs > 0){
-		myRecs->Copy(*(copyme.myRecs));
-	}
-}
-
-//copy assignment operator
-Page & Page :: operator = (const Page &other) {	
-	delete myRecs;
-	curSizeInBytes = other.curSizeInBytes;
-	numRecs = other.numRecs;
-	myRecs = new (std::nothrow) TwoWayList<Record>;
-	if (myRecs == NULL)
-	{
-		cout << "ERROR : Not enough memory. EXIT !!!\n";
-		exit(1);
-	}
-	if (numRecs > 0){
-		myRecs->Copy(*(other.myRecs));
-	}
-	return *this;
-}
-
 //move constructor
-Page :: Page (Page &&moveme) {
-	curSizeInBytes = moveme.curSizeInBytes;
-	numRecs = moveme.numRecs;
+Page :: Page (Page &&moveme) : curSizeInBytes(moveme.curSizeInBytes), numRecs(moveme.numRecs), myRecs(nullptr) {
 	myRecs = moveme.myRecs;
-	moveme.myRecs = NULL;
+	moveme.myRecs = nullptr;
 }
 
 //move assignment operator
 Page & Page :: operator = (Page &&other) {
+	delete myRecs;
 	curSizeInBytes = other.curSizeInBytes;
 	numRecs = other.numRecs;
 	myRecs = other.myRecs;
-	other.myRecs = NULL;
+	other.myRecs = nullptr;
 	return *this;
 }
 

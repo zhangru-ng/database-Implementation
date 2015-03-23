@@ -103,7 +103,7 @@ W: write out records from in_pipe to a file using out_schema
 */
 
 // SELETE * FROM partsupp WHERE ps_supplycost <1.03 
-// expected output: 31 records
+// expected output: 21 records
 void q1 () {
 	cout << " query1 \n ";
 
@@ -115,14 +115,14 @@ void q1 () {
 
 	int cnt = clear_pipe (_ps, ps->schema (), true);
 
-	cout << "\n\n query1 \n\n SELETE * \n FROM partsupp \n WHERE ps_supplycost <1.03 \n\n query1 returned " << cnt << " records (expected 31 records)\n";
+	cout << "\n\n query1 \n\n SELETE * \n FROM partsupp \n WHERE ps_supplycost <1.03 \n\n query1 returned " << cnt << " records (expected 21 records)\n";
 
 	dbf_ps.Close ();
 }
 
 
 // SELETE p_partkey(0), p_name(1), p_retailprice(7) FROM part WHERE (p_retailprice > 931.01) AND (p_retailprice < 931.3);
-// expected output: 22 records
+// expected output: 12 records
 void q2 () {
 	cout << " query2 \n ";
 
@@ -146,7 +146,7 @@ void q2 () {
 	Schema out_sch ("out_sch", numAttsOut, att3);
 	int cnt = clear_pipe (_out, &out_sch, true);
 
-	cout << "\n\n query2 \n\n SELETE p_partkey, p_name, p_retailprice \n FROM part \n WHERE (p_retailprice > 931.01) AND (p_retailprice < 931.3)\n\n query2 returned " << cnt << " records (expected 22 records)\n";
+	cout << "\n\n query2 \n\n SELETE p_partkey, p_name, p_retailprice \n FROM part \n WHERE (p_retailprice > 931.01) AND (p_retailprice < 931.3)\n\n query2 returned " << cnt << " records (expected 12 records)\n";
 
 	dbf_p.Close ();
 }
@@ -184,7 +184,7 @@ void q3 () {
 
 // SELETE sum (ps_supplycost) FROM supplier, partsupp 
 // WHERE s_suppkey = ps_suppkey;
-// expected output: 4.00406e+08
+// expected output: 4.00421e+08
 void q4 () {
 	cout << " query4 \n\n SELETE sum (ps_supplycost) \n FROM supplier, partsupp \n WHERE s_suppkey = ps_suppkey \n\n";
 

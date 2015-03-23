@@ -7,6 +7,17 @@ Function :: Function () {
 	opList = new Arithmatic[MAX_DEPTH];
 }
 
+Function :: ~Function () {
+	for(int i = 0; i < numOps; i++) {
+		if (PushInt == opList[numOps].myOp && -1 == opList[numOps].recInput)
+			delete static_cast<int*>(opList[numOps].litInput);
+		else if (PushDouble == opList[numOps].myOp && -1 == opList[numOps].recInput )
+			delete static_cast<double*>(opList[numOps].litInput);
+	}
+	delete[] opList;
+}
+
+
 Type Function :: RecursivelyBuild (struct FuncOperator *parseTree, Schema &mySchema) {
 
 	// different cases; in the first case, simple, unary operation
@@ -150,10 +161,10 @@ Type Function :: RecursivelyBuild (struct FuncOperator *parseTree, Schema &mySch
 
 		if (myTypeRight == Int) {
 
-                        // the left operand is an ant and needs to be cast
-                        opList[numOps].myOp = ToDouble;
-                        numOps++;
-                }
+			// the left operand is an ant and needs to be cast
+			opList[numOps].myOp = ToDouble;
+			numOps++;
+		}
 
 		// now, we know that the top two items on the stach are doubles,
 		// so we go ahead and do the math

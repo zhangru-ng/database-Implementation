@@ -42,6 +42,7 @@ Record :: Record (Record &&moveme): bits (NULL) {
 
 //move assignment operator
 Record & Record :: operator = (Record &&other){
+	delete [] bits;
 	bits = other.bits;
 	other.bits = NULL;
     return *this;

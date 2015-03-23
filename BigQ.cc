@@ -1,7 +1,7 @@
 #include "BigQ.h"
 #include <utility>
 
-BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl), runsFileName(NULL), runsFile(), runNum(0), workthread() {
+BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl), runsFileName(), runsFile(), runNum(0), workthread() {
 	if (runlen > 0) {
 		StartInternalThread();
  	} else {
@@ -10,20 +10,14 @@ BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortor
 	}
 }
 
-BigQ::~BigQ () {
-	if (remove(runsFileName)) {
-	 	cerr << "can't delete" << runsFileName;
-	}
-	free(runsFileName);
-}
 
 //two phase multiway merge sort
 void *BigQ::InternalThreadEntry () {
 	char dir[80] = "dbfile/temp/BigQtemp_XXXXXX";
 	//generate random file name, replace XXXXXX with random string
 	mkstemp(dir);
-	runsFileName = strdup(dir);
-	runsFile.Open(0, runsFileName);
+	runsFileName = dir;
+	runsFile.Open(0, runsFileName.c_str());
 	//vector to store run information
 	vector<Run> runs;
 	runs.reserve(200);
@@ -36,9 +30,12 @@ void *BigQ::InternalThreadEntry () {
 	SecondPhase(runs);
 	// end = clock();
 	// cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-	// cout << "sort spent " << cpu_time_used << " seconds cpu time" << endl;
-	out.ShutDown ();		
+	// cout << "sort spent " << cpu_time_used << " seconds cpu time" << endl;	
 	runsFile.Close();
+	if (remove(runsFileName.c_str())) {
+	 	cerr << "can't delete" << runsFileName;
+	}
+	out.ShutDown ();
 	//cout << "TPMMS spent totally " << cpu_time_used << " senconds cpu time" << endl;		
 	pthread_exit(NULL);
 }
@@ -235,7 +232,6 @@ void BigQ::PriorityQueue (vector<Run> &runs) {
 		minID = tempQM.runID;
 		//insert the smallest record to output pipe
 		out.Insert(&tempQM.rec);
-		//pop the minimal record
 		//if there are more record in the run which has just extracted the minimal record
 		if(runs[minID].GetNext(tempQM.rec)){
 			tempQM.runID = minID;
@@ -245,28 +241,7 @@ void BigQ::PriorityQueue (vector<Run> &runs) {
 	}	
 }
 
-Run::Run (int ID, int beg, int rl, File *rf) : runID(ID), runBegIndex(beg), runCurIndex(beg), curRunLen(rl), runsFile(rf) ,curPage(){ 
-}
-
-//Copy constructer
-Run::Run (const Run &r) {
- 	runID = r.runID;
- 	curRunLen = r.curRunLen;
-  	runBegIndex = r.runBegIndex;
-  	runCurIndex = r.runCurIndex;
-  	runsFile = r.runsFile;
-  	curPage = r.curPage;
-}
-
-//copy assignment operator
-Run& Run::operator = (const Run &r) {
- 	runID = r.runID;
- 	curRunLen = r.curRunLen;
-  	runBegIndex = r.runBegIndex;
-  	runCurIndex = r.runCurIndex;
-  	runsFile = r.runsFile;
-  	curPage = r.curPage;
-  	return *this;
+Run::Run (int ID, int beg, int rl, File *rf) : runID(ID), curRunLen(rl), runBegIndex(beg), runCurIndex(beg), runsFile(rf) ,curPage(){ 
 }
 
 //move constructor

@@ -9,7 +9,7 @@ GTEST_DIR = ./source/gtest
 USER_DIR = ./source
 BIN_DIR = ./bin
 CPPFLAGS += -isystem $(GTEST_DIR)/include
-CXXFLAGS += -std=c++11 -g -pthread -Wno-write-strings # -Wall -Wextra
+CXXFLAGS += -std=c++11 -g -O2 -pthread -Wno-write-strings -Wno-unused-result # -Wall -Wextra
 TESTS = Database_unittest 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -125,7 +125,7 @@ gtest-all.o : $(GTEST_SRCS_)
 	$(CXX) $(CPPFLAGS) -I$(GTEST_DIR) $(CXXFLAGS) -c \
             $(GTEST_DIR)/src/gtest-all.cc 
 
-all:  a3test.out a22test.out a2test.out a1test.out main DBFile_unittest
+all:  a3test.out a22test.out a2test.out a1test.out main Database_unittest
 out:  a3test.out a22test.out a2test.out a1test.out 
 test: Database_unittest
 

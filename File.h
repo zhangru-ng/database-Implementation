@@ -22,11 +22,13 @@ private:
 public:
 	// constructor
 	Page ();
-	Page (const Page &copyme);
-	virtual ~Page ();
-	Page & operator = (const Page &other);
+	//delete default copy constructor and assignment to avoid incorrect copy
+	Page (const Page &copyme) = delete;
+	Page & operator = (const Page &other) = delete;
+	//move constructor and move assignment 
 	Page(Page &&moveme);
 	Page & operator = (Page &&other);
+	virtual ~Page ();
 
 	// this takes a page and writes its binary representation to bits
 	void ToBinary (char *bits);

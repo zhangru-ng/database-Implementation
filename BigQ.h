@@ -3,7 +3,6 @@
 #include <pthread.h>
 #include <iostream>
 #include <vector>
-#include <queue>
 #include <list>
 #include <utility>
 #include <algorithm>
@@ -16,7 +15,13 @@
 #include "Schema.h"
 #include "Thread.h"
 
-using namespace std;
+using std::vector;
+using std::sort;
+using std::string;
+using std::move;
+using std::cerr;
+using std::cout;
+using std::endl;
 
 #define THRESHOLD 30
 
@@ -46,7 +51,7 @@ private:
     Pipe &out;
     OrderMaker &sortorder;
     int runlen;
-    char *runsFileName;
+    string runsFileName;
     File runsFile;
     int runNum;
     pthread_t workthread;
@@ -66,7 +71,6 @@ private:
 
 public:
     BigQ (Pipe &in, Pipe &out, OrderMaker &sortorder, int runlen);
-    ~BigQ ();  
 };
 
 class Run{
@@ -79,8 +83,10 @@ private:
     Page curPage;         //current page being read
 public:
     Run(int ID, int beg, int rl, File *rf);
-    Run(const Run &r);
-    Run & operator = (const Run &r);
+    //delete default copy constructor and assignment to avoid incorrect copy
+    Run(const Run &r) = delete;
+    Run & operator = (const Run &r) = delete;
+    //move constructor and move assignment
     Run (Run &&r);
     Run & operator = (Run &&r);
     //get the ID of this run

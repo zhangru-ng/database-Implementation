@@ -56,7 +56,6 @@ Schema :: Schema (const char *fpath, int num_atts, Attribute *atts) {
 		}
 		myAtts[i].name = strdup (atts[i].name);
 	}
-	free(fileName);
 }
 
 Schema :: Schema (const char *fName, const char *relName) {
@@ -150,12 +149,16 @@ Schema :: Schema (const char *fName, const char *relName) {
 			exit (1);
 		}
 	}
-	free(fileName);
+	
 	fclose (foo);
 }
 
 Schema :: ~Schema () {
+	for (int i = 0; i < numAtts; i++ ) {
+		free(myAtts[i].name);
+	}
 	delete [] myAtts;
+	free(fileName);
 	myAtts = 0;
 }
 

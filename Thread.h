@@ -12,7 +12,7 @@ private:
 	//C++ class member functions have a hidden this parameter passed in, 
 	//use a static class method (which has no this parameter) to bootstrap the class
     static void * InternalThreadEntryFunc(void * This) {
-        reinterpret_cast<Thread *>(This)->InternalThreadEntry(); 
+        static_cast<Thread *>(This)->InternalThreadEntry(); 
         return nullptr;
     }
    	
