@@ -410,6 +410,7 @@ void q7 () {
 
 	SF_s.WaitUntilDone ();
 	SF_p.WaitUntilDone();
+	SF_ps.WaitUntilDone();
 	J_p_ps.WaitUntilDone();
 	J_s_pps.WaitUntilDone();
 	T.WaitUntilDone ();
@@ -423,7 +424,6 @@ void q7 () {
 	dbf_p.Close ();
 	dbf_ps.Close ();
 }
-
 /*
 SELETE l_orderkey, l_partkey, l_suppkey
 FROM lineitem
@@ -476,6 +476,82 @@ void q8 () {
 	dbf_li.Close ();
 }
 
+/*
+SELECT SUM (l.l_discount)
+FROM customer AS c, orders AS o, lineitem AS l
+WHERE (c.c_custkey = o.o_custkey) AND
+	  (o.o_orderkey = l.l_orderkey) AND
+	  (c.c_name = 'Customer#000070919') AND
+	  (l.l_quantity > 30) AND (l.l_discount < 0.03)
+*/
+void q9 () { 
+	cout << " query9 \n\n SELECT SUM (l_discount)\nFROM customer, orders, lineitem\n WHERE (c_custkey = o_custkey) AND (o_orderkey = l_orderkey) AND (c_name = 'Customer#000070919') AND (l_quantity > 30) AND (l_discount < 0.03) \n\n";
+
+	char *pred_c = "(c_name = 'Customer#000070919')";
+	init_SF_c (pred_c, 100);	
+
+	char *pred_o = "(o_orderkey = o_orderkey)";
+	init_SF_o (pred_o, 100);
+
+	char *pred_li = "(l_quantity > 30.0) AND (l_discount < 0.03)";
+	init_SF_li (pred_li, 100);	
+
+	Join J_c_o;
+		Pipe _c_o(pipesz);
+		CNF cnf_c_o;
+		Record lit_c_o;
+		get_cnf ("(c_custkey = o_custkey)", c->schema(), o->schema(), cnf_c_o, lit_c_o);
+	int co_Atts = cAtts + oAtts;
+	Attribute o_orderkey = {"o_orderkey", Int};
+
+	Attribute j_co_att[] = {IA,SA,SA,IA,SA,DA,SA,SA, o_orderkey,IA,SA,DA,SA,SA,SA,IA,SA};
+	Schema co_sch ("co_sch", co_Atts, j_co_att);
+	J_c_o.Use_n_Pages (buffsz);
+
+	Join J_li_co;
+		Pipe _li_co (pipesz);
+		CNF cnf_li_co;
+		Record lit_li_co;
+		get_cnf ("(l_orderkey = o_orderkey )", li->schema(), &co_sch, cnf_li_co, lit_li_co);
+
+	int outAtts = liAtts + co_Atts;
+	Attribute l_discount = {"l_discount", Double};
+	Attribute joinatt[] = {IA,IA,IA,IA,DA,DA,l_discount,DA,SA,SA,SA,SA,SA,SA,SA,SA, IA,SA,SA,IA,SA,DA,SA,SA, IA,IA,SA,DA,SA,SA,SA,IA,SA};
+	Schema join_sch ("join_sch", outAtts, joinatt);
+	J_li_co.Use_n_Pages (buffsz);
+
+	Sum T;
+		// _s (input pipe)
+		Pipe _out (1);
+		Function func;
+			char *str_sum = "(l_discount)";
+			get_cnf (str_sum, &join_sch, func);
+	T.Use_n_Pages (1);
+
+	SF_c.Run (dbf_c, _c, cnf_c, lit_c); 
+	SF_o.Run (dbf_o, _o, cnf_o, lit_o);
+	SF_li.Run (dbf_li, _li, cnf_li, lit_li); 
+	J_c_o.Run (_c, _o, _c_o, cnf_c_o, lit_c_o);
+	J_li_co.Run (_li, _c_o, _li_co, cnf_li_co, lit_li_co);
+	T.Run (_li_co, _out, func);
+
+	SF_c.WaitUntilDone ();
+	SF_o.WaitUntilDone();
+	SF_li.WaitUntilDone();
+	J_c_o.WaitUntilDone();
+	J_li_co.WaitUntilDone();
+	T.WaitUntilDone ();
+
+	Schema out_sch ("out_sch", 1, &DA);
+	int cnt = clear_pipe (_out, &out_sch, true);
+
+	cout << "\n\n query9 returned " << cnt << " rec  \n";
+
+	dbf_c.Close ();
+	dbf_o.Close ();
+	dbf_li.Close ();
+}
+
 int main (int argc, char *argv[]) {
 
 	if (argc != 2) {
@@ -483,11 +559,11 @@ int main (int argc, char *argv[]) {
 		exit (0);
 	}
 
-	void (*query_ptr[]) () = {&q1, &q2, &q3, &q4, &q5, &q6, &q7, &q8};  
+	void (*query_ptr[]) () = {&q1, &q2, &q3, &q4, &q5, &q6, &q7, &q8, &q9};  
 	void (*query) ();
 	int qindx = atoi (argv[1]);
 
-	if (qindx > 0 && qindx < 9) {
+	if (qindx > 0 && qindx < 10) {
 		setup ();
 		query = query_ptr [qindx - 1];
 		double start_time = clock();

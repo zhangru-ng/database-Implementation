@@ -42,8 +42,9 @@ void *BigQ::InternalThreadEntry () {
 
 void BigQ::SortInRun (vector<Record> &oneRunRecords) {
 	ComparisonEngine comp;
+	OrderMaker &order = sortorder;
 	//use funny lambda function                                 [capture] (papameter) {body}
-	sort(oneRunRecords.begin(), oneRunRecords.end(), [comp, this](const Record &r1, const Record &r2) { return comp.Compare (&r1, &r2, &sortorder) < 0; });
+	sort(oneRunRecords.begin(), oneRunRecords.end(), [&comp, &order](const Record &r1, const Record &r2) { return comp.Compare (&r1, &r2, &order) < 0; });
 }
 
 //write one run to temporary file, store the begin and length of current run

@@ -1098,25 +1098,29 @@ TEST_F(RelOpTest, GroupBy) {
 }
 
 TEST_F(RelOpTest, WriteOut) {
-	CNF cnf_pred, out_pred;
-	Record literal, lit_out, rec;	
+	CNF cnf_pred;
+	Record literal, rec;	
 	SelectFile SF;	
 	initDBFile(CUSTOMER, 1);
 	get_cnf ("(c_custkey = c_custkey)", f_schema, cnf_pred, literal);
-	Pipe su(100);
-	SF.Run (dbfile, su, cnf_pred, literal);
+	Pipe cu(100);
+
 	WriteOut W;
 		char *fwpath = "test.w.tmp";
-		FILE *writefile = fopen (fwpath, "rw");
-
-	W.Run (su, writefile, *f_schema);
+		FILE *writefile = fopen (fwpath, "w");
+		
+	ASSERT_TRUE(writefile != NULL);
+	SF.Run (dbfile, cu, cnf_pred, literal);
+	W.Run (cu, writefile, *f_schema);
 	SF.WaitUntilDone ();
 	W.WaitUntilDone();
-	rewind(writefile);
+	fclose(writefile);
+	
+	writefile = fopen (fwpath, "r");
 	int count = 0;
 	while (rec.SuckNextRecord(f_schema, writefile)) {
 		count++;
 	}
 	EXPECT_EQ( 1500, count );
-	remove(fwpath);
+	fclose(writefile);
 }
