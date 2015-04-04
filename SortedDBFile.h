@@ -6,6 +6,8 @@
 #include "GenericDBFile.h"
 #include <memory>
 
+#define KEY_NOT_FOUND -1
+
 using std::unique_ptr;
 
 typedef struct _SortInfo {

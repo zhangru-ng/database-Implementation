@@ -16,9 +16,7 @@
 #include "Thread.h"
 
 using std::vector;
-using std::sort;
 using std::string;
-using std::move;
 using std::cerr;
 using std::cout;
 using std::endl;

@@ -11,8 +11,8 @@ string tbl_prefix = "/cise/homes/rui/Desktop/testfiles/10M_table/";
 string tbl_name[8] = {"region", "nation", "customer", "part", "partsupp", "supplier", "order", "lineitem"};
 typedef enum table { REGION = 0, NATION, CUSTOMER, PART, PARTSUPP, SUPPLIER, ORDER, LINEITEM } Table;
 string catalog_path = "catalog";
-string testFile_path[2] = { "/cise/tmp/rui/testFile1.bin", "/cise/tmp/rui/testFile2.bin" };
-string headFile_path[2] = { "/cise/tmp/rui/testFile1.bin.header", "/cise/tmp/rui/testFile2.bin" };
+string testFile_path[2] = { "dbfile/testFile1.bin", "dbfile/testFile2.bin" };
+string headFile_path[2] = { "dbfile/testFile1.bin.header", "dbfile/testFile2.bin" };
 
 extern "C" {
 	int yyparse (void);   // defined in y.tab.c
@@ -42,15 +42,12 @@ extern struct FuncOperator *finalfunc;
 
 class HeapFileTest : public ::testing::Test {
 protected:
-	virtual void SetUp() {
-		f_schema = new Schema(catalog_path.c_str(), tbl_name[(int)LINEITEM].c_str());
-		tbl_dir = tbl_prefix + tbl_name[(int)LINEITEM] + ".tbl";
+	virtual void SetUp() {		
 		dbfile.Create(testFile_path[0].c_str(), heap , 0);
 	}
 
 	virtual void TearDown() {
 		dbfile.Close();
-		delete f_schema;
 		remove(testFile_path[0].c_str());
 		remove(headFile_path[0].c_str());
 	}
@@ -58,11 +55,14 @@ protected:
 	ComparisonEngine comp;	
 	CNF cnf_pred;
 	Record literal;
-	Schema *f_schema;
-	string tbl_dir;
+	static Schema f_schema;
+	static string tbl_dir;
 public:
 	int AddRecord(int size);
 };
+
+Schema HeapFileTest::f_schema = { catalog_path.c_str(), tbl_name[(int)LINEITEM].c_str() };
+string HeapFileTest::tbl_dir = tbl_prefix + tbl_name[(int)LINEITEM] + ".tbl";
 
 int HeapFileTest::AddRecord(int size){
 	char *tempBits = NULL;
@@ -118,7 +118,7 @@ TEST_F(HeapFileTest, CreateHeapTypeHeader) {
 
 TEST_F(HeapFileTest, LoadFile) {
 	EXPECT_EQ( 0, dbfile.myInternalPoniter->curFile.GetLength() );
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	EXPECT_LE( 2, dbfile.myInternalPoniter->curFile.GetLength() );
 }
 
@@ -133,10 +133,10 @@ TEST_F(HeapFileTest, GetNextRecord) {
 	FILE *tableFile = fopen (tbl_dir.c_str(), "r");
 	ASSERT_TRUE(tableFile != NULL);
 	
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();
 	
-	while ( dbfile.GetNext(tempRec2) && tempRec1.SuckNextRecord (f_schema, tableFile) ){
+	while ( dbfile.GetNext(tempRec2) && tempRec1.SuckNextRecord (&f_schema, tableFile) ){
 		EXPECT_EQ( 0, strcmp( tempRec1.GetBits(), tempRec2.GetBits() ) );
 	}
 	fclose(tableFile);
@@ -162,7 +162,7 @@ TEST_F(HeapFileTest, AddAndGetRecord) {
 	FILE *tableFile = fopen (tbl_dir.c_str(), "r");
 	ASSERT_TRUE(tableFile != NULL);
 	int count1 = 0;
-	while(tempRec.SuckNextRecord (f_schema, tableFile)){
+	while(tempRec.SuckNextRecord (&f_schema, tableFile)){
 		dbfile.Add(tempRec);
 		++count1;
 	}
@@ -178,8 +178,8 @@ TEST_F(HeapFileTest, AddAndGetRecord) {
 TEST_F(HeapFileTest, GetNextFilterInt) {
 	int err = 0;
 	Record tempRec;
-	get_cnf ("(l_orderkey < 27)", f_schema, cnf_pred, literal);
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	get_cnf ("(l_orderkey < 27)", &f_schema, cnf_pred, literal);
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();
 	
 	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
@@ -193,8 +193,8 @@ TEST_F(HeapFileTest, GetNextFilterInt) {
 TEST_F(HeapFileTest, GetNextFilterDouble) {
 	int err = 0;
 	Record tempRec;
-	get_cnf ("(l_extendedprice > 15000.0) AND (l_extendedprice < 17000.0)", f_schema, cnf_pred, literal);
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	get_cnf ("(l_extendedprice > 15000.0) AND (l_extendedprice < 17000.0)", &f_schema, cnf_pred, literal);
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();
 	
 	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
@@ -208,8 +208,8 @@ TEST_F(HeapFileTest, GetNextFilterDouble) {
 TEST_F(HeapFileTest, GetNextFilterString) {
 	int err = 0;
 	Record tempRec;
-	get_cnf ("(l_comment > 'c') AND (l_comment < 'e')", f_schema, cnf_pred, literal);
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	get_cnf ("(l_comment > 'c') AND (l_comment < 'e')", &f_schema, cnf_pred, literal);
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();
 	
 	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
@@ -223,8 +223,8 @@ TEST_F(HeapFileTest, GetNextFilterString) {
 TEST_F(HeapFileTest, GetNextFilterMixed1) {
 	int err = 0;
 	Record tempRec;
-	get_cnf ("(l_orderkey > 100) AND (l_orderkey < 1000) AND (l_partkey > 100) AND (l_partkey < 5000) AND (l_shipmode = 'AIR') AND (l_linestatus = 'F') AND (l_tax < 0.07)", f_schema, cnf_pred, literal);
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	get_cnf ("(l_orderkey > 100) AND (l_orderkey < 1000) AND (l_partkey > 100) AND (l_partkey < 5000) AND (l_shipmode = 'AIR') AND (l_linestatus = 'F') AND (l_tax < 0.07)", &f_schema, cnf_pred, literal);
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();
 	
 	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
@@ -238,8 +238,8 @@ TEST_F(HeapFileTest, GetNextFilterMixed1) {
 TEST_F(HeapFileTest, GetNextFilterMixed2) {
 	int err = 0;
 	Record tempRec;
-	get_cnf ("(l_shipdate > '1994-01-01') AND (l_shipdate < '1994-01-07') AND (l_discount > 0.05) AND (l_discount < 0.06) AND (l_quantity > 4.0) ", f_schema, cnf_pred, literal);
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	get_cnf ("(l_shipdate > '1994-01-01') AND (l_shipdate < '1994-01-07') AND (l_discount > 0.05) AND (l_discount < 0.06) AND (l_quantity > 4.0) ", &f_schema, cnf_pred, literal);
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();
 	
 	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
@@ -289,15 +289,29 @@ void get_sort_order (char *input, Schema *f_schema, OrderMaker &sortorder) {
 	int errnum;
 }testutil;
 
+typedef struct {
+	Pipe *pipe;
+	DBFile *dbfile;
+}testinput;
+
 class BigQTest : public ::testing::Test {
 protected:
-	virtual void SetUp(){
-		tbl_dir = tbl_prefix + tbl_name[(int)LINEITEM] + ".tbl";
-		buffsz = 100;
-		runlen = 10;
+	static void SetUpTestCase() {
+		dbfile.Create(testFile_path[0].c_str(), heap , 0);
+		dbfile.Load (f_schema, tbl_dir.c_str());			
+	}
+    static void TearDownTestCase() {
+		dbfile.Close();
+		remove(testFile_path[0].c_str());
+		remove(headFile_path[0].c_str());
+	}
+
+	virtual void SetUp(){	
+		dbfile.MoveFirst ();	
 		input = new Pipe(buffsz);
-		output = new Pipe(buffsz);		
-		f_schema = new Schema(catalog_path.c_str(), tbl_name[(int)LINEITEM] .c_str());
+		output = new Pipe(buffsz);	
+		tinput.pipe = input;	
+		tinput.dbfile = &dbfile;
 		tutil.pipe = output;
 		tutil.order = &sortorder;
 		tutil.errnum = 0;	
@@ -305,37 +319,38 @@ protected:
 	virtual void TearDown() {
 		delete input;
 		delete output;
-		delete f_schema;
-		remove(testFile_path[0].c_str());
-		remove(headFile_path[0].c_str());
+		
 	}	
-	int buffsz;
+	static int buffsz;
+	static int runlen;
+	static DBFile dbfile;
+	static Schema f_schema;
+	static string tbl_dir;
+	ComparisonEngine ceng;
 	Pipe *input;
   	Pipe *output;
-	OrderMaker sortorder;
-	int runlen;	
+	OrderMaker sortorder;	
 	pthread_t thread1;
 	pthread_t thread2;	
-	testutil tutil; 
-	ComparisonEngine ceng;
-	DBFile dbfile;
-	Schema *f_schema;
-	string tbl_dir;
+	testutil tutil;
+	testinput tinput;	
 };
 
+int BigQTest::buffsz = 100;
+int BigQTest::runlen = 10;
+string BigQTest::tbl_dir = tbl_prefix + tbl_name[(int)LINEITEM] + ".tbl";
+Schema BigQTest::f_schema = {catalog_path.c_str(), tbl_name[(int)LINEITEM] .c_str()};
+DBFile BigQTest::dbfile;
+
+
 void *producer (void *arg) {
-	Pipe *myPipe = (Pipe *) arg;
-	Record temp;
-	DBFile tdbfile;
-	string tbl_dir = tbl_prefix + tbl_name[(int)LINEITEM] + ".tbl";
-	tdbfile.Create(testFile_path[0].c_str(), heap , 0);
-	Schema f_schema(catalog_path.c_str(), tbl_name[(int)LINEITEM] .c_str());
-	tdbfile.Load (f_schema, tbl_dir.c_str());
-	tdbfile.MoveFirst ();
-	while (tdbfile.GetNext (temp) == 1) {
+	testinput *i = (testinput *)arg;
+	Pipe *myPipe = i->pipe;
+	DBFile *dbfile = i->dbfile;
+	Record temp;	
+	while (dbfile->GetNext (temp) == 1) {
 		myPipe->Insert (&temp);
 	}
-	tdbfile.Close ();
 	myPipe->ShutDown ();
 }
 
@@ -360,8 +375,8 @@ void *consumer (void *arg) {
 }
 
 TEST_F(BigQTest, SortIntAttribute) {
-	pthread_create (&thread1, NULL, producer, (void *)input);	
-	get_sort_order ("(l_suppkey)", f_schema, sortorder);
+	pthread_create (&thread1, NULL, producer, (void *)&tinput);
+	get_sort_order ("(l_suppkey)", &f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -370,8 +385,8 @@ TEST_F(BigQTest, SortIntAttribute) {
 }
 
 TEST_F(BigQTest, SortDoubleAttribute) {
-	pthread_create (&thread1, NULL, producer, (void *)input);
-	get_sort_order ("(l_quantity)", f_schema, sortorder);
+	pthread_create (&thread1, NULL, producer, (void *)&tinput);
+	get_sort_order ("(l_quantity)", &f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -380,8 +395,8 @@ TEST_F(BigQTest, SortDoubleAttribute) {
 }
 
 TEST_F(BigQTest, SortStringAttribute) {
-	pthread_create (&thread1, NULL, producer, (void *)input);	
-	get_sort_order ("(l_shipdate)", f_schema, sortorder);
+	pthread_create (&thread1, NULL, producer, (void *)&tinput);	
+	get_sort_order ("(l_shipdate)", &f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -390,8 +405,8 @@ TEST_F(BigQTest, SortStringAttribute) {
 }
 
 TEST_F(BigQTest, SortTwoLiterals) {
-	pthread_create (&thread1, NULL, producer, (void *)input);	
-	get_sort_order ("(l_partkey) AND (l_extendedprice)", f_schema, sortorder);
+	pthread_create (&thread1, NULL, producer, (void *)&tinput);	
+	get_sort_order ("(l_partkey) AND (l_extendedprice)", &f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -400,8 +415,8 @@ TEST_F(BigQTest, SortTwoLiterals) {
 }
 
 TEST_F(BigQTest, SortThreeLiterals) {
-	pthread_create (&thread1, NULL, producer, (void *)input);	
-	get_sort_order ("(l_suppkey) AND (l_discount) AND (l_returnflag)", f_schema, sortorder);
+	pthread_create (&thread1, NULL, producer, (void *)&tinput);	
+	get_sort_order ("(l_suppkey) AND (l_discount) AND (l_returnflag)", &f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -410,8 +425,8 @@ TEST_F(BigQTest, SortThreeLiterals) {
 }
 
 TEST_F(BigQTest, SortSixLiterals) {
-	pthread_create (&thread1, NULL, producer, (void *)input);		
-	get_sort_order ("(l_suppkey) AND (l_shipmode) AND (l_commitdate) AND (l_receiptdate) AND (l_shipinstruct) AND (l_tax)", f_schema, sortorder);
+	pthread_create (&thread1, NULL, producer, (void *)&tinput);		
+	get_sort_order ("(l_suppkey) AND (l_shipmode) AND (l_commitdate) AND (l_receiptdate) AND (l_shipinstruct) AND (l_tax)", &f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -421,8 +436,8 @@ TEST_F(BigQTest, SortSixLiterals) {
 
 TEST_F(BigQTest, RunLengthOne) {
 	runlen = 1;
-	pthread_create (&thread1, NULL, producer, (void *)input);		
-	get_sort_order ("(l_suppkey)", f_schema, sortorder);
+	pthread_create (&thread1, NULL, producer, (void *)&tinput);		
+	get_sort_order ("(l_suppkey)", &f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -432,8 +447,8 @@ TEST_F(BigQTest, RunLengthOne) {
 
 TEST_F(BigQTest, RunLengthThree) {
 	runlen = 3;
-	pthread_create (&thread1, NULL, producer, (void *)input);		
-	get_sort_order ("(l_orderkey)", f_schema, sortorder);
+	pthread_create (&thread1, NULL, producer, (void *)&tinput);		
+	get_sort_order ("(l_orderkey)", &f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -444,8 +459,8 @@ TEST_F(BigQTest, RunLengthThree) {
 
 TEST_F(BigQTest, RunLengthSeven) {
 	runlen = 7;
-	pthread_create (&thread1, NULL, producer, (void *)input);		
-	get_sort_order ("(l_tax)", f_schema, sortorder);
+	pthread_create (&thread1, NULL, producer, (void *)&tinput);		
+	get_sort_order ("(l_tax)", &f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -456,8 +471,8 @@ TEST_F(BigQTest, RunLengthSeven) {
 
 TEST_F(BigQTest, RunLengthFifteen) {
 	runlen = 15;
-	pthread_create (&thread1, NULL, producer, (void *)input);		
-	get_sort_order ("(l_comment)", f_schema, sortorder);
+	pthread_create (&thread1, NULL, producer, (void *)&tinput);		
+	get_sort_order ("(l_comment)", &f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -467,8 +482,8 @@ TEST_F(BigQTest, RunLengthFifteen) {
 
 TEST_F(BigQTest, RunLengthFifty) {
 	runlen = 50;
-	pthread_create (&thread1, NULL, producer, (void *)input);		
-	get_sort_order ("(l_shipdate)", f_schema, sortorder);
+	pthread_create (&thread1, NULL, producer, (void *)&tinput);		
+	get_sort_order ("(l_shipdate)", &f_schema, sortorder);
 	pthread_create (&thread2, NULL, consumer, (void *)&tutil);
 	BigQ bq (*input, *output, sortorder, runlen);	
 	pthread_join (thread1, NULL);
@@ -484,33 +499,32 @@ TEST_F(BigQTest, RunLengthFifty) {
 
 class SortedFileTest : public ::testing::Test {
 protected:
-	virtual void SetUp() {
-		tbl_dir = tbl_prefix + tbl_name[(int)LINEITEM] + ".tbl";
-		runlen = 10;
-		f_schema = new Schema(catalog_path.c_str(), tbl_name[(int)LINEITEM] .c_str());
-		get_sort_order ("(l_suppkey)", f_schema, sortorder);
+	virtual void SetUp() {		
+		get_sort_order ("(l_suppkey)", &f_schema, sortorder);
 		startup.order = &sortorder;  //can be initailized as startup = {&sortorder, runlen}; in C++ 11
 		startup.runlen = runlen;		
 	}
 
 	virtual void TearDown() {
-		delete f_schema;
 		dbfile.Close();
 		remove(testFile_path[0].c_str());
 		remove(headFile_path[0].c_str());
-	}
-	DBFile dbfile;	
+	}	
 	ComparisonEngine comp;	
 	CNF cnf_pred;
-	Record literal;
-	int runlen;
+	Record literal;	
 	OrderMaker sortorder;
 	SortInfo startup;
-	Schema *f_schema;
-	string tbl_dir;
+	DBFile dbfile;
+	static int runlen;
+	static Schema f_schema;
+	static string tbl_dir;
 public:
 	int checkOrder(OrderMaker &sortorder);
 };
+int SortedFileTest::runlen = 10;	
+Schema SortedFileTest::f_schema = { catalog_path.c_str(), tbl_name[(int)LINEITEM] .c_str() };
+string SortedFileTest::tbl_dir = tbl_prefix + tbl_name[(int)LINEITEM] + ".tbl";
 
 int SortedFileTest::checkOrder(OrderMaker &sortorder){
 	ComparisonEngine ceng;
@@ -586,7 +600,7 @@ TEST_F(SortedFileTest, AddRecord) {
 	FILE *tableFile = fopen (tbl_dir.c_str(), "r");
 	ASSERT_TRUE(tableFile != NULL);	
 	dbfile.Create(testFile_path[0].c_str(), sorted , &startup);		
-	while (tempRec.SuckNextRecord (f_schema, tableFile)){
+	while (tempRec.SuckNextRecord (&f_schema, tableFile)){
 		dbfile.Add(tempRec);
 	}
 	fclose(tableFile);
@@ -597,44 +611,44 @@ TEST_F(SortedFileTest, AddRecord) {
 TEST_F(SortedFileTest, LoadFile) {
 	dbfile.Create(testFile_path[0].c_str(), sorted , &startup);
 	EXPECT_EQ( 0, dbfile.myInternalPoniter->curFile.GetLength() );
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();
 	EXPECT_LE( 2, dbfile.myInternalPoniter->curFile.GetLength() );
 }
 
 TEST_F(SortedFileTest, GetNextRecord) {
 	dbfile.Create(testFile_path[0].c_str(), sorted , &startup);	
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();
 	EXPECT_EQ( 0, checkOrder(sortorder) );
 }	
 
 TEST_F(SortedFileTest, SortOneLiterals) {			
-	get_sort_order ("(l_quantity)", f_schema, sortorder);
+	get_sort_order ("(l_quantity)", &f_schema, sortorder);
 	startup.order = &sortorder;
 	startup.runlen = runlen;
 	dbfile.Create(testFile_path[0].c_str(), sorted , &startup);	
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();
 	EXPECT_EQ( 0, checkOrder(sortorder) );
 }
 
 TEST_F(SortedFileTest, SortTwoLiterals) {		
-	get_sort_order ("(l_partkey) AND (l_extendedprice)", f_schema, sortorder);
+	get_sort_order ("(l_partkey) AND (l_extendedprice)", &f_schema, sortorder);
 	startup.order = &sortorder;
 	startup.runlen = runlen;
 	dbfile.Create(testFile_path[0].c_str(), sorted , &startup);	
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();
 	EXPECT_EQ( 0, checkOrder(sortorder) );
 }
 
 TEST_F(SortedFileTest, SortSixLiterals) {		
-	get_sort_order ("(l_suppkey) AND (l_shipmode) AND (l_commitdate) AND (l_receiptdate) AND (l_shipinstruct) AND (l_tax)", f_schema, sortorder);
+	get_sort_order ("(l_suppkey) AND (l_shipmode) AND (l_commitdate) AND (l_receiptdate) AND (l_shipinstruct) AND (l_tax)", &f_schema, sortorder);
 	startup.order = &sortorder;
 	startup.runlen = runlen;
 	dbfile.Create(testFile_path[0].c_str(), sorted , &startup);
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();
 	EXPECT_EQ( 0, checkOrder(sortorder) );
 }
@@ -642,10 +656,10 @@ TEST_F(SortedFileTest, SortSixLiterals) {
 TEST_F(SortedFileTest, GetNextFilterMixed1) {
 	int err = 0;
 	dbfile.Create(testFile_path[0].c_str(), sorted , &startup);	
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();	
 	Record tempRec;
-	get_cnf ("(l_orderkey > 100) AND (l_orderkey < 1000) AND (l_partkey > 100) AND (l_partkey < 5000) AND (l_shipmode = 'AIR') AND (l_linestatus = 'F') AND (l_tax < 0.07)", f_schema, cnf_pred, literal);
+	get_cnf ("(l_orderkey > 100) AND (l_orderkey < 1000) AND (l_partkey > 100) AND (l_partkey < 5000) AND (l_shipmode = 'AIR') AND (l_linestatus = 'F') AND (l_tax < 0.07)", &f_schema, cnf_pred, literal);
 	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
 		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
 				err++;
@@ -657,10 +671,10 @@ TEST_F(SortedFileTest, GetNextFilterMixed1) {
 TEST_F(SortedFileTest, GetNextFilterMixed2) {
 	int err = 0;
 	dbfile.Create(testFile_path[0].c_str(), sorted , &startup);		
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();	
 	Record tempRec;
-	get_cnf ("(l_shipdate > '1994-01-01') AND (l_shipdate < '1994-01-07') AND (l_discount > 0.05) AND (l_discount < 0.06) AND (l_quantity > 4.0) ", f_schema, cnf_pred, literal);
+	get_cnf ("(l_shipdate > '1994-01-01') AND (l_shipdate < '1994-01-07') AND (l_discount > 0.05) AND (l_discount < 0.06) AND (l_quantity > 4.0) ", &f_schema, cnf_pred, literal);
 	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
 		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
 				err++;
@@ -671,15 +685,15 @@ TEST_F(SortedFileTest, GetNextFilterMixed2) {
 
 
 TEST_F(SortedFileTest, FilterMatchSortAtts) {
-	get_sort_order (" (l_quantity)", f_schema, sortorder);
+	get_sort_order (" (l_quantity)", &f_schema, sortorder);
 	startup.order = &sortorder;
 	startup.runlen = runlen;
 	dbfile.Create(testFile_path[0].c_str(), sorted , &startup);	
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();	
 	Record tempRec;
 	int err = 0;
-	get_cnf ("(l_shipdate > '1994-01-01') AND (l_shipdate < '1994-01-07') AND (l_discount > 0.05) AND (l_discount < 0.06) AND (l_quantity > 4.0) ", f_schema, cnf_pred, literal);
+	get_cnf ("(l_shipdate > '1994-01-01') AND (l_shipdate < '1994-01-07') AND (l_discount > 0.05) AND (l_discount < 0.06) AND (l_quantity > 4.0) ", &f_schema, cnf_pred, literal);
 	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
 		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
 				err++;
@@ -690,11 +704,11 @@ TEST_F(SortedFileTest, FilterMatchSortAtts) {
 
 TEST_F(SortedFileTest, FilterNotMatchSortAtts) {	
 	dbfile.Create(testFile_path[0].c_str(), sorted , &startup);	
-	dbfile.Load (*f_schema, tbl_dir.c_str());
+	dbfile.Load (f_schema, tbl_dir.c_str());
 	dbfile.MoveFirst();	
 	Record tempRec;
 	int err = 0;
-	get_cnf ("(l_shipdate > '1994-01-01') AND (l_shipdate < '1994-01-07') AND (l_discount > 0.05) AND (l_discount < 0.06) AND (l_quantity > 4.0) ", f_schema, cnf_pred, literal);
+	get_cnf ("(l_shipdate > '1994-01-01') AND (l_shipdate < '1994-01-07') AND (l_discount > 0.05) AND (l_discount < 0.06) AND (l_quantity > 4.0) ", &f_schema, cnf_pred, literal);
 	while ( dbfile.GetNext(tempRec, cnf_pred, literal) == 1 ){
 		if(comp.Compare(&tempRec, &literal, &cnf_pred) == 0){
 				err++;
@@ -1124,3 +1138,10 @@ TEST_F(RelOpTest, WriteOut) {
 	EXPECT_EQ( 1500, count );
 	fclose(writefile);
 }
+
+GTEST_API_ int main(int argc, char **argv) {
+  printf("Running main() from gtest_main.cc\n");
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
+

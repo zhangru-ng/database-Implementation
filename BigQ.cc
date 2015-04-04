@@ -42,9 +42,8 @@ void *BigQ::InternalThreadEntry () {
 
 void BigQ::SortInRun (vector<Record> &oneRunRecords) {
 	ComparisonEngine comp;
-	OrderMaker &order = sortorder;
 	//use funny lambda function                                 [capture] (papameter) {body}
-	sort(oneRunRecords.begin(), oneRunRecords.end(), [&comp, &order](const Record &r1, const Record &r2) { return comp.Compare (&r1, &r2, &order) < 0; });
+	sort(oneRunRecords.begin(), oneRunRecords.end(), [&](const Record &r1, const Record &r2) { return comp.Compare (&r1, &r2, &sortorder) < 0; });
 }
 
 //write one run to temporary file, store the begin and length of current run
@@ -66,13 +65,12 @@ void BigQ::WriteRunToFile (vector<Record> &oneRunRecords, int &beg, int &len) {
 		exit (1);
 	}
 	beg = tempIndex;
-	for (auto it = oneRunRecords.begin(); it != oneRunRecords.end(); ++it) {
-		tempRec.Consume(&(*it));
-		if (0 == tempPage.Append(&tempRec)) {
+	for (auto &rec : oneRunRecords) {
+		if (0 == tempPage.Append(&rec)) {
 			//if the page is full, create a new page
 			runsFile.AddPage(&tempPage, tempIndex);  
 			tempPage.EmptyItOut();
-			tempPage.Append(&tempRec);
+			tempPage.Append(&rec);
 			tempIndex++;
 		}
 	}		 
@@ -113,7 +111,7 @@ void BigQ::FirstPhase (vector<Run> &runs) {
 			//write the sorted run to temporary file
 			WriteRunToFile(oneRunRecords, beg, len);
 			//add a new run to vector<Run> runs, use move to avoid copy
-			runs.push_back(move(Run(runNum, beg, len, &runsFile)));
+			runs.push_back(std::move(Run(runNum, beg, len, &runsFile)));
 			//clear the current run which has written to file
 			oneRunRecords.clear();
 			//clear current run counter
@@ -122,7 +120,7 @@ void BigQ::FirstPhase (vector<Run> &runs) {
 			runNum++;			
 		}
 		//add the record to this run,  use move to avoid copy
-		oneRunRecords.push_back(move(tempRec));
+		oneRunRecords.push_back(std::move(tempRec));
 	}   
 	//the size of last oneRunRecords may be less than one run
 	if (oneRunRecords.size() > 0) {
@@ -131,7 +129,7 @@ void BigQ::FirstPhase (vector<Run> &runs) {
 		//add as a run, the last page count as one page, current run length plus 1
 		curLen++;
 		//add a new run to vector<Run> runs, use move to avoid copy
-		runs.push_back(move(Run(runNum, beg, len, &runsFile)));
+		runs.push_back(std::move(Run(runNum, beg, len, &runsFile)));
 		//increase run number
 		runNum++;				
 	}
@@ -146,7 +144,7 @@ void BigQ::SecondPhase (vector<Run> &runs) {
 	if (runNum >= THRESHOLD) {
 		PriorityQueue(runs);
 	}
-	// Linear scan is faster than priority queue when when run number small
+	// // Linear scan is faster than priority queue when when run number small
 	else {
 		LinearScan(runs);
 	}
@@ -174,12 +172,12 @@ void BigQ::LinearScan(vector<Run> &runs){
 	vector<LinearScanMember> run_vector;
 	run_vector.reserve(runNum);
 	//traverse runs vector to initial the vector
-	for (auto it=runs.begin(); it!=runs.end(); ++it){
-		tempLSM.myRun = &(*it);
+	for (auto &r : runs){
+		tempLSM.myRun = &r;
 		//perform move first to get first page
-		it->MoveFirst();
-		it->GetNext(tempLSM.rec);
-		run_vector.push_back(move(tempLSM));
+		r.MoveFirst();
+		r.GetNext(tempLSM.rec);
+		run_vector.push_back(std::move(tempLSM));
 	}
 	//iterator to store the minimal node for later use
 	auto minIt = run_vector.begin();
@@ -198,7 +196,8 @@ void BigQ::LinearScan(vector<Run> &runs){
 		//if the run with minimal record is empty
 		if (0 == (minIt->myRun)->GetNext(minIt->rec)) {
 			//erase the run
- 			run_vector.erase(minIt);
+			std::iter_swap(minIt, run_vector.end()-1);
+ 			run_vector.pop_back();
  			//set the minimal node to the begin node
  			minIt = run_vector.begin();
  		}
@@ -218,11 +217,11 @@ void BigQ::PriorityQueue (vector<Run> &runs) {
 	//reserve place for internal vector in queue
 	pqueue.reserve(runNum);
 	//traverse runs vector to initial the priority queue
-	for (auto it=runs.begin(); it!=runs.end(); ++it) {
-		tempQM.runID = it->GetRunID();
+	for (auto &r : runs) {
+		tempQM.runID = r.GetRunID();
 		//perform move first to get first page
-		it->MoveFirst();
-		it->GetNext(tempQM.rec);
+		r.MoveFirst();
+		r.GetNext(tempQM.rec);
 		//"move" semantic push
 		pqueue.push(tempQM);
 	}
@@ -252,7 +251,7 @@ Run::Run (Run &&r) {
   	runBegIndex = r.runBegIndex;
   	runCurIndex = r.runCurIndex;
   	runsFile = r.runsFile;
-  	curPage = move(r.curPage);
+  	curPage = std::move(r.curPage);
 }
 
 //move assignment operator
@@ -262,7 +261,7 @@ Run& Run::operator = (Run &&r) {
   	runBegIndex = r.runBegIndex;
   	runCurIndex = r.runCurIndex;
   	runsFile = r.runsFile;
-  	curPage = move(r.curPage);
+  	curPage = std::move(r.curPage);
   	return *this;
 }
 
@@ -309,15 +308,15 @@ bool Queue::empty() {
 }
 //push element into queue
 void Queue::push(QueueMember &element) {
-    qm.push_back(move(element));        
+    qm.push_back(std::move(element));        
     push_heap(qm.begin(), qm.end(), sorter);
 }
 //pop element from queue
 QueueMember Queue::pop() {
     pop_heap(qm.begin(), qm.end(), sorter);
-    QueueMember result = move(qm.back());
+    QueueMember result = std::move(qm.back());
     qm.pop_back();
-    return move(result);
+    return std::move(result);
 }
 
 QueueMember::QueueMember () : runID(0), rec() { }   
@@ -325,13 +324,13 @@ QueueMember::QueueMember () : runID(0), rec() { }
 //move constructor
 QueueMember::QueueMember (QueueMember &&qm){
 	runID = qm.runID;       
-    rec = move(qm.rec);
+    rec = std::move(qm.rec);
 }
 
 //move assignment operator
 QueueMember & QueueMember::operator = (QueueMember &&qm) {
 	runID = qm.runID;       
-    rec = move(qm.rec);
+    rec = std::move(qm.rec);
     return *this;
 }
 
@@ -341,14 +340,14 @@ LinearScanMember::LinearScanMember () : myRun(nullptr), rec() { }
 LinearScanMember::LinearScanMember (LinearScanMember &&lm) {
 	myRun = lm.myRun;
 	lm.myRun = nullptr;
-	rec = move(lm.rec);
+	rec = std::move(lm.rec);
 }
 
 //move assignment operator
 LinearScanMember & LinearScanMember::operator = (LinearScanMember &&lm) {
 	myRun = lm.myRun;
 	lm.myRun = nullptr;
-	rec = move(lm.rec);
+	rec = std::move(lm.rec);
 	return *this;
 }
 
@@ -372,7 +371,7 @@ void BigQ::LinearScan(vector<Run> &runs){
 		//perform move first to get first page
 		it->MoveFirst();
 		it->GetNext(tempLM.rec);
-		run_vector.push_front(move(tempLM));
+		run_vector.push_front(std::move(tempLM));
 	}
 	//iterator to store the minimal node for later use
 	auto minIt = run_vector.begin();
