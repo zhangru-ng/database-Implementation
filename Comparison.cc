@@ -344,7 +344,7 @@ void CNF :: GrowFromParseTree (struct AndList *parseTree, Schema *leftSchema,
                                         typeLeft = rightSchema->FindType (myOr->left->left->value);
 
 				// it is not there!  So there is an error in the query
-                                } else {
+				} else {
 					cout << "ERROR: Could not find attribute " <<
 						myOr->left->left->value << "\n";
 					exit (1);	

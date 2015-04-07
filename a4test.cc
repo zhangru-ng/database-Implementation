@@ -4,6 +4,9 @@
 #include "Statistics.h"
 #include "ParseTree.h"
 #include <math.h>
+
+#define UNKNOWN -1
+
 extern "C" {
 	struct YY_BUFFER_STATE *yy_scan_string(const char*);
 	int yyparse(void);
@@ -101,7 +104,9 @@ void q0 (){
 
 	yy_scan_string(cnf);
 	yyparse();
+	
 	double result = s.Estimate(final, relName, 2);
+
 	if(result!=800000)
 		cout<<"error in estimating Q1 before apply \n ";
 	s.Apply(final, relName, 2);
@@ -138,7 +143,6 @@ void q1 (){
 
 	yy_scan_string(cnf);
 	yyparse();
-
 	double result = s.Estimate(final, relName, 1);
 	cout<<"Your estimation Result  " <<result;
 	cout<<"\n Correct Answer: 8.5732e+5";
@@ -197,7 +201,7 @@ void q3 (){
 	Statistics s;
 	char *relName[] = {"supplier","customer","nation"};
 
-	s.Read(fileName);
+	// s.Read(fileName);
 	
 	s.AddRel(relName[0],10000);
 	s.AddAtt(relName[0], "s_nationey",25);
@@ -273,30 +277,32 @@ void q4 (){
 	s.CopyRel("nation","n");
 	s.CopyRel("region","r");
 
+	char *relName2[] = { "p", "ps", "s", "n", "r"};
+
 	char *cnf = "(p.p_partkey=ps.ps_partkey) AND (p.p_size = 2)";
 	yy_scan_string(cnf);
 	yyparse();
-	s.Apply(final, relName, 2);
+	s.Apply(final, relName2, 2);
 
 	cnf ="(s.s_suppkey = ps.ps_suppkey)";
 	yy_scan_string(cnf);
 	yyparse();
-	s.Apply(final, relName, 3);
+	s.Apply(final, relName2, 3);
 
 	cnf =" (s.s_nationkey = n.n_nationkey)";
 	yy_scan_string(cnf);
 	yyparse();
-	s.Apply(final, relName, 4);
+	s.Apply(final, relName2, 4);
 
 	cnf ="(n.n_regionkey = r.r_regionkey) AND (r.r_name = 'AMERICA') ";
 	yy_scan_string(cnf);
 	yyparse();
 
-	double result = s.Estimate(final, relName, 5);
+	double result = s.Estimate(final, relName2, 5);
 	if(fabs(result-3200)>0.1)
 		cout<<"error in estimating Q4\n";
 
-	s.Apply(final, relName, 5);	
+	s.Apply(final, relName2, 5);	
 	
 	s.Write(fileName);
 	
@@ -350,7 +356,7 @@ void q6 (){
 	Statistics s;
         char *relName[] = { "partsupp", "supplier", "nation"};
 
-	s.Read(fileName);
+	// s.Read(fileName);
 	
 	s.AddRel(relName[0],800000);
 	s.AddAtt(relName[0], "ps_suppkey",10000);
@@ -390,7 +396,7 @@ void q7(){
 	Statistics s;
         char *relName[] = { "orders", "lineitem"};
 
-	s.Read(fileName);
+	// s.Read(fileName);
 	
 
 	s.AddRel(relName[0],1500000);
@@ -399,6 +405,7 @@ void q7(){
 	
 	s.AddRel(relName[1],6001215);
 	s.AddAtt(relName[1], "l_orderkey",1500000);
+	s.AddAtt(relName[1], "l_receiptdate",UNKNOWN);
 	
 
 	char *cnf = "(l_receiptdate >'1995-02-01' ) AND (l_orderkey = o_orderkey)";
@@ -422,7 +429,7 @@ void q8 (){
 	Statistics s;
         char *relName[] = { "part",  "partsupp"};
 
-	s.Read(fileName);
+	// s.Read(fileName);
 	
 	s.AddRel(relName[0],200000);
 	s.AddAtt(relName[0], "p_partkey",200000);
@@ -430,7 +437,6 @@ void q8 (){
 
 	s.AddRel(relName[1],800000);
 	s.AddAtt(relName[1], "ps_partkey",200000);
-	
 
 	char *cnf = "(p_partkey=ps_partkey) AND (p_size =3 OR p_size=6 OR p_size =19)";
 
@@ -491,7 +497,7 @@ void q10 (){
 	Statistics s;
         char *relName[] = { "customer", "orders", "lineitem","nation"};
 
-	s.Read(fileName);
+	// s.Read(fileName);
 	
 	s.AddRel(relName[0],150000);
 	s.AddAtt(relName[0], "c_custkey",150000);
@@ -513,12 +519,14 @@ void q10 (){
 	s.Apply(final, relName, 2);
 
 	cnf = " (l_orderkey = o_orderkey) ";
-	yy_scan_string(cnf);                                                                               	yyparse();
+	yy_scan_string(cnf);
+	yyparse();
 
 	s.Apply(final, relName, 3);  
 	
 	cnf = "(c_nationkey = n_nationkey) ";
-	yy_scan_string(cnf);                                                                               	yyparse();	
+	yy_scan_string(cnf); 
+	yyparse();	
 	
 	double result = s.Estimate(final, relName, 4);
 	if(fabs(result-2000405)>0.1)
@@ -536,11 +544,11 @@ void q11 (){
 	Statistics s;
         char *relName[] = { "part",  "lineitem"};
 
-	s.Read(fileName);
+	// s.Read(fileName);
 	
 	s.AddRel(relName[0],200000);
 	s.AddAtt(relName[0], "p_partkey",200000);
-	s.AddAtt(relName[0], "p_conatiner",40);
+	s.AddAtt(relName[0], "p_container",40);
 
 	s.AddRel(relName[1],6001215);
 	s.AddAtt(relName[1], "l_partkey",200000);
