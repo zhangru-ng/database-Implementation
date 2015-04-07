@@ -19,10 +19,10 @@ using std::endl;
 typedef std::unordered_map<std::string,long> AttInfo;
 
 typedef struct _set {
-	long numTuples;
+	double numTuples;
 	AttInfo atts;
 	std::vector<std::string> names;
-	_set(long num) : numTuples(num), atts(), names() { }
+	_set(double num) : numTuples(num), atts(), names() { }
 } Subset;
 
 // number of tuples, attribute list
@@ -39,8 +39,6 @@ typedef struct info {
 	info(const info& rhs) : numTuples(rhs.numTuples), atts(rhs.atts), sp(rhs.sp), hasJoined(rhs.hasJoined) { }
 } RelInfo;
 
-
-
 // relation name, relation info: number of tuples, attribute list
 typedef std::unordered_map<std::string, RelInfo> Relations;
 
@@ -50,12 +48,9 @@ private:
 	std::unordered_map<std::string, float> sizeParameters;
 	
 	std::string initAttsName (struct ComparisonOp *pCom);
-
 	std::pair<double,float> EstimateProduct(std::vector<std::string> &relname);
 	std::pair<double,float> EstimateSelection(const struct AndList *pAnd, std::vector<std::string> &relname);
 	std::pair<double,float> EstimateJoin(const struct AndList *pAnd, std::vector<std::string> &relname);
-	// float ComputeSelectivity (const struct OrList *pOr, AttInfo &atts);
-	// float ComputeSelectivity (const struct OrList *pOr, AttInfo &latts, AttInfo &ratts);
 	std::pair<double,float> Simulate (const struct AndList *parseTree, char **relNames, int numToJoin);
 	
 public:

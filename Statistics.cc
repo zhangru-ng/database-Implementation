@@ -55,7 +55,7 @@ void Statistics::CopyRel (char *oldName, char *newName) {
 	RelInfo rel(old.numTuples);
 	for (auto &att : old.atts) {
 		std::string newAttName(newName);
-		newAttName = newAttName + "." + att.first;
+		newAttName += "." + att.first;
 		rel.atts.emplace(newAttName, att.second);
 	}
 	// //Add into relations with new name
@@ -109,6 +109,7 @@ void Statistics::Apply (const struct AndList *parseTree, char *relNames[], int n
 	auto nsp = Simulate(parseTree, relNames, numToJoin);
 	double totNumTuples = std::get<0>(nsp);
 	float selectivity = std::get<1>(nsp);
+	cout << "Apply:" << totNumTuples * selectivity << endl;
 	std::shared_ptr<Subset> sp = std::make_shared<Subset>(totNumTuples * selectivity);
 	for (int i = 0; i < numToJoin; i++) {
 		RelInfo &rel = relations.at(relNames[i]);
@@ -120,6 +121,10 @@ void Statistics::Apply (const struct AndList *parseTree, char *relNames[], int n
 		}
 		sp->names.push_back(relNames[i]);
 	}
+
+	// for (int i = 0; i < numToJoin; i++) {
+	// 	cout << "N"<< relations.at(relNames[i]).sp->numTuples << endl;
+	// }
 }
 
 double Statistics::Estimate (const struct AndList *parseTree, char **relNames, int numToJoin) {
@@ -127,7 +132,7 @@ double Statistics::Estimate (const struct AndList *parseTree, char **relNames, i
 	auto nsp = Simulate(parseTree, relNames, numToJoin);
 	double totNumTuples = std::get<0>(nsp);
 	float selectivity = std::get<1>(nsp);
-	cout << totNumTuples * selectivity << endl;
+	cout << "Estimate" << totNumTuples * selectivity << endl;
 	return totNumTuples * selectivity;
 
 }
@@ -165,7 +170,7 @@ std::pair<double,float> Statistics::Simulate (const struct AndList *parseTree, c
 					exit(1);
 				} else {
 					//erase the matched relation
-					relToJoin.erase(rel);
+					relToJoin.erase(srel);
 				}
 			}
 		}		
@@ -270,8 +275,10 @@ std::pair<double,float> Statistics::EstimateJoin(const struct AndList *pAnd, std
 						exit(1);
 					}
 				}
-				double max = liter->second > riter->second ? liter->second : riter->second;
-				totTuples = (lrel.numTuples * rrel.numTuples) / max;
+				double lTuples = lrel.hasJoined == false? lrel.numTuples : lrel.sp->numTuples;
+				double rTuples = rrel.hasJoined == false? rrel.numTuples : rrel.sp->numTuples;
+				long max = std::max(liter->second, riter->second);
+				totTuples = (lTuples * rTuples) / max;
 			}
 			// NAME , value | value , name
 			else if (lOperand | rOperand > 4) {

@@ -204,7 +204,7 @@ void q3 (){
 	// s.Read(fileName);
 	
 	s.AddRel(relName[0],10000);
-	s.AddAtt(relName[0], "s_nationey",25);
+	s.AddAtt(relName[0], "s_nationkey",25);
 
 	s.AddRel(relName[1],150000);
 	s.AddAtt(relName[1], "c_custkey",150000);
@@ -323,6 +323,7 @@ void q5 (){
 	s.AddRel(relName[1],1500000);
 	s.AddAtt(relName[1], "o_orderkey",1500000);
 	s.AddAtt(relName[1], "o_custkey",150000);
+	s.AddAtt(relName[1], "o_orderdate",UNKNOWN);
 	
 	s.AddRel(relName[2],6001215);
 	s.AddAtt(relName[2], "l_orderkey",1500000);
@@ -506,6 +507,8 @@ void q10 (){
 	s.AddRel(relName[1],1500000);
 	s.AddAtt(relName[1], "o_orderkey",1500000);
 	s.AddAtt(relName[1], "o_custkey",150000);
+	s.AddAtt(relName[1], "o_orderdate",UNKNOWN);
+
 	
 	s.AddRel(relName[2],6001215);
 	s.AddAtt(relName[2], "l_orderkey",1500000);
