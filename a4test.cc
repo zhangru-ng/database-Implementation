@@ -5,8 +5,6 @@
 #include "ParseTree.h"
 #include <math.h>
 
-#define UNKNOWN -1
-
 extern "C" {
 	struct YY_BUFFER_STATE *yy_scan_string(const char*);
 	int yyparse(void);
@@ -116,7 +114,7 @@ void q0 (){
 
 	//reload the statistics object from file
 	Statistics s1;
-	s1.Read(fileName);	
+	s1.Read(fileName);
 	cnf = "(s_suppkey>1000)";	
 	yy_scan_string(cnf);
 	yyparse();
@@ -201,7 +199,7 @@ void q3 (){
 	Statistics s;
 	char *relName[] = {"supplier","customer","nation"};
 
-	// s.Read(fileName);
+	s.Read(fileName);
 	
 	s.AddRel(relName[0],10000);
 	s.AddAtt(relName[0], "s_nationkey",25);
@@ -357,7 +355,7 @@ void q6 (){
 	Statistics s;
         char *relName[] = { "partsupp", "supplier", "nation"};
 
-	// s.Read(fileName);
+	s.Read(fileName);
 	
 	s.AddRel(relName[0],800000);
 	s.AddAtt(relName[0], "ps_suppkey",10000);
@@ -397,7 +395,7 @@ void q7(){
 	Statistics s;
         char *relName[] = { "orders", "lineitem"};
 
-	// s.Read(fileName);
+	s.Read(fileName);
 	
 
 	s.AddRel(relName[0],1500000);
@@ -430,7 +428,7 @@ void q8 (){
 	Statistics s;
         char *relName[] = { "part",  "partsupp"};
 
-	// s.Read(fileName);
+	s.Read(fileName);
 	
 	s.AddRel(relName[0],200000);
 	s.AddAtt(relName[0], "p_partkey",200000);
@@ -581,7 +579,7 @@ int main(int argc, char *argv[]) {
 		exit (1);
 	}
 
-	void (*query_ptr[]) () = {&q0,&q1, &q2, &q3, &q4, &q5, &q6, &q7, &q8,&q9,&q10,&q11};  
+	void (*query_ptr[]) () = {&q0, &q1, &q2, &q3, &q4, &q5, &q6, &q7, &q8, &q9, &q10, &q11};  
 	void (*query) ();
 	int qindx = atoi (argv[1]);
 
@@ -591,7 +589,7 @@ int main(int argc, char *argv[]) {
 		cout << "\n\n";
 	}
 	else {
-		cout << " ERROR!!!!\n";
+		cout << " ERROR!!!!  Usage: ./test.out [0-11] >\n";
 	}
 
 }
