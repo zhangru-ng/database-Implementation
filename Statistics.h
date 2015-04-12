@@ -17,6 +17,8 @@ using std::cerr;
 using std::endl;
 
 #define UNKNOWN -1
+#define LEFT 0
+#define RIGHT 1
 // attribute name, number of distinct value
 typedef std::unordered_map<std::string,double> AttInfo;
 typedef std::vector<std::string> Subset;
@@ -61,6 +63,14 @@ typedef struct _RelInfo{
 	}
 }RelInfo;
 
+
+typedef struct {
+	double numTuples;
+	float totSel;
+	float leftSel;
+	float rightSel;
+}EstimateInfo;
+
 // relation name, relation info: number of tuples, attribute list
 typedef std::unordered_map<std::string, RelInfo> Relations;
 
@@ -68,13 +78,15 @@ class Statistics {
 private:
 	Relations relations;
 	std::unordered_map<std::string, float> sizeParameters;
-	std::string initAttsName (struct ComparisonOp *pCom);
-	double CheckAtts(std::string &name, AttInfo &latts, AttInfo &ratts);
+	std::string InitAttsName (struct ComparisonOp *pCom);
+	std::pair<double, int> CheckAtts(std::string &name, AttInfo &latts, AttInfo &ratts);
 	std::pair<double, double> CheckAtts(std::string &lname, std::string &rname, AttInfo &latts, AttInfo &ratts);
-	std::pair<double,float> EstimateProduct(std::vector<std::string> &relname);
-	std::pair<double,float> EstimateSelection(const struct AndList *pAnd, std::vector<std::string> &relname);
-	std::pair<double,float> EstimateJoin(const struct AndList *pAnd, std::vector<std::string> &relname);
-	std::pair<double,float> Simulate (const struct AndList *parseTree, char **relNames, int numToJoin);
+	void SetSelectivity(std::string &name, std::vector<std::string> &attNames, float &selToSet, float sel);
+	void BuildSubset(RelInfo &rel1, RelInfo &rel2, std::vector<std::string> &repOfSet); 
+	EstimateInfo EstimateProduct(std::vector<std::string> &relname);
+	EstimateInfo EstimateSelection(const struct AndList *pAnd, std::vector<std::string> &relname);
+	EstimateInfo EstimateJoin(const struct AndList *pAnd, std::vector<std::string> &relname);
+	EstimateInfo Simulate (const struct AndList *parseTree, char **relNames, int numToJoin, std::vector<std::string> &repOfSet);
 	
 public:
 	Statistics();
