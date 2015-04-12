@@ -199,7 +199,7 @@ void q3 (){
 	Statistics s;
 	char *relName[] = {"supplier","customer","nation"};
 
-	s.Read(fileName);
+	// s.Read(fileName);
 	
 	s.AddRel(relName[0],10000);
 	s.AddAtt(relName[0], "s_nationkey",25);
@@ -276,7 +276,6 @@ void q4 (){
 	s.CopyRel("region","r");
 
 	char *relName2[] = { "p", "ps", "s", "n", "r"};
-
 	char *cnf = "(p.p_partkey=ps.ps_partkey) AND (p.p_size = 2)";
 	yy_scan_string(cnf);
 	yyparse();
@@ -386,7 +385,6 @@ void q6 (){
 	
 	s.Write(fileName);
 	
-	
 
 }
 
@@ -395,17 +393,14 @@ void q7(){
 	Statistics s;
         char *relName[] = { "orders", "lineitem"};
 
-	s.Read(fileName);
-	
+	// s.Read(fileName);
 
 	s.AddRel(relName[0],1500000);
 	s.AddAtt(relName[0], "o_orderkey",1500000);
-	
-	
+
 	s.AddRel(relName[1],6001215);
 	s.AddAtt(relName[1], "l_orderkey",1500000);
 	s.AddAtt(relName[1], "l_receiptdate",UNKNOWN);
-	
 
 	char *cnf = "(l_receiptdate >'1995-02-01' ) AND (l_orderkey = o_orderkey)";
 
@@ -419,7 +414,6 @@ void q7(){
 	s.Apply(final, relName, 2);
 	s.Write(fileName);
 
-	
 }
 
 // Note  OR conditions are not independent.

@@ -118,7 +118,7 @@ void Statistics::CopyRel (char *oldName, char *newName) {
 			attInfo->emplace(attName, numDistincts);
 		}
 		info.atts = attInfo;		
-		if(info.hasJoined) {
+		if (info.hasJoined) {
 			infile >> attName;
 			if ("[" != attName) {
 				cerr << "ERROR: Malformed subset list in Read\n";
@@ -175,32 +175,29 @@ void Statistics::Write (const char *fromWhere) {
 
 void Statistics::Apply (const struct AndList *parseTree, char *relNames[], int numToJoin) {
 	std::vector<std::string> repOfSet;
-	auto estimateInfo = Simulate(parseTree, relNames, numToJoin, repOfSet);
-	double totNumTuples = estimateInfo.numTuples;
-	float selectivity = estimateInfo.totSel;
-	float leftSel = estimateInfo.leftSel;
-	float rightSel = estimateInfo.rightSel;
-	cout << "Apply:" << totNumTuples * selectivity << endl;
-	
+	auto nsp = Simulate(parseTree, relNames, numToJoin, repOfSet);
+	double totNumTuples = std::get<0>(nsp);
+	float selectivity = std::get<1>(nsp);
+	// cout << "Apply:" << totNumTuples * selectivity << endl;	
 	RelInfo &rel1 = relations.at(repOfSet[0]);
 	AttInfo &atts1 = *(rel1.atts);
 	rel1.numTuples = totNumTuples * selectivity;
 	for (auto &att : atts1) {
 		// attInfo->emplace(att.first, UNKNOWN != att.second ? att.second * leftSel : UNKNOWN);
 		if(UNKNOWN != att.second) {
-			double numDistincts = att.second * leftSel;
+			double numDistincts = att.second * selectivity;
 			att.second = (numDistincts < 1) ? 1: numDistincts;
 		}
 	}
 	int numSets = repOfSet.size();
-	if(2 == repOfSet.size()) {
+	if (2 == repOfSet.size()) {
 		RelInfo &rel2 = relations.at(repOfSet[1]);
 		AttInfo &atts2 = *(rel2.atts);
 		// Build the new attribute list
 		for (auto const &att : atts2) {
 			double numDistincts = UNKNOWN;
-			if(UNKNOWN != att.second) {
-				numDistincts = att.second * rightSel;
+			if (UNKNOWN != att.second) {
+				numDistincts = att.second * selectivity;
 				numDistincts = (numDistincts < 1) ? 1: numDistincts;
 			}
 			// atts->emplace(att.first, UNKNOWN != att.second ? att.second * rightSel : UNKNOWN);
@@ -237,15 +234,15 @@ void Statistics::BuildSubset(RelInfo &rel1, RelInfo &rel2, std::vector<std::stri
 double Statistics::Estimate (const struct AndList *parseTree, char **relNames, int numToJoin) {
 	std::vector<std::string> repOfSet;
 	//number of tuples and selectivity pair
-	auto estimateInfo = Simulate(parseTree, relNames, numToJoin, repOfSet);
-	double totNumTuples = estimateInfo.numTuples;
-	float selectivity = estimateInfo.totSel;
-	cout << "Estimate" << totNumTuples * selectivity << endl;
+	auto nsp = Simulate(parseTree, relNames, numToJoin, repOfSet);
+	double totNumTuples = std::get<0>(nsp);
+	float selectivity = std::get<1>(nsp);
+	// cout << "Estimate" << totNumTuples * selectivity << endl;
 	return totNumTuples * selectivity;
 
 }
 
-EstimateInfo Statistics::Simulate (const struct AndList *parseTree, char **relNames, int numToJoin, std::vector<std::string> &repOfSet) {
+std::pair<double,float> Statistics::Simulate (const struct AndList *parseTree, char **relNames, int numToJoin, std::vector<std::string> &repOfSet) {
 	std::unordered_set<std::string> relToJoin;
 	for (int i = 0; i < numToJoin; i++) {
 		//if the relations to join is not in current statistics, report error and exit
@@ -307,7 +304,7 @@ EstimateInfo Statistics::Simulate (const struct AndList *parseTree, char **relNa
 	}
 }
 
-EstimateInfo Statistics::EstimateSelection(const struct AndList *pAnd, std::vector<std::string> &relname) {		
+std::pair<double,float> Statistics::EstimateSelection(const struct AndList *pAnd, std::vector<std::string> &relname) {		
 	struct OrList *pOr = pAnd->left;
 	struct ComparisonOp *pCom = pOr->left;
 	std::string name = InitAttsName(pCom);
@@ -327,7 +324,7 @@ EstimateInfo Statistics::EstimateSelection(const struct AndList *pAnd, std::vect
 				exit(1);
 			}
 			int op = pCom->code;			
-			float sel =  EQUALS == op ? 1.0f / atts[name] : 1.0f / 3;			
+			float sel =  (EQUALS == op) ? 1.0f / atts[name] : 1.0f / 3;			
 			SetSelectivity(name, attNames, orSel, sel);
 			pOr = pOr->rightOr;
 		}
@@ -339,7 +336,7 @@ EstimateInfo Statistics::EstimateSelection(const struct AndList *pAnd, std::vect
 		cerr << "ERROR: Total selectivity less than 0\n";
 		exit(1);
 	}
-	return EstimateInfo { rel.numTuples, totSel, totSel, 1.0 };
+	return std::make_pair(rel.numTuples, totSel);
 }
 
 std::string Statistics::InitAttsName (struct ComparisonOp *pCom) {
@@ -352,66 +349,61 @@ std::string Statistics::InitAttsName (struct ComparisonOp *pCom) {
 	}
 }
 
-EstimateInfo Statistics::EstimateJoin(const struct AndList *pAnd, std::vector<std::string> &relname) {
+std::pair<double,float> Statistics::EstimateJoin(const struct AndList *pAnd, std::vector<std::string> &relname) {
 	RelInfo &lrel = relations.at(relname[0]);
 	RelInfo &rrel = relations.at(relname[1]);
 	AttInfo &latts = *(lrel.atts);
 	AttInfo &ratts = *(rrel.atts);
 	double totTuples;
 	float totSel = 1.0f;
-	float totlSel = 1.0f;
-	float totrSel = 1.0f;
 	while (pAnd != nullptr) {
 		struct OrList *pOr = pAnd->left;
-		float lorSel = 1.0f;
-		float rorSel = 1.0f;
+		float orSel = 1.0f;
 		std::vector<std::string> attNames;
 		while (pOr != nullptr) {
 			struct ComparisonOp *pCom = pOr->left;
 			int op = pCom->code;
-			// NAME = NAME
 			int lOperand = pCom->left->code;
 			int rOperand = pCom->right->code;
-			// NAME = NAME
-			if (EQUALS == op && NAME == (lOperand | rOperand)) {
+			// NAME op NAME  
+			if (NAME == (lOperand | rOperand)) {
 				std::string lname(pCom->left->value);
 				std::string rname(pCom->right->value);				
 				auto numDistinctsPair = CheckAtts(lname, rname, latts, ratts);
 				double lTuples = lrel.numTuples;
 				double rTuples = rrel.numTuples;
 				double max = std::max(numDistinctsPair.first, numDistinctsPair.second);
-				totTuples = (lTuples * rTuples) / max;
+				if (EQUALS == op) {
+					totTuples = (lTuples * rTuples) / max;
+				} else {
+					totTuples = (lTuples * rTuples) / (3 * max);
+				}				
 			}
-			// NAME , value | value , name
+			// NAME op value | value op name
 			else if (lOperand | rOperand > 4) {
 				std::string name = InitAttsName(pCom);
 				//pair store the number of distinct and which side the attribute belong to
 				auto DistSidePair = CheckAtts(name, latts, ratts);
-				float sel =  EQUALS == op ? 1.0f / DistSidePair.first : 1.0f / 3;
-				if(LEFT == DistSidePair.second)
-					SetSelectivity(name, attNames, lorSel, sel);
-				else
-					SetSelectivity(name, attNames, rorSel, sel);				
+				float sel =  (EQUALS == op) ? 1.0f / DistSidePair.first : 1.0f / 3;
+				SetSelectivity(name, attNames, orSel, sel);
 			} else {
-				cout << "Not yet implement\n";
+				cout << "ERROR: Both operands are literals\n";
 				exit(1);
 			}
 			pOr = pOr->rightOr;
 		}
-		totSel *= lorSel * rorSel;
-		totlSel *= lorSel;
-		totrSel *= rorSel;
+		totSel *= orSel;
 		pAnd = pAnd->rightAnd;
 	}
 	if (totSel < 0) {
 		cerr << "ERROR: Total selectivity less than 0\n";
 		exit(1);
 	}
-	return EstimateInfo { totTuples, totSel, totlSel, totrSel };
+	return std::make_pair(totTuples, totSel);
 }
 
-EstimateInfo Statistics::EstimateProduct(std::vector<std::string> &relname) {
-	return EstimateInfo { relations.at(relname[0]).numTuples * relations.at(relname[1]).numTuples, 1, 1, 1 };
+std::pair<double,float> Statistics::EstimateProduct(std::vector<std::string> &relname) {
+	return std::make_pair(relations.at(relname[0]).numTuples * relations.at(relname[1]).numTuples, 1);
 }
 
 void Statistics::SetSelectivity(std::string &name, std::vector<std::string> &attNames, float &selToSet, float sel) {
@@ -443,11 +435,7 @@ std::pair<double, int> Statistics::CheckAtts(std::string &name, AttInfo &latts, 
 		if (iter == ratts.end()) {
 			cerr << "ERROR: Attempt to select on non-exist attribute! " << name << "\n";
 			exit(1);
-		} else {
-			side = RIGHT;
 		}
-	} else {
-		side = LEFT;
 	}
 	return std::make_pair(iter->second, side);
 }

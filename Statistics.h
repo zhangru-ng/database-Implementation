@@ -63,14 +63,6 @@ typedef struct _RelInfo{
 	}
 }RelInfo;
 
-
-typedef struct {
-	double numTuples;
-	float totSel;
-	float leftSel;
-	float rightSel;
-}EstimateInfo;
-
 // relation name, relation info: number of tuples, attribute list
 typedef std::unordered_map<std::string, RelInfo> Relations;
 
@@ -83,10 +75,10 @@ private:
 	std::pair<double, double> CheckAtts(std::string &lname, std::string &rname, AttInfo &latts, AttInfo &ratts);
 	void SetSelectivity(std::string &name, std::vector<std::string> &attNames, float &selToSet, float sel);
 	void BuildSubset(RelInfo &rel1, RelInfo &rel2, std::vector<std::string> &repOfSet); 
-	EstimateInfo EstimateProduct(std::vector<std::string> &relname);
-	EstimateInfo EstimateSelection(const struct AndList *pAnd, std::vector<std::string> &relname);
-	EstimateInfo EstimateJoin(const struct AndList *pAnd, std::vector<std::string> &relname);
-	EstimateInfo Simulate (const struct AndList *parseTree, char **relNames, int numToJoin, std::vector<std::string> &repOfSet);
+	std::pair<double,float> EstimateProduct(std::vector<std::string> &relname);
+	std::pair<double,float> EstimateSelection(const struct AndList *pAnd, std::vector<std::string> &relname);
+	std::pair<double,float> EstimateJoin(const struct AndList *pAnd, std::vector<std::string> &relname);
+	std::pair<double,float> Simulate (const struct AndList *parseTree, char **relNames, int numToJoin, std::vector<std::string> &repOfSet);
 	
 public:
 	Statistics();
