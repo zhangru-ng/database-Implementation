@@ -22,63 +22,53 @@ using std::endl;
 // attribute name, number of distinct value
 typedef std::unordered_map<std::string,double> AttInfo;
 typedef std::vector<std::string> Subset;
+typedef std::pair<double,float> EstimateInfo;
 // number of tuples, attribute list
-typedef struct _RelInfo{
+typedef struct RelInfo_{
 	double numTuples;
 	bool hasJoined;
-	std::shared_ptr<AttInfo> atts;
-	std::shared_ptr<Subset> subset;
-	_RelInfo(double num) : numTuples(num), hasJoined(false), atts(nullptr), subset() { }
-	_RelInfo(_RelInfo && rhs) : numTuples(rhs.numTuples), hasJoined(rhs.hasJoined) {
+	AttInfo atts;
+	Subset subset;
+	RelInfo_(double num) : numTuples(num), hasJoined(false), atts(), subset() { }
+	RelInfo_(RelInfo_ && rhs) : numTuples(rhs.numTuples), hasJoined(rhs.hasJoined) {
 		atts = std::move(rhs.atts);
 		subset = std::move(rhs.subset);
 	}
-	_RelInfo& operator = (_RelInfo && rhs) {
+	RelInfo_ & operator = (RelInfo_ && rhs) {
 		numTuples = rhs.numTuples;
 		hasJoined = rhs.hasJoined;
 		atts = std::move(rhs.atts);
 		subset = std::move(rhs.subset);
 		return *this;
 	}
-	_RelInfo(const _RelInfo& rhs) : numTuples(rhs.numTuples), hasJoined(rhs.hasJoined), atts(rhs.atts), subset(rhs.subset) { }
-	_RelInfo & operator =(_RelInfo &rhs) {
-		numTuples = rhs.numTuples;
-		hasJoined = rhs.hasJoined;
-		atts = rhs.atts;
-		subset = rhs.subset;
-		return *this;
-	}
+	RelInfo_(const RelInfo_ & rhs) = delete;
+	RelInfo_ & operator =(RelInfo_ &rhs) = delete;
 	void AddAtt(std::string attName, long numDistincts) {
-		if(nullptr == atts) {
-			atts = std::make_shared<AttInfo>();
-			atts->emplace(attName, numDistincts);
-		} else {
-			auto p = atts->emplace(attName, numDistincts);
-			// if the attribute is in statisics, upadte number of distinct value of this attribute
-			if (false == p.second) {
-				//p.first = AttInfo::iterator point to the matched element
-				(p.first)->second = numDistincts;		
-			}
+		auto p = atts.emplace(attName, numDistincts);
+		// if the attribute is in statisics, upadte number of distinct value of this attribute
+		if (false == p.second) {
+			//p.first = AttInfo::iterator point to the matched element
+			(p.first)->second = numDistincts;		
 		}
 	}
 }RelInfo;
 
 // relation name, relation info: number of tuples, attribute list
-typedef std::unordered_map<std::string, RelInfo> Relations;
+typedef std::unordered_map<std::string, std::shared_ptr<RelInfo>> Relations;
 
 class Statistics {
 private:
 	Relations relations;
 	std::unordered_map<std::string, float> sizeParameters;
 	std::string InitAttsName (struct ComparisonOp *pCom);
-	std::pair<double, int> CheckAtts(std::string &name, AttInfo &latts, AttInfo &ratts);
+	double CheckAtts(std::string &name, AttInfo &latts, AttInfo &ratts);
 	std::pair<double, double> CheckAtts(std::string &lname, std::string &rname, AttInfo &latts, AttInfo &ratts);
 	void SetSelectivity(std::string &name, std::vector<std::string> &attNames, float &selToSet, float sel);
 	void BuildSubset(RelInfo &rel1, RelInfo &rel2, std::vector<std::string> &repOfSet); 
-	std::pair<double,float> EstimateProduct(std::vector<std::string> &relname);
-	std::pair<double,float> EstimateSelection(const struct AndList *pAnd, std::vector<std::string> &relname);
-	std::pair<double,float> EstimateJoin(const struct AndList *pAnd, std::vector<std::string> &relname);
-	std::pair<double,float> Simulate (const struct AndList *parseTree, char **relNames, int numToJoin, std::vector<std::string> &repOfSet);
+	EstimateInfo EstimateProduct(std::vector<std::string> &relname);
+	EstimateInfo EstimateSelection(const struct AndList *pAnd, std::vector<std::string> &relname);
+	EstimateInfo EstimateJoin(const struct AndList *pAnd, std::vector<std::string> &relname);
+	EstimateInfo Simulate (const struct AndList *parseTree, char **relNames, int numToJoin, std::vector<std::string> &repOfSet);
 	
 public:
 	Statistics();

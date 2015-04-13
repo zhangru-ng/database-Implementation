@@ -11,29 +11,23 @@ Statistics::Statistics (Statistics const &copyMe) {
 void Statistics::AddRel (char *relName, long numTuples) {
 	// if the relation name equal to NULL
 	if (nullptr == relName) {
-		cerr << "ERROR: Invalid relation name in AddRel\n";
+		cerr << "ERROR: Invalid relation name in AddRel!\n";
 		exit(1);
 	}
 	// add this relation in
-	auto p = relations.emplace(std::string(relName), RelInfo(numTuples));
+	auto p = relations.emplace(std::string(relName), std::make_shared<RelInfo>(numTuples));
 	// if the relation is in statisics, upadte number of tuples of this relation
 	if (false == p.second) {
-		RelInfo &rel = (p.first)->second;
+		auto relInfo_ptr = (p.first)->second;
 		//p.first = Relations::iterator point to the matched element
-		if (true == rel.hasJoined) {
-			for (std::string &name : *(rel.subset)) {
-				relations.at(name).numTuples = numTuples;
-			}
-		} else {
-			rel.numTuples = numTuples;
-		}		
+		relInfo_ptr->numTuples = numTuples;
 	} 
 }
 
 void Statistics::AddAtt (char *relName, char *attName, long numDistincts) {
 	//if the names are invalid, report and exit
 	if (nullptr == relName || nullptr == attName) {
-		cerr << "ERROR: Invalid relation name or attribute name in AddAtt\n";
+		cerr << "ERROR: Invalid relation name or attribute name in AddAtt!\n";
 		exit(1);
 	}
 	// if the relation is not in statisics, report error and exit
@@ -41,7 +35,11 @@ void Statistics::AddAtt (char *relName, char *attName, long numDistincts) {
 		cerr << "ERROR: Attempt to add attribute to non-exist relation!\n";
 		exit(1);
 	} 
-	relations.at(relName).AddAtt(attName, numDistincts);
+	if (relations.at(relName)->numTuples < numDistincts) {
+		cerr << "ERROR: Attempt to add distinct value greater than number of tuples!\n";
+		exit(1);
+	}
+	relations.at(relName)->AddAtt(attName, numDistincts);
 }
 
 void Statistics::CopyRel (char *oldName, char *newName) {
@@ -52,7 +50,7 @@ void Statistics::CopyRel (char *oldName, char *newName) {
 		exit(1);
 	}
 	// get number of tuples in old relaiton
-	RelInfo &old = iter->second;
+	RelInfo &old = *(iter->second);
 	if (old.hasJoined) {
 		cerr << "ERROR: Can't copy relations which have been joined!\n";
 	}
@@ -65,24 +63,12 @@ void Statistics::CopyRel (char *oldName, char *newName) {
 	RelInfo rel(old.numTuples);
 	rel.hasJoined = old.hasJoined;
 	//rename the attribute and add to attribute list
-	for (auto &att : *(old.atts)) {
+	for (auto &att : old.atts) {
 		std::string newAttName(newName);
 		newAttName += "." + att.first;
 		rel.AddAtt(newAttName, att.second);
 	}
-	//if the relation has joined, copy the subset list
-	// if (rel.hasJoined) {
-	// 	rel.subset = std::make_shared<Subset>();
-	// 	for (std::string const &name : *(old.subset)) {
-	// 		if(0 == name.compare(oldName)) {
-	// 			rel.subset->push_back(newName);
-	// 		} else {
-	// 			rel.subset->push_back(name);
-	// 		}			
-	// 	}
-	// }	
-	// //Add into relations with new name
-	relations.emplace(std::move(newName), std::move(rel));
+	relations.emplace(std::move(newName), std::make_shared<RelInfo>(std::move(rel)));
 }
 	
  void Statistics::Read (const char *fromWhere) {
@@ -95,8 +81,6 @@ void Statistics::CopyRel (char *oldName, char *newName) {
 	double numTuples, numDistincts;
 	relations.clear();
 	while (true) {
-		std::shared_ptr<AttInfo> attInfo = std::make_shared<AttInfo>();
-		std::shared_ptr<Subset> subSet = std::make_shared<Subset>();
 		infile >> relName;
 		if (!infile.good()) {
 			break;
@@ -109,35 +93,38 @@ void Statistics::CopyRel (char *oldName, char *newName) {
 			cerr << "ERROR: Malformed attribute list in Read\n";
 			exit(1);
 		}
+		// read the attribute list
 		while (true) {
 			infile >> attName;
 			if(attName == "}" || !infile.good()) {
 				break;
 			}
 			infile >> numDistincts;
-			attInfo->emplace(attName, numDistincts);
+			info.atts.emplace(attName, numDistincts);
 		}
-		info.atts = attInfo;		
 		if (info.hasJoined) {
+			// read the subset list
 			infile >> attName;
 			if ("[" != attName) {
 				cerr << "ERROR: Malformed subset list in Read\n";
 				exit(1);
 			}
+			Subset subset;
 			while (true) {
 				infile >> attName;	
 				if (attName == "]" || !infile.good()) {
 					break;
 				}		
-				subSet->push_back(attName);
-			} 
-			info.subset = subSet;
-			for (auto s : *subSet) {
-				relations.emplace(s, info);
+				subset.push_back(attName);
+			} 			
+			auto relInfo_ptr = std::make_shared<RelInfo>(std::move(info));
+			// all relation in the subset point to the same relaition infomation
+			for (auto  &s : subset) {
+				relations.insert(std::make_pair(s, relInfo_ptr));
 			}
-			
+			relInfo_ptr->subset = std::move(subset);			
 		} else {
-			relations.emplace(relName, info);
+			relations.emplace(relName, std::make_shared<RelInfo>(std::move(info)));
 		}		
 	}	
 }
@@ -152,16 +139,19 @@ void Statistics::Write (const char *fromWhere) {
 	for (auto const &rel : relations) {
 		if (names.end() == names.find(rel.first)) {
 			names.insert(rel.first);
-			outfile << rel.first << " " << rel.second.numTuples << endl;
-			outfile << rel.second.hasJoined << endl;
+			auto relInfo_ptr = rel.second;
+			outfile << rel.first << " " << relInfo_ptr->numTuples << endl;
+			outfile << relInfo_ptr->hasJoined << endl;
 			outfile << "{" <<  endl;
-			for (auto att : *(rel.second.atts)) {
+			// write out the attribute list, surround with curly braces
+			for (auto const &att : relInfo_ptr->atts) {
 				outfile << att.first << " " << att.second << endl;
 			}
 			outfile << "}" <<endl;
-			if (rel.second.hasJoined) {
+			if (relInfo_ptr->hasJoined) {
 				outfile << "[" << endl;
-				for (auto n : *(rel.second.subset)) {
+				// write out the subset list, surround with square braces
+				for (auto const &n : relInfo_ptr->subset) {
 					outfile << n << " ";
 					names.insert(n);
 				}
@@ -170,79 +160,73 @@ void Statistics::Write (const char *fromWhere) {
 			}
 		}		
 	}
-	// outfile << "END_STAT";
 }
 
 void Statistics::Apply (const struct AndList *parseTree, char *relNames[], int numToJoin) {
 	std::vector<std::string> repOfSet;
-	auto nsp = Simulate(parseTree, relNames, numToJoin, repOfSet);
-	double totNumTuples = std::get<0>(nsp);
-	float selectivity = std::get<1>(nsp);
+	auto estimateInfo = Simulate(parseTree, relNames, numToJoin, repOfSet);
+	double totNumTuples = std::get<0>(estimateInfo);
+	float selectivity = std::get<1>(estimateInfo);
 	// cout << "Apply:" << totNumTuples * selectivity << endl;	
-	RelInfo &rel1 = relations.at(repOfSet[0]);
-	AttInfo &atts1 = *(rel1.atts);
+	RelInfo &rel1 = *(relations.at(repOfSet[0]));
+	AttInfo &atts1 = rel1.atts;
 	rel1.numTuples = totNumTuples * selectivity;
-	for (auto &att : atts1) {
+	for (auto &att1 : atts1) {
 		// attInfo->emplace(att.first, UNKNOWN != att.second ? att.second * leftSel : UNKNOWN);
-		if(UNKNOWN != att.second) {
-			double numDistincts = att.second * selectivity;
-			att.second = (numDistincts < 1) ? 1: numDistincts;
+		if(UNKNOWN != att1.second) {
+			double numDistincts = att1.second * selectivity;
+			// distinct value is at lease 1
+			att1.second = (numDistincts < 1) ? 1: numDistincts;
 		}
 	}
 	int numSets = repOfSet.size();
 	if (2 == repOfSet.size()) {
-		RelInfo &rel2 = relations.at(repOfSet[1]);
-		AttInfo &atts2 = *(rel2.atts);
+		RelInfo &rel2 = *(relations.at(repOfSet[1]));
+		AttInfo &atts2 = rel2.atts;
 		// Build the new attribute list
-		for (auto const &att : atts2) {
+		for (auto const &att2 : atts2) {
 			double numDistincts = UNKNOWN;
-			if (UNKNOWN != att.second) {
-				numDistincts = att.second * selectivity;
+			if (UNKNOWN != att2.second) {
+				numDistincts = att2.second * selectivity;
+				// distinct value is at lease 1
 				numDistincts = (numDistincts < 1) ? 1: numDistincts;
 			}
 			// atts->emplace(att.first, UNKNOWN != att.second ? att.second * rightSel : UNKNOWN);
-			atts1.emplace(att.first, numDistincts);
+			atts1.emplace(att2.first, numDistincts);
 		}
-		// Build the subset list	
-		BuildSubset(rel1, rel2, repOfSet);		
-		rel2.atts = rel1.atts;
-		rel2.numTuples = rel1.numTuples;
 		rel1.hasJoined = true;
-		rel2.hasJoined = true;
+		// Build the subset list
+		// if subset of relation 1 is empty, add itself to the subset
+		if(0 == rel1.subset.size()) {
+			rel1.subset.push_back(repOfSet[0]);
+		}  
+		// similarily for relation 2
+		if (0 == rel2.subset.size()) {
+			rel1.subset.push_back(repOfSet[1]);
+			// make relation 2 point to the same RelInfo as relation 1
+			relations.at(repOfSet[1]) = relations.at(repOfSet[0]);
+		} else {
+			// if relation 2 has subset, make all of the subset point to the same RelInfo as relation 1
+			for (std::string &name : rel2.subset) {
+				rel1.subset.push_back(name);
+				relations.at(name) = relations.at(repOfSet[0]);
+			}
+		}	
 	}	
-}
-
-void Statistics::BuildSubset(RelInfo &rel1, RelInfo &rel2, std::vector<std::string> &repOfSet) {
-	if (!rel1.subset && !rel2.subset) {
-		std::shared_ptr<Subset> subSet = std::make_shared<Subset>(repOfSet);
-		rel1.subset = subSet;
-		rel2.subset = subSet;
-	} else if (!rel1.subset) {
-		rel2.subset->push_back(repOfSet[0]);
-		rel1.subset = rel2.subset;
-	} else if (!rel2.subset) {
-		rel1.subset->push_back(repOfSet[1]);
-		rel2.subset = rel1.subset;
-	} else {
-		for (std::string &name : *(rel2.subset)) {
-			rel1.subset->push_back(name);
-		}
-		rel2.subset = rel1.subset;
-	}
 }
 
 double Statistics::Estimate (const struct AndList *parseTree, char **relNames, int numToJoin) {
 	std::vector<std::string> repOfSet;
 	//number of tuples and selectivity pair
-	auto nsp = Simulate(parseTree, relNames, numToJoin, repOfSet);
-	double totNumTuples = std::get<0>(nsp);
-	float selectivity = std::get<1>(nsp);
+	auto estimateInfo = Simulate(parseTree, relNames, numToJoin, repOfSet);
+	double totNumTuples = std::get<0>(estimateInfo);
+	float selectivity = std::get<1>(estimateInfo);
 	// cout << "Estimate" << totNumTuples * selectivity << endl;
 	return totNumTuples * selectivity;
 
 }
 
-std::pair<double,float> Statistics::Simulate (const struct AndList *parseTree, char **relNames, int numToJoin, std::vector<std::string> &repOfSet) {
+EstimateInfo Statistics::Simulate (const struct AndList *parseTree, char **relNames, int numToJoin, std::vector<std::string> &repOfSet) {
 	std::unordered_set<std::string> relToJoin;
 	for (int i = 0; i < numToJoin; i++) {
 		//if the relations to join is not in current statistics, report error and exit
@@ -250,13 +234,8 @@ std::pair<double,float> Statistics::Simulate (const struct AndList *parseTree, c
 			cerr << "ERROR: Current statistics does not contain " << relNames[i] << endl;
 			exit(1);
 		}
-		//otherwis hash them into a hash table relToJoin
-		if (relations.at(relNames[i]).hasJoined) {
-			Subset &names = *(relations.at(relNames[i]).subset);
-			for (auto const &srel : names) {
-				relToJoin.emplace(srel);
-			}
-		} else {
+		//otherwise only hash it into the table
+		else {
 			relToJoin.emplace(relNames[i]);
 		}
 		
@@ -268,11 +247,11 @@ std::pair<double,float> Statistics::Simulate (const struct AndList *parseTree, c
 		auto iter = relations.find(*rel);
 		repOfSet.push_back(iter->first);
 		//get the subset list of first element in the table
-		if (false == iter->second.hasJoined) {
+		if (false == iter->second->hasJoined) {
 			//erase this element in the hash table after get its subset member
 			relToJoin.erase(rel);
 		} else {
-			Subset &names = *(iter->second.subset);		
+			Subset &names = iter->second->subset;		
 			//for each elements in the subset 
 			for (auto const &srel : names) {
 				//if one of the elements in the subset is not in relations to join, this join does not make sense
@@ -288,28 +267,33 @@ std::pair<double,float> Statistics::Simulate (const struct AndList *parseTree, c
 		}		
 		++numSet;
 	}
+	// if all "relations" belong to the same subset
 	if (1 == numSet) {
+		// estimate selection when the parse tree is not empty
 		if (nullptr != parseTree) {
 			return EstimateSelection(parseTree, repOfSet);
 		}		
 	} else if (2 == numSet) {
+		// estimate cross product when the parse tree is empty
 		if (nullptr == parseTree) {
 			return EstimateProduct(repOfSet);
 		} else {
 			return EstimateJoin(parseTree, repOfSet);
 		}
 	} else {
+		// each time only estimate operations on one or two relations
 		cerr << "ERRPR: Attempt to perform operation on more than 2 relations!\n";
 		exit(1);
 	}
 }
 
-std::pair<double,float> Statistics::EstimateSelection(const struct AndList *pAnd, std::vector<std::string> &relname) {		
+// estimate cost of selection when all "relations" belong to the same subset
+EstimateInfo Statistics::EstimateSelection(const struct AndList *pAnd, std::vector<std::string> &relname) {		
 	struct OrList *pOr = pAnd->left;
 	struct ComparisonOp *pCom = pOr->left;
 	std::string name = InitAttsName(pCom);
-	RelInfo &rel = relations.at(relname[0]);
-	AttInfo &atts = *(rel.atts);
+	RelInfo &rel = *(relations.at(relname[0]));
+	AttInfo &atts = rel.atts;
 	float totSel = 1.0f;
 	std::vector<std::string> attNames; 
 	while (pAnd != nullptr) {
@@ -318,16 +302,21 @@ std::pair<double,float> Statistics::EstimateSelection(const struct AndList *pAnd
 		while (pOr != nullptr) {
 			struct ComparisonOp *pCom = pOr->left;
 			std::string name = InitAttsName(pCom);
+			// since all "relations" belong to the same subset, which means only one relation in this estimation
+			// check if the attribute in this relation's attribute list
 			auto iter = atts.find(name);
 			if(atts.end() == iter) {
 				cerr << "ERROR: Attempt to select on non-exist attribute! " << name << "\n";
 				exit(1);
 			}
-			int op = pCom->code;			
+			int op = pCom->code;
+			// equal seletion: selectivity = 1 / V(A)
+			// non-equal seletion: selectivity = 1 / 3
 			float sel =  (EQUALS == op) ? 1.0f / atts[name] : 1.0f / 3;			
 			SetSelectivity(name, attNames, orSel, sel);
 			pOr = pOr->rightOr;
 		}
+		// multiply selectivities from each or list
 		totSel *= orSel;
 		attNames.clear();
 		pAnd = pAnd->rightAnd;
@@ -339,9 +328,10 @@ std::pair<double,float> Statistics::EstimateSelection(const struct AndList *pAnd
 	return std::make_pair(rel.numTuples, totSel);
 }
 
+// initial attribute name from parse tree
 std::string Statistics::InitAttsName (struct ComparisonOp *pCom) {
 	int op = pCom->code;
-	// NAME , value | value , name
+	// NAME , value | value , NAME
 	if (pCom->left->code == NAME) {
 		return std::string(pCom->left->value);				
 	} else {
@@ -349,11 +339,12 @@ std::string Statistics::InitAttsName (struct ComparisonOp *pCom) {
 	}
 }
 
-std::pair<double,float> Statistics::EstimateJoin(const struct AndList *pAnd, std::vector<std::string> &relname) {
-	RelInfo &lrel = relations.at(relname[0]);
-	RelInfo &rrel = relations.at(relname[1]);
-	AttInfo &latts = *(lrel.atts);
-	AttInfo &ratts = *(rrel.atts);
+// estimate cost of joining two relation, maybe along with some selections
+EstimateInfo Statistics::EstimateJoin(const struct AndList *pAnd, std::vector<std::string> &relname) {
+	RelInfo &lrel = *(relations.at(relname[0]));
+	RelInfo &rrel = *(relations.at(relname[1]));
+	AttInfo &latts = lrel.atts;
+	AttInfo &ratts = rrel.atts;
 	double totTuples;
 	float totSel = 1.0f;
 	while (pAnd != nullptr) {
@@ -365,26 +356,29 @@ std::pair<double,float> Statistics::EstimateJoin(const struct AndList *pAnd, std
 			int op = pCom->code;
 			int lOperand = pCom->left->code;
 			int rOperand = pCom->right->code;
-			// NAME op NAME  
+			// NAME op NAME  (NAME = 4, thus NAME | NAME = 4)
 			if (NAME == (lOperand | rOperand)) {
 				std::string lname(pCom->left->value);
-				std::string rname(pCom->right->value);				
+				std::string rname(pCom->right->value);
+				// check if each of the two attributes belong to the relations
 				auto numDistinctsPair = CheckAtts(lname, rname, latts, ratts);
 				double lTuples = lrel.numTuples;
 				double rTuples = rrel.numTuples;
-				double max = std::max(numDistinctsPair.first, numDistinctsPair.second);
+				double max = std::max(numDistinctsPair.first, numDistinctsPair.second);				
 				if (EQUALS == op) {
+					// equal join : number of tuples = (T(R) * T(S)) / max{V(A), V(B)}
 					totTuples = (lTuples * rTuples) / max;
 				} else {
-					totTuples = (lTuples * rTuples) / (3 * max);
+					// non-equal join : number of tuples = (1/3) * (T(R) * T(S)) 
+					totTuples = (lTuples * rTuples) / 3;
 				}				
 			}
-			// NAME op value | value op name
+			// NAME op value | value op name (NAME = 4 other = [1, 3], thus NAME | other > 4)
 			else if (lOperand | rOperand > 4) {
 				std::string name = InitAttsName(pCom);
 				//pair store the number of distinct and which side the attribute belong to
-				auto DistSidePair = CheckAtts(name, latts, ratts);
-				float sel =  (EQUALS == op) ? 1.0f / DistSidePair.first : 1.0f / 3;
+				double distinct = CheckAtts(name, latts, ratts);
+				float sel =  (EQUALS == op) ? 1.0f / distinct : 1.0f / 3;
 				SetSelectivity(name, attNames, orSel, sel);
 			} else {
 				cout << "ERROR: Both operands are literals\n";
@@ -402,8 +396,8 @@ std::pair<double,float> Statistics::EstimateJoin(const struct AndList *pAnd, std
 	return std::make_pair(totTuples, totSel);
 }
 
-std::pair<double,float> Statistics::EstimateProduct(std::vector<std::string> &relname) {
-	return std::make_pair(relations.at(relname[0]).numTuples * relations.at(relname[1]).numTuples, 1);
+EstimateInfo Statistics::EstimateProduct(std::vector<std::string> &relname) {
+	return std::make_pair(relations.at(relname[0])->numTuples * relations.at(relname[1])->numTuples, 1);
 }
 
 void Statistics::SetSelectivity(std::string &name, std::vector<std::string> &attNames, float &selToSet, float sel) {
@@ -425,8 +419,7 @@ void Statistics::SetSelectivity(std::string &name, std::vector<std::string> &att
 	selToSet = selToSet < 1 ? selToSet : 1;
 }
 
-std::pair<double, int> Statistics::CheckAtts(std::string &name, AttInfo &latts, AttInfo &ratts) {
-	int side;
+double Statistics::CheckAtts(std::string &name, AttInfo &latts, AttInfo &ratts) {
 	auto iter = latts.find(name);
 	//if the attribute is not in left relation
 	if (iter == latts.end()) {
@@ -437,13 +430,16 @@ std::pair<double, int> Statistics::CheckAtts(std::string &name, AttInfo &latts, 
 			exit(1);
 		}
 	}
-	return std::make_pair(iter->second, side);
+	return iter->second;
 }
 
 
 std::pair<double, double> Statistics::CheckAtts(std::string &lname, std::string &rname, AttInfo &latts, AttInfo &ratts) {
 	auto liter = latts.find(lname);
 	auto riter = ratts.find(rname);
+	// There are only two cases:
+	// 1.left attribute name belong to left attribute list, right attribute name belong to right attribute list
+	// 2.right attribute name belong to left attribute list, left attribute name belong to right attribute list
 	if (liter == latts.end() || riter == ratts.end()) {
 		liter = ratts.find(lname);
 		riter = latts.find(rname);
@@ -458,21 +454,25 @@ std::pair<double, double> Statistics::CheckAtts(std::string &lname, std::string 
 void Statistics::Print () const {
 	std::unordered_set<std::string> names;
 	for (auto const &rel : relations) {
+		// avoid visit relations belong to the same subset twice
 		if (names.end() == names.find(rel.first)) {
 			names.insert(rel.first);
-			cout <<  "Relation name: " << rel.first << " | num of tuples: " << rel.second.numTuples << endl;
-			cout << (rel.second.hasJoined ? "Joined" : "Not joined") << endl;
+			cout <<  "Relation name: " << rel.first << " | num of tuples: " << rel.second->numTuples << endl;
+			cout << (rel.second->hasJoined ? "Joined" : "Not joined") << endl;
 			cout << "Attribute list: " << endl;
 			cout << "{" <<  endl;
-			for (auto att : *(rel.second.atts)) {
-				cout << att.first << " " << att.second << endl;
+			// print attribute list
+			for (auto const &att : rel.second->atts) {
+				cout << "\t" << att.first << " " << att.second << endl;
 			}
 			cout << "}" <<endl;			
-			if (rel.second.hasJoined) {
+			if (rel.second->hasJoined) {
+				// print subset list
 				cout << "Subset list: " << endl;
 				cout << "[" << endl;
-				for (auto n : *(rel.second.subset)) {
+				for (auto const &n : rel.second->subset) {
 					cout << n << " ";
+					// insert subset member into visited relation set
 					names.insert(n);
 				}
 				cout << endl;
