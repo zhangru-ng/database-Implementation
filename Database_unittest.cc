@@ -1,10 +1,11 @@
 #include <limits.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <assert.h>
 #include "DBFile.h"
 #include "BigQ.h"
 #include "RelOp.h"
+#include "Statistics.h"
+#include "ParseTree.h"
 #include "gtest/gtest.h"
 
 string tbl_prefix = "/cise/homes/rui/Desktop/testfiles/10M_table/";
@@ -21,6 +22,7 @@ extern "C" {
 	void close_lexical_parser (); // defined in lex.yy.c
 	void init_lexical_parser_func (char *); // defined in lex.yyfunc.c (from Lexerfunc.l)
 	void close_lexical_parser_func (); // defined in lex.yyfunc.c
+	struct YY_BUFFER_STATE *yy_scan_string(const char*);
 }
 extern FILE * yyin;
 extern struct AndList *final;
@@ -300,7 +302,7 @@ protected:
 		dbfile.Create(testFile_path[0].c_str(), heap , 0);
 		dbfile.Load (f_schema, tbl_dir.c_str());			
 	}
-    static void TearDownTestCase() {
+	static void TearDownTestCase() {
 		dbfile.Close();
 		remove(testFile_path[0].c_str());
 		remove(headFile_path[0].c_str());
@@ -1138,6 +1140,417 @@ TEST_F(RelOpTest, WriteOut) {
 	EXPECT_EQ( 1500, count );
 	fclose(writefile);
 }
+
+/*
+ * Statistics unit test
+ * Written by Rui 2015.04.13	
+ */ 
+string StatFileName = "dbfile/Statistics.txt";
+class StatisticsTest : public ::testing::Test {
+protected:
+	Statistics s;
+};
+
+TEST_F(StatisticsTest, EqualSeletion) {
+	char *relName[] = {"R"};	
+	s.AddRel(relName[0],10000);
+	s.AddAtt(relName[0], "R.a",10);
+	char *cnf = "(R.a = 10)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 1);
+	EXPECT_NEAR(1000, result, 0.1);
+}
+
+TEST_F(StatisticsTest, NonEqualSeletion) {
+	char *relName[] = {"R"};	
+	s.AddRel(relName[0],30000);
+	s.AddAtt(relName[0], "R.a",UNKNOWN);
+	char *cnf = "(R.a > 10)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 1);
+	EXPECT_NEAR(10000, result, 0.1);
+}
+
+TEST_F(StatisticsTest, DependentOR) {
+	char *relName[] = {"R"};	
+	s.AddRel(relName[0],30000);
+	s.AddAtt(relName[0], "R.a", 30);
+	char *cnf = "(R.a = 10 OR R.a = 20)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 1);
+	EXPECT_NEAR(2000, result, 0.1);
+}
+
+TEST_F(StatisticsTest, IndependentOR) {
+	char *relName[] = {"R"};	
+	s.AddRel(relName[0],30000);
+	s.AddAtt(relName[0], "R.a",UNKNOWN);
+	s.AddAtt(relName[0], "R.b",10);
+	char *cnf = "(R.a > 10 OR R.b = 5)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 1);
+	EXPECT_NEAR(12000, result, 0.1);
+}
+
+TEST_F(StatisticsTest, SelectionAND) {
+	char *relName[] = {"R"};	
+	s.AddRel(relName[0],30000);
+	s.AddAtt(relName[0], "R.a",UNKNOWN);
+	s.AddAtt(relName[0], "R.b",10);
+	char *cnf = "(R.a > 10) AND (R.b = 5)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 1);
+	EXPECT_NEAR(1000, result, 0.1);
+}
+
+TEST_F(StatisticsTest, SelectionANDwithOrList) {
+	char *relName[] = {"R"};	
+	s.AddRel(relName[0],30000);
+	s.AddAtt(relName[0], "R.a",UNKNOWN);
+	s.AddAtt(relName[0], "R.b",3);
+	s.AddAtt(relName[0], "R.c",10);
+	char *cnf = "(R.a > 10) AND (R.b = 5 OR R.c = 10)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 1);
+	EXPECT_NEAR(4000, result, 0.1);
+}
+
+TEST_F(StatisticsTest, EqualJoin) {
+	char *relName[] = {"R", "S"};	
+	s.AddRel(relName[0],30000);
+	s.AddRel(relName[1],100000);
+	s.AddAtt(relName[0], "R.a",1000);
+	s.AddAtt(relName[1], "S.b",5000);
+	char *cnf = "(R.a = S.b)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 2);
+	EXPECT_NEAR(600000, result, 0.1);
+}
+
+//*******************some problem with distinct value
+TEST_F(StatisticsTest, NonEqualJoin) {
+	char *relName[] = {"R", "S"};	
+	s.AddRel(relName[0],3000);
+	s.AddRel(relName[1],10000);
+	s.AddAtt(relName[0], "R.a",UNKNOWN);
+	s.AddAtt(relName[1], "S.b",UNKNOWN);
+	char *cnf = "(R.a > S.b)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 2);
+	EXPECT_NEAR(10000000, result, 0.1);
+}
+
+TEST_F(StatisticsTest, EqualJoinThreeRelation) {
+	char *relName[] = {"R", "S", "T"};	
+	s.AddRel(relName[0],30000);
+	s.AddRel(relName[1],100000);
+	s.AddRel(relName[2],20000);
+	s.AddAtt(relName[0], "R.a",1000);
+	s.AddAtt(relName[1], "S.b",5000);
+	s.AddAtt(relName[2], "T.c",10000);
+	char *cnf = "(R.a = S.b)";
+	yy_scan_string(cnf);
+	yyparse();
+	s.Apply(final, relName, 2);
+	cnf = "(R.a = T.c)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 3);
+	EXPECT_NEAR(1200000, result, 0.1);
+}
+
+TEST_F(StatisticsTest, EqualJoinFourRelation) {
+	char *relName[] = {"R", "S", "T", "U"};	
+	s.AddRel(relName[0],30000);
+	s.AddRel(relName[1],100000);
+	s.AddRel(relName[2],20000);
+	s.AddRel(relName[3],50000);
+	s.AddAtt(relName[0], "R.a",1000);
+	s.AddAtt(relName[1], "S.b",5000);
+	s.AddAtt(relName[2], "T.c",10000);
+	s.AddAtt(relName[3], "U.d",10000);
+	char *cnf = "(R.a = S.b)";
+	yy_scan_string(cnf);
+	yyparse();
+	s.Apply(final, relName, 2);
+	cnf = "(R.a = T.c)";
+	yy_scan_string(cnf);
+	yyparse();
+	s.Apply(final, relName, 3);
+	cnf = "(U.d = T.c)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 4);
+	EXPECT_NEAR(6000000, result, 0.1);
+}
+
+TEST_F(StatisticsTest, EqualJoinAndSelect) {
+	char *relName[] = {"R", "S"};	
+	s.AddRel(relName[0],30000);
+	s.AddRel(relName[1],100000);
+	s.AddAtt(relName[0], "R.a",1000);
+	s.AddAtt(relName[1], "S.b",5000);
+	char *cnf = "(R.a = S.b) AND (R.a = 2)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 2);
+	EXPECT_NEAR(600, result, 0.1);
+}
+
+TEST_F(StatisticsTest, EqualJoinAndSelectOrList) {
+	char *relName[] = {"R", "S"};	
+	s.AddRel(relName[0],30000);
+	s.AddRel(relName[1],100000);
+	s.AddAtt(relName[0], "R.a",100);
+	s.AddAtt(relName[1], "S.b",300);
+	char *cnf = "(R.a = S.b) AND (R.a = 2 OR S.b = 100)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 2);
+	EXPECT_NEAR(133000, result, 0.1);
+}
+
+TEST_F(StatisticsTest, EqualJoinAndSelectAndList) {
+	char *relName[] = {"R", "S"};	
+	s.AddRel(relName[0],30000);
+	s.AddRel(relName[1],100000);
+	s.AddAtt(relName[0], "R.a",100);
+	s.AddAtt(relName[1], "S.b",200);
+	char *cnf = "(R.a = S.b) AND (R.a = 2) AND (S.b = 100)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 2);
+	EXPECT_NEAR(750, result, 0.1);
+}
+
+TEST_F(StatisticsTest, EqualJoinAfterApplySelect) {
+	char *relName[] = {"R", "S"};	
+	s.AddRel(relName[0],30000);
+	s.AddRel(relName[1],100000);
+	s.AddAtt(relName[0], "R.a",100);
+	s.AddAtt(relName[1], "S.b",200);
+	char *cnf = "(R.a = 2)";
+	yy_scan_string(cnf);
+	yyparse();
+	s.Apply(final, relName, 1);
+	cnf = "(R.a = S.b)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 2);
+	EXPECT_NEAR(150000, result, 0.1);
+}
+
+TEST_F(StatisticsTest, SelectAfterApplyEqualJoin) {
+	char *relName[] = {"R", "S"};	
+	s.AddRel(relName[0],30000);
+	s.AddRel(relName[1],100000);
+	s.AddAtt(relName[0], "R.a",100);
+	s.AddAtt(relName[1], "S.b",200);
+	char *cnf = "(R.a = S.b)";
+	yy_scan_string(cnf);
+	yyparse();
+	s.Apply(final, relName, 2);
+	cnf = "(R.a = 2)";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, relName, 2);
+	EXPECT_NEAR(150000, result, 0.1);
+}
+
+TEST_F(StatisticsTest, ReadAndWrite1) {
+	char *relName[] = {"R", "S"};	
+	s.AddRel(relName[0],30000);
+	s.AddRel(relName[1],100000);
+	s.AddAtt(relName[0], "R.a",100);
+	s.AddAtt(relName[1], "S.b",200);
+	char *cnf = "(R.a = 2)";
+	yy_scan_string(cnf);
+	yyparse();
+	s.Apply(final, relName, 1);
+	s.Write(StatFileName.c_str());
+	cnf = "(R.a = S.b)";
+	yy_scan_string(cnf);
+	yyparse();
+	Statistics s1;
+	s1.Read(StatFileName.c_str());
+	double result = s1.Estimate(final, relName, 2);
+	EXPECT_NEAR(150000, result, 0.1);
+	remove(StatFileName.c_str());
+}
+
+TEST_F(StatisticsTest, ReadAndWrite2) {
+	char *relName[] = {"R", "S", "T"};	
+	s.AddRel(relName[0],30000);
+	s.AddRel(relName[1],100000);
+	s.AddRel(relName[2],20000);
+	s.AddAtt(relName[0], "R.a",1000);
+	s.AddAtt(relName[1], "S.b",5000);
+	s.AddAtt(relName[2], "T.c",10000);
+	char *cnf = "(R.a = S.b)";
+	yy_scan_string(cnf);
+	yyparse();
+	s.Apply(final, relName, 2);
+	s.Write(StatFileName.c_str());
+	cnf = "(R.a = T.c)";
+	yy_scan_string(cnf);
+	yyparse();
+	Statistics s1;
+	s1.Read(StatFileName.c_str());
+	double result = s1.Estimate(final, relName, 3);
+	EXPECT_NEAR(1200000, result, 0.1);	
+	remove(StatFileName.c_str());
+}
+
+TEST_F(StatisticsTest, CopyRelation) {
+	char *relName[] = {"R","S","T"};
+	s.AddRel(relName[0],10000);
+	s.AddAtt(relName[0], "a",25);
+	s.AddRel(relName[1],150000);
+	s.AddAtt(relName[1], "b",150000);
+	s.AddAtt(relName[1], "c",25);
+	s.AddRel(relName[2],25);
+	s.AddAtt(relName[2], "d",25);
+
+	s.CopyRel("T","t1");
+	s.CopyRel("T","t2");
+	s.CopyRel("R","r");
+	s.CopyRel("S","s");
+
+	char *set1[] ={"r","t1"};
+	char *cnf = "(r.a = t1.d)";
+	yy_scan_string(cnf);
+	yyparse();	
+	s.Apply(final, set1, 2);
+	
+	char *set2[] ={"s","t2"};
+	cnf = "(s.c = t2.d)";
+	yy_scan_string(cnf);
+	yyparse();
+	s.Apply(final, set2, 2);
+
+	char *set3[] = {"s","r","t1","t2"};
+	cnf = " (t1.d = t2.d )";
+	yy_scan_string(cnf);
+	yyparse();
+	double result = s.Estimate(final, set3, 4);
+	EXPECT_NEAR(60000000, result, 0.1);
+}
+
+
+TEST(StatisticsDeathTest, AddNumDistinctLargerThanNumTuples) {
+	::testing::FLAGS_gtest_death_test_style = "threadsafe";
+	Statistics s;
+	 char *relName[] = {"R"};	
+	s.AddRel(relName[0],10);	
+	EXPECT_DEATH( s.AddAtt(relName[0], "R.a", 11), "ERROR: Attempt to add distinct value greater than number of tuples!");
+}
+
+TEST(StatisticsDeathTest, AddNumDistinctToNonExistRelation) {
+	::testing::FLAGS_gtest_death_test_style = "threadsafe";
+	Statistics s;
+	char *relName[] = {"R"};	
+	s.AddRel(relName[0],10);	
+	EXPECT_DEATH( s.AddAtt("S", "R.a", 1), "ERROR: Attempt to add attribute to non-exist relation!");
+}
+
+TEST(StatisticsDeathTest, AddNullRelation) {
+	::testing::FLAGS_gtest_death_test_style = "threadsafe";
+	Statistics s;
+	
+	EXPECT_DEATH( s.AddRel(nullptr, 10), "ERROR: Invalid relation name in AddRel!");
+}
+
+TEST(StatisticsDeathTest, AddNullAttribute) {
+	::testing::FLAGS_gtest_death_test_style = "threadsafe";
+	Statistics s;
+	 char *relName[] = {"R"};	
+	s.AddRel(relName[0],10);	
+	EXPECT_DEATH( s.AddAtt("R", nullptr, 1), "ERROR: Invalid relation name or attribute name in AddAtt!");
+}
+
+TEST(StatisticsDeathTest,SelectNonExistAttribute) {
+	::testing::FLAGS_gtest_death_test_style = "threadsafe";
+	Statistics s;
+	char *relName[] = {"R"};	
+	s.AddRel(relName[0],1000);
+	char *cnf = "(R.a = 1)";
+	yy_scan_string(cnf);
+	yyparse();
+	EXPECT_DEATH( s.Estimate(final, relName, 1), "ERROR: Attempt to select on non-exist attribute! R.a");
+}
+
+TEST(StatisticsDeathTest, JoinNonExistAttribute) {
+	::testing::FLAGS_gtest_death_test_style = "threadsafe";
+	Statistics s;
+	char *relName[] = {"R", "S"};
+	s.AddRel(relName[0],100);
+	s.AddRel(relName[1],200);
+	s.AddAtt(relName[1], "S.b",10);
+	char *cnf = "(R.a = S.b)";
+	yy_scan_string(cnf);
+	yyparse();
+	EXPECT_DEATH( s.Estimate(final, relName, 2), "ERROR: Attempt to join on non-exist attribute! R.a=S.b");
+}
+
+TEST(StatisticsDeathTest, SelectNonExistRelation) {
+	::testing::FLAGS_gtest_death_test_style = "threadsafe";
+	Statistics s;
+	char *relName[] = {"R"};
+	char *wrongName[] = {"S"};
+	s.AddRel(relName[0],100);
+	s.AddAtt(relName[0], "R.a",10);
+	char *cnf = "(R.a = 1)";
+	yy_scan_string(cnf);
+	yyparse();
+	EXPECT_DEATH( s.Estimate(final, wrongName, 1), "ERROR: Current statistics does not contain S");
+}
+
+TEST(StatisticsDeathTest, JoinNonExistRelation) {
+	::testing::FLAGS_gtest_death_test_style = "threadsafe";
+	Statistics s;
+	char *relName[] = {"R", "S"};
+	char *wrongName[] = {"R", "T"};
+	s.AddRel(relName[0],100);
+	s.AddRel(relName[1],200);
+	s.AddAtt(relName[1], "S.b",10);
+	char *cnf = "(R.a = S.b)";
+	yy_scan_string(cnf);
+	yyparse();
+	EXPECT_DEATH( s.Estimate(final, wrongName, 2), "ERROR: Current statistics does not contain T");
+}
+
+TEST(StatisticsDeathTest, JoinIncompleteSubset) {
+	::testing::FLAGS_gtest_death_test_style = "threadsafe";
+	Statistics s;
+	char *relName[] = {"R", "S"};
+	s.AddRel(relName[0],100);
+	s.AddRel(relName[1],100);	
+	s.AddAtt(relName[0], "R.a",10);
+	s.AddAtt(relName[1], "S.b",10);
+	char *cnf = "(R.a = S.b)";
+	yy_scan_string(cnf);
+	yyparse();
+	s.Apply(final, relName, 2);
+	s.Write(StatFileName.c_str());
+	Statistics s1;
+	s1.Read(StatFileName.c_str());
+	char *relName2[] = {"T", "R"};
+	s1.AddRel(relName2[0],100);
+	s1.AddAtt(relName2[0], "T.c",10);
+	cnf = "(R.a = T.c)";
+	yy_scan_string(cnf);
+	yyparse();
+	EXPECT_DEATH( s1.Estimate(final, relName2, 2), "ERROR: Attempt to join incomplete subset members");
+}
+
 
 GTEST_API_ int main(int argc, char **argv) {
 	printf("Running main() from gtest_main.cc\n");
