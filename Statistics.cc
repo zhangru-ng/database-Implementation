@@ -8,14 +8,14 @@ Statistics::Statistics (Statistics const &copyMe) {
 	relations = copyMe.relations;
 }
 
-void Statistics::AddRel (char *relName, long numTuples) {
+void Statistics::AddRel (char *relNames, long numTuples) {
 	// if the relation name equal to NULL
-	if (nullptr == relName) {
+	if (nullptr == relNames) {
 		cerr << "ERROR: Invalid relation name in AddRel!\n";
 		exit(1);
 	}
 	// add this relation in
-	auto p = relations.emplace(std::string(relName), std::make_shared<RelInfo>(numTuples));
+	auto p = relations.emplace(std::string(relNames), std::make_shared<RelInfo>(numTuples));
 	// if the relation is in statisics, upadte number of tuples of this relation
 	if (false == p.second) {
 		auto relInfo_ptr = (p.first)->second;
@@ -24,22 +24,22 @@ void Statistics::AddRel (char *relName, long numTuples) {
 	} 
 }
 
-void Statistics::AddAtt (char *relName, char *attName, long numDistincts) {
+void Statistics::AddAtt (char *relNames, char *attName, long numDistincts) {
 	//if the names are invalid, report and exit
-	if (nullptr == relName || nullptr == attName) {
+	if (nullptr == relNames || nullptr == attName) {
 		cerr << "ERROR: Invalid relation name or attribute name in AddAtt!\n";
 		exit(1);
 	}
 	// if the relation is not in statisics, report error and exit
-	if (relations.find(relName) == relations.end()) {
+	if (relations.find(relNames) == relations.end()) {
 		cerr << "ERROR: Attempt to add attribute to non-exist relation!\n";
 		exit(1);
 	} 
-	if (relations.at(relName)->numTuples < numDistincts) {
+	if (relations.at(relNames)->numTuples < numDistincts) {
 		cerr << "ERROR: Attempt to add distinct value greater than number of tuples!\n";
 		exit(1);
 	}
-	relations.at(relName)->AddAtt(attName, numDistincts);
+	relations.at(relNames)->AddAtt(attName, numDistincts);
 }
 
 void Statistics::CopyRel (char *oldName, char *newName) {
@@ -76,12 +76,12 @@ void Statistics::CopyRel (char *oldName, char *newName) {
 	if (!infile.is_open()) {
 		return;
 	}
-	std::string relName;
+	std::string relNames;
 	std::string attName;
 	double numTuples, numDistincts;
 	relations.clear();
 	while (true) {
-		infile >> relName;
+		infile >> relNames;
 		if (!infile.good()) {
 			break;
 		}
@@ -124,7 +124,7 @@ void Statistics::CopyRel (char *oldName, char *newName) {
 			}
 			relInfo_ptr->subset = std::move(subset);			
 		} else {
-			relations.emplace(relName, std::make_shared<RelInfo>(std::move(info)));
+			relations.emplace(relNames, std::make_shared<RelInfo>(std::move(info)));
 		}		
 	}	
 }
@@ -162,7 +162,7 @@ void Statistics::Write (const char *fromWhere) {
 	}
 }
 
-void Statistics::Apply (const struct AndList *parseTree, char *relNames[], int numToJoin) {
+void Statistics::Apply (const struct AndList *parseTree, char **relNames, int numToJoin) {
 	std::vector<std::string> repOfSet;
 	auto estimateInfo = Simulate(parseTree, relNames, numToJoin, repOfSet);
 	double totNumTuples = std::get<0>(estimateInfo);
@@ -482,4 +482,185 @@ void Statistics::Print () const {
 		cout << endl;
 	}	
 	cout << endl;
+}
+
+
+
+void Statistics::SeparatePredicate(struct AndList *pAnd, char **relNames, int numToJoin, std::unordered_map<std::string, predicate> &selectList, std::vector<JoinRelInfo> &joinList, std::vector<CrossSelectInfo> &crossSelectList){
+	// std::unordered_map<std::string, predicate> selectList;
+	// std::vector<predicate> joinList;
+	while (pAnd != nullptr) {
+		bool containJoin = false;	
+		bool containCrossSelect = false;	
+		std::string oldname("#");
+		predicate p;
+		std::vector<int> crossRelNo(numToJoin, 0);
+		struct OrList *pOr = pAnd->left;
+		while (pOr != nullptr) {
+			struct ComparisonOp *pCom = pOr->left;
+			int op = pCom->code;
+			int lOperand = pCom->left->code;
+			int rOperand = pCom->right->code;
+			// NAME op NAME  (NAME = 4, thus NAME | NAME = 4)
+			if (NAME == lOperand && NAME ==rOperand) {				
+				p = pAnd;
+				std::string lname(pCom->left->value);
+				std::string rname(pCom->right->value);
+				int left = FindAtts(relNames, lname, numToJoin);
+				int right = FindAtts(relNames, rname, numToJoin);
+				joinList.push_back(std::move(JoinRelInfo{left,right,p}));
+				containJoin = true;
+			}
+			// NAME op value | value op name (NAME = 4 other = [1, 3], thus NAME | other > 4)
+			else if (NAME == lOperand || NAME == rOperand) {
+				if (true == containJoin) {
+					cerr << "ERROR: Join and selection in one AND";
+					exit(1);
+				}
+				std::string name = InitAttsName (pCom);
+				int i = FindAtts(relNames, name, numToJoin);
+				std::string rel(relNames[i]);
+				crossRelNo[i] = 1;
+				if (!oldname.compare("#")) {
+					oldname = rel;		
+				} else {
+					if(rel.compare(oldname)) {
+						containCrossSelect = true;
+					}
+				}						
+			} 
+			pOr = pOr->rightOr;
+		}		
+		if(!containJoin) {
+			if (!containCrossSelect) {
+				p = pAnd;
+				auto ibp = selectList.emplace(oldname, p);
+				if(false == ibp.second) {
+					selectList.at(oldname)->rightAnd = p;
+				}
+			} else {
+				crossSelectList.push_back(std::move(CrossSelectInfo{std::move(crossRelNo), p}));
+			}			
+		}
+		pAnd = pAnd->rightAnd;
+		p->rightAnd = nullptr;
+	}
+}
+
+int	Statistics::FindAtts(char* relNames[], std::string &AttsName, int numToJoin) {
+	for (int i = 0; i < numToJoin; ++i) {
+		AttInfo &atts = relations.at(relNames[i])->atts;
+		if(atts.find(AttsName) != atts.end()){
+			return i;
+		}
+	}
+	cerr << AttsName << endl;
+	cerr << "ERROR: attribute is non-exist!";
+	exit(1);
+}
+
+void Statistics::GetJoinOrder(struct AndList *pAnd, char **relNames, int numToJoin) {
+	std::unordered_map<std::string, predicate> selectList;
+	std::vector<JoinRelInfo> joinList;
+	std::vector<CrossSelectInfo> crossSelectList;
+	std::vector<int> joinedTable(numToJoin, 0);
+
+	SeparatePredicate(pAnd, relNames, numToJoin, selectList, joinList, crossSelectList);
+
+	for(auto sel : selectList) {		
+		char *rels[] = { const_cast<char*>(sel.first.c_str()) };
+		struct AndList *p = sel.second;
+		Apply(p, rels , 1);
+	
+	}
+	if (numToJoin < 2) {
+		return;
+	}
+	double min = std::numeric_limits<double>::max();
+	std::vector<char*> minList;
+	auto minit = joinList.begin();
+	for(auto it = joinList.begin(); it < joinList.end(); ++it){
+		char *rels[] = {relNames[it->left], relNames[it->right]};
+		double result = Estimate(it->p, rels , 2);
+		if(result < min){
+			min = result;			
+			minit = it;
+		}
+	}
+	minList.push_back(relNames[minit->left]);
+	minList.push_back(relNames[minit->right]);
+	joinedTable[minit->left] = 1;
+	joinedTable[minit->right] = 1;
+	Apply(minit->p, &minList[0] , 2);
+	joinList.erase(minit);
+	int predNo;
+	while ( (predNo = CheckCrossSelect(crossSelectList, joinedTable)) != -1) {
+		Apply(crossSelectList[predNo].p, &minList[0] , 2);
+		crossSelectList.erase(crossSelectList.begin() + predNo);
+	}
+
+	
+
+	int numOfRels = 3;
+	while(!joinList.empty()) {		
+		int product_cout = 0;
+		min = std::numeric_limits<double>::max();
+		int minId = -1, newId = -1;
+		std::vector<char*> rels = minList;
+		for(auto it = joinList.begin(); it < joinList.end(); ++it){
+			if(1 == joinedTable[it->left]) {
+				rels.push_back(relNames[it->right]);
+				newId = it->right;
+			} else if(1 == joinedTable[it->right]) {
+				rels.push_back(relNames[it->left]);
+				newId = it->left;
+			} else {
+				++product_cout;
+				if (product_cout == joinList.size()) {
+					cerr << "Product is needed!";
+					exit(1);
+				}
+				continue;
+			}		
+			double result = Estimate(it->p, &rels[0] , numOfRels);
+			if(result < min){
+				min = result;
+				minit = it;
+				minId = newId;
+			}
+			rels.pop_back();
+		}
+		if(-1 == minId){
+			cerr << "ERROR:minid is negative";
+			exit(1);
+		}
+		joinedTable[minId] = 1;
+		minList.push_back(relNames[minId]);
+		Apply(minit->p, &minList[0] , numOfRels);
+		joinList.erase(minit);
+		int predNo;
+		while ( (predNo = CheckCrossSelect(crossSelectList, joinedTable)) != -1) {
+			Apply(crossSelectList[predNo].p, &minList[0] , numOfRels);
+			crossSelectList.erase(crossSelectList.begin() + predNo);
+		}
+
+		++numOfRels;
+	}
+}
+
+int Statistics::CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<int> &joinedTable) {
+	for (int i = 0; i < csl.size(); i++) {		
+		std::vector<int> &relNo = csl[i].relNo;
+		int size = relNo.size();
+		int j;
+		for (j = 0; j < size; j++) {
+			if(0 == joinedTable[relNo[j]]) {
+				break;
+			}
+		}	
+		if (j == size) {
+			return i;
+		}
+	}
+	return -1;
 }

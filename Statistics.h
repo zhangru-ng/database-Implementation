@@ -19,6 +19,21 @@ using std::endl;
 #define UNKNOWN -1
 #define LEFT 0
 #define RIGHT 1
+
+typedef struct AndList* predicate;
+
+typedef struct {
+	int left;
+	int right;
+	predicate p;
+}JoinRelInfo;
+
+typedef struct {
+	std::vector<int> relNo;
+	predicate p;
+}CrossSelectInfo;
+
+
 // attribute name, number of distinct value
 typedef std::unordered_map<std::string,double> AttInfo;
 typedef std::vector<std::string> Subset;
@@ -69,6 +84,10 @@ private:
 	EstimateInfo EstimateSelection(const struct AndList *pAnd, std::vector<std::string> &relname);
 	EstimateInfo EstimateJoin(const struct AndList *pAnd, std::vector<std::string> &relname);
 	EstimateInfo Simulate (const struct AndList *parseTree, char **relNames, int numToJoin, std::vector<std::string> &repOfSet);
+
+
+	// int	FindAtts(char* relName[], std::string &AttsName, int relToJoin);
+	
 	
 public:
 	Statistics();
@@ -81,11 +100,16 @@ public:
 	void Read(const char *fromWhere);
 	void Write(const char *fromWhere);
 
-	void Apply(const struct AndList *parseTree, char *relNames[], int numToJoin);
+	void Apply(const struct AndList *parseTree, char **relNames, int numToJoin);
 	double Estimate(const struct AndList *parseTree, char **relNames, int numToJoin);
 	
 	void Print() const;
 
+
+	void SeparatePredicate(struct AndList *parseTree, char **relNames, int numToJoin, std::unordered_map<std::string, predicate> &selectList, std::vector<JoinRelInfo> &joinList, std::vector<CrossSelectInfo> &crossSelectList);
+	int	FindAtts(char* relName[], std::string &AttsName, int relToJoin);
+	int CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<int> &joinedTable);
+	void GetJoinOrder(struct AndList *pAnd, char **relNames, int numToJoin);
 	
 };
 
