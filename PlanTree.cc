@@ -197,120 +197,33 @@ void PlanTree::SeparatePredicate(struct AndList *pAnd) {
 
 void PlanTree::GetJoinOrder(struct AndList *pAnd) {
 	// a hash table stores the relations have been joined
-	// joinedTable[i] = 1 means relName[i] has been joined,  0 means not been joined
-	std::vector<int> joinedTable(numToJoin, 0);
-	std::vector<PlanNode*> nodeList;
-	std::vector<PlanNode*> joinNodes;
-	nodeList.reserve(numToJoin);
+	// joinedTable[i] = 1 means relName[i] has been joined,  0 means not been joined	
 	SeparatePredicate(pAnd);
-	
+	int numOfRels = 1;
+	std::vector<PlanNode*> nodeList;
+	nodeList.reserve(numToJoin);
 	GrowSelectFileNode(nodeList);
 	s.Print();
 	if (numToJoin < 2) {
 		return;
 	}
-	int numOfRels = 2;
-	//use greedy algorithm, find the minimum cost join and apply
-	double min = std::numeric_limits<double>::max();
+	++numOfRels;
+	std::vector<int> joinedTable(numToJoin, 0);
+	//store builded node expect first 2 single relation, which stores in nodeList
+	std::vector<PlanNode*> bulidedNodes;
+	// minimun cost relation sequence
 	std::vector<char*> minList;
-	auto minit = joinList.begin();
-	for (auto it = joinList.begin(); it < joinList.end(); ++it) {
-		char *rels[] = {relNames[it->left], relNames[it->right]};
-		double result = s.Estimate(it->p, rels , 2);
-		if (result < min) {
-			min = result;			
-			minit = it;
-		}
-	}
-	// update joined relation name list
-	minList.push_back(relNames[minit->left]);
-	minList.push_back(relNames[minit->right]);
-	// update joined table
-	joinedTable[minit->left] = 1;
-	joinedTable[minit->right] = 1;
-	Record *rec = new Record();
-	CNF *cnf = new CNF();
-	TableInfo &lti = tableInfo.at(tableList.at(relNames[minit->left]));
-	TableInfo &rti = tableInfo.at(tableList.at(relNames[minit->right]));
-	cnf->GrowFromParseTree (minit->p, lti.sch, rti.sch, *rec);
-
-	JoinNode *treeNode = new JoinNode(cnf, rec);
-	treeNode->outSch = new Schema(*lti.sch, *rti.sch);
-	treeNode->lchild = nodeList[minit->left];
-	treeNode->rchild = nodeList[minit->right];
-	nodeList[minit->left]->parent = treeNode;
-	nodeList[minit->right]->parent = treeNode;	
-	joinNodes.push_back(treeNode);
-
-	s.Apply(minit->p, &minList[0] , 2);
-	joinList.erase(minit);
+	//use greedy algorithm, find the minimum cost join and apply
+	GrowRowJoinNode(joinedTable, minList, bulidedNodes, nodeList);
 	// find if any cross selection can be performed
-	GrowSelectPipeNode(joinedTable, minList, joinNodes, numOfRels);
-	s.Print();	
-
+	GrowSelectPipeNode(joinedTable, minList, bulidedNodes, numOfRels);
+	s.Print();
 	++numOfRels;
 	// keep finding minimum cost join and apply while joinList is not empty 
 	while(!joinList.empty()) {		
-		int product_cout = 0;
-		min = std::numeric_limits<double>::max();
-		int minId = -1, newId = -1;
-		std::vector<char*> rels = minList;
-		for (auto it = joinList.begin(); it < joinList.end(); ++it) {
-			if (1 == joinedTable[it->left]) {
-				rels.push_back(relNames[it->right]);
-				newId = it->right;
-			} else if(1 == joinedTable[it->right]) {
-				rels.push_back(relNames[it->left]);
-				newId = it->left;
-			} else {				
-				++product_cout;
-				// if for all predicates in join list, both relations in the prediacte don't appear in join table
-				// cross product is needed
-				if (product_cout == joinList.size()) {
-					cerr << "Product is needed!";
-					exit(1);
-				}
-				continue;
-			}		
-			double result = s.Estimate(it->p, &rels[0] , numOfRels);
-			if (result < min) {
-				min = result;
-				minit = it;
-				minId = newId;
-			}
-			rels.pop_back();
-		}
-		if (-1 == minId) {
-			cerr << "ERROR:minid is negative";
-			exit(1);
-		}
-		joinedTable[minId] = 1;
-		minList.push_back(relNames[minId]);
-		Record *rec = new Record();
-		CNF *cnf = new CNF();	
-		TableInfo &rti = tableInfo.at(tableList.at(relNames[minId]));
-		cnf->GrowFromParseTree (minit->p, joinNodes[numOfRels - 3]->outSch, rti.sch, *rec);
-		JoinNode *treeNode = new JoinNode(cnf, rec);
-		treeNode->outSch = new Schema(*(joinNodes[numOfRels - 3]->outSch), *rti.sch);
-
-		treeNode->lchild = joinNodes[numOfRels - 3];
-		treeNode->rchild = nodeList[minId];
-		joinNodes[numOfRels - 3]->parent = treeNode;
-		nodeList[minId]->parent = treeNode;
-		joinNodes.push_back(treeNode);
-		s.Apply(minit->p, &minList[0] , numOfRels);
-		joinList.erase(minit);
+		GrowCookedJoinNode(joinedTable, minList, bulidedNodes, nodeList, numOfRels);
 		// find if any cross selection can be performed
-		GrowSelectPipeNode(joinedTable, minList, joinNodes, numOfRels);
-		int predNo;
-		while ( (predNo = CheckCrossSelect(crossSelectList, joinedTable)) != -1) {
-			s.Apply(crossSelectList[predNo].p, &minList[0] , numOfRels);
-			Record *rec = new Record();
-			CNF *cnf = new CNF();	
-			cnf->GrowFromParseTree (crossSelectList[predNo].p, joinNodes[numOfRels - 2]->outSch, *rec);
-			PlanNode *treeNode = new SelectPipeNode(cnf, rec);
-			crossSelectList.erase(crossSelectList.begin() + predNo);
-		}
+		GrowSelectPipeNode(joinedTable, minList, bulidedNodes, numOfRels);		
 		s.Print();
 		// increment number of relations
 		++numOfRels;
@@ -338,19 +251,114 @@ void PlanTree::GrowSelectFileNode(std::vector<PlanNode*> &nodeList) {
 	}
 }
 
-void PlanTree::GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &joinNodes, int numOfRels) {
+void PlanTree::GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &bulidedNodes, int numOfRels) {
 	int predNo;
 	while ( (predNo = CheckCrossSelect(crossSelectList, joinedTable)) != -1) {
 		s.Apply(crossSelectList[predNo].p, &minList[0] , numOfRels);
 		Record *rec = new Record();
 		CNF *cnf = new CNF();	
-		cnf->GrowFromParseTree (crossSelectList[predNo].p, joinNodes[numOfRels - 2]->outSch, *rec);
-		PlanNode *treeNode = new SelectPipeNode(cnf, rec);
+		cnf->GrowFromParseTree (crossSelectList[predNo].p, bulidedNodes[numOfRels - 2]->outSch, *rec);
+		SelectPipeNode *treeNode = new SelectPipeNode(cnf, rec);
+		int current = bulidedNodes.size() - 1;
+		treeNode->child = bulidedNodes[current];
+		bulidedNodes[current]->parent = treeNode;
+		treeNode->outSch = bulidedNodes[current]->outSch;
+		bulidedNodes.push_back(treeNode);
 		crossSelectList.erase(crossSelectList.begin() + predNo);
 	}
 }
 
+void PlanTree::GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &bulidedNodes, std::vector<PlanNode*> &nodeList) {
+	double min = std::numeric_limits<double>::max();
+	auto minit = joinList.begin();
+	for (auto it = joinList.begin(); it < joinList.end(); ++it) {
+		char *rels[] = {relNames[it->left], relNames[it->right]};
+		double result = s.Estimate(it->p, rels , 2);
+		if (result < min) {
+			min = result;			
+			minit = it;
+		}
+	}
+	// update joined relation name list
+	minList.push_back(relNames[minit->left]);
+	minList.push_back(relNames[minit->right]);
+	// update joined table
+	joinedTable[minit->left] = 1;
+	joinedTable[minit->right] = 1;
+	Record *rec = new Record();
+	CNF *cnf = new CNF();
+	TableInfo &lti = tableInfo.at(tableList.at(relNames[minit->left]));
+	TableInfo &rti = tableInfo.at(tableList.at(relNames[minit->right]));
+	cnf->GrowFromParseTree (minit->p, lti.sch, rti.sch, *rec);
 
+	JoinNode *treeNode = new JoinNode(cnf, rec);
+	treeNode->outSch = new Schema(*lti.sch, *rti.sch);
+	treeNode->lchild = nodeList[minit->left];
+	treeNode->rchild = nodeList[minit->right];
+	nodeList[minit->left]->parent = treeNode;
+	nodeList[minit->right]->parent = treeNode;	
+	bulidedNodes.push_back(treeNode);
+
+	s.Apply(minit->p, &minList[0] , 2);
+	joinList.erase(minit);
+}
+
+void PlanTree::GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &bulidedNodes, std::vector<PlanNode*> &nodeList, int numOfRels) {
+	int product_cout = 0;
+	double min = std::numeric_limits<double>::max();
+	int minId = -1, newId = -1;
+	std::vector<char*> rels = minList;
+	auto minit = joinList.begin();
+	for (auto it = joinList.begin(); it < joinList.end(); ++it) {
+		if (1 == joinedTable[it->left]) {
+			rels.push_back(relNames[it->right]);
+			newId = it->right;
+		} else if(1 == joinedTable[it->right]) {
+			rels.push_back(relNames[it->left]);
+			newId = it->left;
+		} else {				
+			++product_cout;
+			// if for all predicates in join list, both relations in the prediacte don't appear in join table
+			// cross product is needed
+			if (product_cout == joinList.size()) {
+				cerr << "Product is needed!";
+				exit(1);
+			}
+			continue;
+		}		
+		double result = s.Estimate(it->p, &rels[0] , numOfRels);
+		if (result < min) {
+			min = result;
+			minit = it;
+			minId = newId;
+		}
+		rels.pop_back();
+	}
+	if (-1 == minId) {
+		cerr << "ERROR:minid is negative";
+		exit(1);
+	}
+	// update joined table and min list
+	joinedTable[minId] = 1;
+	minList.push_back(relNames[minId]);
+	// build join node member
+	Record *rec = new Record();
+	CNF *cnf = new CNF();	
+	int current = bulidedNodes.size()-1;
+	TableInfo &rti = tableInfo.at(tableList.at(relNames[minId]));
+	cnf->GrowFromParseTree (minit->p, bulidedNodes[current]->outSch, rti.sch, *rec);
+
+	JoinNode *treeNode = new JoinNode(cnf, rec);
+	treeNode->outSch = new Schema(*(bulidedNodes[current]->outSch), *rti.sch);
+	treeNode->lchild = bulidedNodes[current];
+	treeNode->rchild = nodeList[minId];
+	bulidedNodes[current]->parent = treeNode;
+	nodeList[minId]->parent = treeNode;
+	bulidedNodes.push_back(treeNode);
+
+	s.Apply(minit->p, &minList[0] , numOfRels);
+	joinList.erase(minit);
+}
 
 // check if a cross selection Predicate
 int PlanTree::CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<int> &joinedTable) {

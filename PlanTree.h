@@ -51,7 +51,7 @@ private:
 	void GrowSelectFileNode(std::vector<PlanNode*> &nodeList);
 	void GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &joinNodes, int numOfRels);
 	void GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &joinNodes, std::vector<PlanNode*> &nodeList);
-	void GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &joinNodes, std::vector<PlanNode*> &nodeList);
+	void GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &joinNodes, std::vector<PlanNode*> &nodeList, int numOfRels);
 public:
 	PlanTree(Statistics &stat);
 	void BuildTableList(struct TableList *tables);
