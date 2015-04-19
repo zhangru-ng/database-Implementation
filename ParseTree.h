@@ -3,8 +3,8 @@
 #define ParseFunc
 
 // these are the types of operands that can appear in a CNF expression
-#define DOUBLE 1
-#define INT 2
+#define INT 1
+#define DOUBLE 2
 #define STRING 3
 #define NAME 4
 #define LESS_THAN 5

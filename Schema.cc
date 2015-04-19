@@ -35,6 +35,38 @@ Attribute *Schema :: GetAtts () {
 	return myAtts;
 }
 
+Schema :: Schema (const Schema &left, const Schema &right) {
+	fileName = NULL;
+	numAtts = left.numAtts + right.numAtts;
+	myAtts = new Attribute[numAtts];
+	for (int i = 0; i < numAtts; i++) {
+		Type attType;
+		char *name;
+		if(i < left.numAtts) {
+			attType = left.myAtts[i].myType;
+			name = strdup (left.myAtts[i].name);
+		} else {
+			attType = right.myAtts[i - left.numAtts].myType;
+			name = strdup (right.myAtts[i - left.numAtts].name);
+		}
+		if (attType == Int) {
+			myAtts[i].myType = Int;
+		}
+		else if (attType == Double) {
+			myAtts[i].myType = Double;
+		}
+		else if (attType == String) {
+			myAtts[i].myType = String;
+		} 
+		else {
+			cout << "Bad attribute type for " << attType << "\n";
+			delete [] myAtts;
+			exit (1);
+		}
+		myAtts[i].name = name;
+	}
+}
+
 Schema :: Schema (const char *fpath, int num_atts, Attribute *atts) {
 	fileName = strdup (fpath);
 	numAtts = num_atts;

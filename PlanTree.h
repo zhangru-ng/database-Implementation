@@ -46,7 +46,12 @@ private:
 	int CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<int> &joinedTable);	
 	void InitPredicate(char *attName, Predicate &initPred);
 	void CreateTable(char* tableName);
-	void RemovePrefix(struct Operand *oper);
+	void RemovePrefix(struct Operand *pOp);
+
+	void GrowSelectFileNode(std::vector<PlanNode*> &nodeList);
+	void GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &joinNodes, int numOfRels);
+	void GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &joinNodes, std::vector<PlanNode*> &nodeList);
+	void GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &joinNodes, std::vector<PlanNode*> &nodeList);
 public:
 	PlanTree(Statistics &stat);
 	void BuildTableList(struct TableList *tables);

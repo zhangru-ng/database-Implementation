@@ -10,7 +10,7 @@
 
 enum Target {Left, Right, Literal};
 enum CompOperator {LessThan, GreaterThan, Equals};
-enum Type {Int, Double, String};
+enum Type {Int = 1, Double, String};
 
 typedef enum {heap, sorted, tree} fType;
 //the current mode of the file: Read or Write

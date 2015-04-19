@@ -1,5 +1,56 @@
 #include "PlanTree.h"
 
+void print_Operand(struct Operand *pOperand) {
+	if(pOperand!=NULL){
+		cout<< pOperand->value;
+	} else
+		return;
+}
+
+void print_ComparisonOp(struct ComparisonOp *pCom){
+	if(pCom!=NULL)        {
+		print_Operand(pCom->left);
+		switch(pCom->code) {
+            case 5:
+                    cout << " < "; break;
+            case 6:
+                    cout << " > "; break;
+            case 7:
+                    cout << " = ";
+        }
+        print_Operand(pCom->right);
+    } else {
+        return;
+    }
+}
+
+void print_OrList(struct OrList *pOr) {
+    if(pOr !=NULL) {
+        struct ComparisonOp *pCom = pOr->left;
+        print_ComparisonOp(pCom);
+        if(pOr->rightOr) {
+            cout << " OR ";
+            print_OrList(pOr->rightOr);
+        }
+    } else {
+        return;
+    }
+}
+
+void print_AndList(struct AndList *pAnd) {
+    if(pAnd !=NULL) {
+        struct OrList *pOr = pAnd->left;
+        cout << "(";
+        print_OrList(pOr);
+        cout << ") ";
+        if(pAnd->rightAnd) {
+            cout << "AND ";
+            print_AndList(pAnd->rightAnd);
+        }
+    } else {
+        return;
+    }
+}
 
 
 string tbl_prefix = "/cise/homes/rui/Desktop/testfiles/10M_table/";
@@ -28,8 +79,10 @@ void PlanTree::BuildTableList(struct TableList *tables) {
 void PlanTree::InitPredicate(char *attName, Predicate &initPred) {
 	struct Operand *lOperand = (struct Operand *) malloc (sizeof (struct Operand));
 	lOperand->value = attName;
+	lOperand->code = NAME;
 	struct Operand *rOperand = (struct Operand *) malloc (sizeof (struct Operand));
 	rOperand->value = attName;
+	rOperand->code = NAME;
 	struct ComparisonOp *pCom  = (struct ComparisonOp *)malloc (sizeof (struct ComparisonOp));
 	pCom->left = lOperand;
 	pCom->code = EQUALS;
@@ -56,16 +109,12 @@ void PlanTree::CreateTable(char* tableName) {
 	tableInfo.emplace(tableName, std::move(tblInfo));
 }
 
-void PlanTree::RemovePrefix(struct Operand *oper) {
-	char *cp= oper->value;
-	int i = 0;
-	while (cp[i] != '\0') {
-		if(cp[i] == '.') {
-			oper->value = cp + i +1;
-		}
-		i++;
-	}
-	
+// remove the prefix relation name for growing parse tree
+void PlanTree::RemovePrefix(struct Operand *pOp) {	
+	string fullname(pOp->value);
+	int pos = fullname.find(".");	
+	string name = fullname.substr(pos+1);
+	strcpy(pOp->value, (char*)name.c_str());		
 }
 
 void PlanTree::SeparatePredicate(struct AndList *pAnd) {
@@ -73,7 +122,7 @@ void PlanTree::SeparatePredicate(struct AndList *pAnd) {
 		bool containJoin = false;	
 		bool containCrossSelect = false;	
 		char* oldname = "";
-		Predicate p;
+		Predicate p = nullptr;
 		// store the relations of cross selection, 0 means not, crossRelNo[i] = 1 means relNames[i] is contained in the Predicate
 		// e.g. crossRelNo = {0, 1, 1} means cross selection contain relNames[1], relNames[2]
 		std::vector<int> crossRelNo(numToJoin, 0);
@@ -85,16 +134,14 @@ void PlanTree::SeparatePredicate(struct AndList *pAnd) {
 			int rOperand = pCom->right->code;
 			// NAME op NAME  (NAME = 4, thus NAME | NAME = 4)
 			if (NAME == lOperand && NAME ==rOperand) {				
-				p = pAnd;				
-				// RemovePrefix(pCom->left);
-				std::string lname(pCom->left->value);		
-				cout << lname << endl;		
-				// RemovePrefix(pCom->right);
-				std::string rname(pCom->right->value);
-				cout << rname<< endl;		
+				p = pAnd;
+				RemovePrefix(pCom->left);
+				std::string lname(pCom->left->value);				
+				RemovePrefix(pCom->right);
+				std::string rname(pCom->right->value);			
 				//find relation ID of left and right attribute
-				int left = s.FindAtts(&relNames[0], lname, numToJoin);
-				int right = s.FindAtts(&relNames[0], rname, numToJoin);
+				int left = s.FindAtts(&relNames[0], lname, numToJoin);				
+				int right = s.FindAtts(&relNames[0], rname, numToJoin);	
 				//push the join infomation into joinList
 				joinList.push_back(std::move(JoinRelInfo{left,right,p}));
 				containJoin = true;
@@ -105,15 +152,15 @@ void PlanTree::SeparatePredicate(struct AndList *pAnd) {
 					cerr << "ERROR: Join and selection in one AND";
 					exit(1);
 				}
+				p = pAnd;
 				std::string name;
 				if (NAME == lOperand) {
-					// RemovePrefix(pCom->left);
-					name = std::string(pCom->left->value);				
-				} else {
-					// RemovePrefix(pCom->right);
-					name = std::string(pCom->right->value);					
+					RemovePrefix(pCom->left);
+					name = std::string(pCom->left->value);	
+				} else if(NAME == rOperand){
+					RemovePrefix(pCom->right);
+					name = std::string(pCom->right->value);	
 				}
-				cout << name<< endl;
 				int i = s.FindAtts(&relNames[0], name, numToJoin);
 				// set the corresponding relation slot in crossRelNo to 1
 				crossRelNo[i] = 1;
@@ -130,8 +177,7 @@ void PlanTree::SeparatePredicate(struct AndList *pAnd) {
 			} 
 			pOr = pOr->rightOr;
 		}		
-		if(!containJoin) {
-			p = pAnd;
+		if(!containJoin) {	
 			// if not contain cross select, the selection can be pushed down to bottom
 			// add it to non-cross selectList
 			if (!containCrossSelect) {				
@@ -150,7 +196,6 @@ void PlanTree::SeparatePredicate(struct AndList *pAnd) {
 }
 
 void PlanTree::GetJoinOrder(struct AndList *pAnd) {
-
 	// a hash table stores the relations have been joined
 	// joinedTable[i] = 1 means relName[i] has been joined,  0 means not been joined
 	std::vector<int> joinedTable(numToJoin, 0);
@@ -159,34 +204,12 @@ void PlanTree::GetJoinOrder(struct AndList *pAnd) {
 	nodeList.reserve(numToJoin);
 	SeparatePredicate(pAnd);
 	
-	for (int i = 0; i < numToJoin; ++i) {
-		TableInfo &ti = tableInfo.at(tableList.at(relNames[i]));
-		Record *rec = new Record();
-		CNF *cnf = new CNF();
-		PlanNode *treeNode = nullptr;
-		auto it = selectList.find(relNames[i]);
-		if( it != selectList.end()) {
-			char *rels[] = { it->first };
-			struct AndList *p = it->second;
-			s.Apply(p, rels , 1);			
-			cnf->GrowFromParseTree (p, ti.sch, *rec);
-			treeNode = new SelectFileNode(ti.dbf, cnf, rec);
-		} else {
-			cnf->GrowFromParseTree(ti.initPred, ti.sch, *rec);
-			treeNode = new SelectFileNode(ti.dbf, cnf, rec);
-		}
-		nodeList.push_back(treeNode);
-	}
-	// push all the non-cross selection down as far as possible, apply them first
-	// for(auto sel : selectList) {		
-	// 	char *rels[] = { sel.first };
-	// 	struct AndList *p = sel.second;
-	// 	s.Apply(p, rels , 1);	
-	// }
+	GrowSelectFileNode(nodeList);
 	s.Print();
 	if (numToJoin < 2) {
 		return;
 	}
+	int numOfRels = 2;
 	//use greedy algorithm, find the minimum cost join and apply
 	double min = std::numeric_limits<double>::max();
 	std::vector<char*> minList;
@@ -210,27 +233,22 @@ void PlanTree::GetJoinOrder(struct AndList *pAnd) {
 	TableInfo &lti = tableInfo.at(tableList.at(relNames[minit->left]));
 	TableInfo &rti = tableInfo.at(tableList.at(relNames[minit->right]));
 	cnf->GrowFromParseTree (minit->p, lti.sch, rti.sch, *rec);
+
 	JoinNode *treeNode = new JoinNode(cnf, rec);
+	treeNode->outSch = new Schema(*lti.sch, *rti.sch);
 	treeNode->lchild = nodeList[minit->left];
 	treeNode->rchild = nodeList[minit->right];
 	nodeList[minit->left]->parent = treeNode;
-	nodeList[minit->right]->parent = treeNode;
+	nodeList[minit->right]->parent = treeNode;	
 	joinNodes.push_back(treeNode);
+
 	s.Apply(minit->p, &minList[0] , 2);
 	joinList.erase(minit);
 	// find if any cross selection can be performed
-	int predNo;
-	while ( (predNo = CheckCrossSelect(crossSelectList, joinedTable)) != -1) {
-		Record *rec = new Record();
-		CNF *cnf = new CNF();	
-		cnf->GrowFromParseTree (crossSelectList[predNo].p, joinNodes[0]->outSch, *rec);
-		PlanNode *treeNode = new SelectPipeNode(cnf, rec);
-		s.Apply(crossSelectList[predNo].p, &minList[0] , 2);
-		crossSelectList.erase(crossSelectList.begin() + predNo);
-	}
+	GrowSelectPipeNode(joinedTable, minList, joinNodes, numOfRels);
 	s.Print();	
 
-	int numOfRels = 3;
+	++numOfRels;
 	// keep finding minimum cost join and apply while joinList is not empty 
 	while(!joinList.empty()) {		
 		int product_cout = 0;
@@ -273,6 +291,8 @@ void PlanTree::GetJoinOrder(struct AndList *pAnd) {
 		TableInfo &rti = tableInfo.at(tableList.at(relNames[minId]));
 		cnf->GrowFromParseTree (minit->p, joinNodes[numOfRels - 3]->outSch, rti.sch, *rec);
 		JoinNode *treeNode = new JoinNode(cnf, rec);
+		treeNode->outSch = new Schema(*(joinNodes[numOfRels - 3]->outSch), *rti.sch);
+
 		treeNode->lchild = joinNodes[numOfRels - 3];
 		treeNode->rchild = nodeList[minId];
 		joinNodes[numOfRels - 3]->parent = treeNode;
@@ -281,6 +301,7 @@ void PlanTree::GetJoinOrder(struct AndList *pAnd) {
 		s.Apply(minit->p, &minList[0] , numOfRels);
 		joinList.erase(minit);
 		// find if any cross selection can be performed
+		GrowSelectPipeNode(joinedTable, minList, joinNodes, numOfRels);
 		int predNo;
 		while ( (predNo = CheckCrossSelect(crossSelectList, joinedTable)) != -1) {
 			s.Apply(crossSelectList[predNo].p, &minList[0] , numOfRels);
@@ -295,6 +316,41 @@ void PlanTree::GetJoinOrder(struct AndList *pAnd) {
 		++numOfRels;
 	}
 }
+
+void PlanTree::GrowSelectFileNode(std::vector<PlanNode*> &nodeList) {
+	for (int i = 0; i < numToJoin; ++i) {
+		TableInfo &ti = tableInfo.at(tableList.at(relNames[i]));
+		Record *rec = new Record();
+		CNF *cnf = new CNF();
+		PlanNode *treeNode = nullptr;
+		auto it = selectList.find(relNames[i]);
+		if( it != selectList.end()) {
+			char *rels[] = { it->first };
+			struct AndList *p = it->second;
+			s.Apply(p, rels , 1);
+			cnf->GrowFromParseTree (p, ti.sch, *rec);
+			treeNode = new SelectFileNode(ti.dbf, cnf, rec);
+		} else {
+			cnf->GrowFromParseTree(ti.initPred, ti.sch, *rec);
+			treeNode = new SelectFileNode(ti.dbf, cnf, rec);
+		}
+		nodeList.push_back(treeNode);
+	}
+}
+
+void PlanTree::GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &joinNodes, int numOfRels) {
+	int predNo;
+	while ( (predNo = CheckCrossSelect(crossSelectList, joinedTable)) != -1) {
+		s.Apply(crossSelectList[predNo].p, &minList[0] , numOfRels);
+		Record *rec = new Record();
+		CNF *cnf = new CNF();	
+		cnf->GrowFromParseTree (crossSelectList[predNo].p, joinNodes[numOfRels - 2]->outSch, *rec);
+		PlanNode *treeNode = new SelectPipeNode(cnf, rec);
+		crossSelectList.erase(crossSelectList.begin() + predNo);
+	}
+}
+
+
 
 // check if a cross selection Predicate
 int PlanTree::CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<int> &joinedTable) {
