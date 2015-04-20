@@ -5,7 +5,9 @@
 #include "Schema.h"
 #include "DBFile.h"
 #include "RelOp.h"
+#include "ParseInfo.h"
 #include <cstring>
+#include <string>
 
 typedef struct AndList* Predicate;
 
@@ -33,25 +35,33 @@ private:
 	PlanNode *root;
 	Statistics &s;
 	int numToJoin;
-
+	// store all the alias relation name
 	std::vector<char*> relNames;
+	// hashtable for alias and corresponding origin realtion name
 	std::unordered_map<char *, char *> tableList;
 	std::unordered_map<std::string, TableInfo> tableInfo;
 	std::unordered_map<char*, Predicate> selectList;
 	std::vector<JoinRelInfo> joinList;
 	std::vector<CrossSelectInfo> crossSelectList;
-
+	//store builded node expect first 2 single relation, which stores in nodeList
+	std::vector<PlanNode*> bulidedNodes;
 
 	void SeparatePredicate(struct AndList *parseTree);
 	int CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<int> &joinedTable);	
 	void InitPredicate(char *attName, Predicate &initPred);
 	void CreateTable(char* tableName);
-	void RemovePrefix(struct Operand *pOp);
+	Type GetSumType(Function *func);
 
 	void GrowSelectFileNode(std::vector<PlanNode*> &nodeList);
-	void GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &joinNodes, int numOfRels);
-	void GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &joinNodes, std::vector<PlanNode*> &nodeList);
-	void GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &joinNodes, std::vector<PlanNode*> &nodeList, int numOfRels);
+	void GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, int numOfRels);
+	void GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &nodeList);
+	void GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &nodeList, int numOfRels);
+	void GrowProjectNode (struct NameList *attsToSelect);
+	void GrowDuplicateRemovalNode ();
+	void GrowSumNode (struct FuncOperator *finalFunction);
+	void GrowGroupByNode (struct FuncOperator *finalFunction, struct NameList *groupingAtts);
+	void GrowWriteOutNode(const char* filename);
+
 public:
 	PlanTree(Statistics &stat);
 	void BuildTableList(struct TableList *tables);
@@ -65,34 +75,18 @@ class PlanNode {
 public:
 	PlanNode *parent;
 	NodeType type;	
+	PlanNode *child;
+	int inPipeID;
 	int outPipeID;
 	Schema *outSch;
 	PlanNode() : parent(nullptr), type(Unary), outPipeID(-1) { }
-	// virtual ~PlanNode();
+	virtual ~PlanNode() {
+		delete outSch;
+		outSch = nullptr;
+	}
 };
 
-class UnaryNode : public PlanNode {
-public:
-	PlanNode *child;
-	int inPipeID;
-
-	UnaryNode() : child(nullptr), inPipeID(-1) { }
-	// virtual ~UnaryNode();
-};
-
-class BinaryNode : public PlanNode {
-public:
-	PlanNode *lchild;
-	PlanNode *rchild;
-	int leftInPipeID;
-	int rightInPipeID;
-
-	BinaryNode() : lchild(nullptr), rchild(nullptr), leftInPipeID(-1), rightInPipeID(-1) { }
-	// virtual ~BinaryNode();
-};
-
-
-class SelectFileNode : public UnaryNode { 
+class SelectFileNode : public PlanNode { 
 private:
 	DBFile *inFile;
 	CNF *selOp;
@@ -107,7 +101,7 @@ public:
 	}
 };
 
-class SelectPipeNode : public UnaryNode  {
+class SelectPipeNode : public PlanNode  {
 private:
 	CNF *selOp;
 	Record *literal;
@@ -121,7 +115,7 @@ public:
 	}
 };
 
-class ProjectNode : public UnaryNode { 
+class ProjectNode : public PlanNode { 
 private:
 	int *keepMe;
 	int numAttsInput;
@@ -130,13 +124,18 @@ public:
 	ProjectNode(int *atts, int numIn, int numOut) : keepMe(atts), numAttsInput(numIn), numAttsOutput(numOut) { }
 	ProjectNode(const ProjectNode &pn) = delete;
 	ProjectNode & operator =(const ProjectNode &pn) = delete;
+	~ProjectNode() {
+		delete keepMe;
+	}
 };
 
-class JoinNode : public BinaryNode { 
+class JoinNode : public PlanNode { 
 private:
 	CNF *selOp;
-	Record *literal;
+	Record *literal;	
 public:
+	PlanNode *rchild;
+	int rightInPipeID;
 	JoinNode(CNF *cnf, Record *rec) : selOp(cnf), literal(rec) { }
 	JoinNode(const JoinNode &jn) = delete;
 	JoinNode & operator = (const JoinNode &jn) = delete;
@@ -146,23 +145,29 @@ public:
 	}
 };
 
-class DuplicateRemovalNode : public UnaryNode {
+class DuplicateRemovalNode : public PlanNode {
 private:
 	Schema *mySchema;
 public:
 	DuplicateRemovalNode(Schema * sch) : mySchema(sch) { }
+	~DuplicateRemovalNode() {
+		// nothing
+	}
 };
 
-class SumNode : public UnaryNode {
+class SumNode : public PlanNode {
 private:
 	Function *computeMe;
 public:	
 	SumNode(Function *func) : computeMe(func) { }
 	SumNode(const SumNode &sn) = delete;
 	SumNode & operator = (const SumNode &sn) = delete;
+	~SumNode() {
+		delete computeMe;
+	}
 };
 
-class GroupByNode : public UnaryNode {
+class GroupByNode : public PlanNode {
 private:
 	OrderMaker *groupAtts;
 	Function *computeMe;
@@ -170,9 +175,13 @@ public:
 	GroupByNode(OrderMaker *om, Function *func) : groupAtts(om), computeMe(func) { }
 	GroupByNode(const GroupByNode *gn) = delete;
 	GroupByNode & operator = (const GroupByNode *gn) = delete;
+	~GroupByNode() {
+		delete groupAtts;
+		delete computeMe;
+	}
 };
 
-class WriteOutNode : public UnaryNode {
+class WriteOutNode : public PlanNode {
 private:
 	FILE *outFile;
 	Schema *mySchema;
@@ -180,6 +189,9 @@ public:
 	WriteOutNode(FILE *f, Schema *sch) : outFile(f), mySchema(sch) { }
 	WriteOutNode(const WriteOutNode &wn) = delete;
 	WriteOutNode & operator =(const WriteOutNode &wn) = delete;
+	~WriteOutNode() {
+		// nothing
+	}
 };
 
 

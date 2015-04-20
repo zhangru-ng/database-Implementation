@@ -1,6 +1,6 @@
 
-#ifndef ParseFunc
-#define ParseFunc
+#ifndef ParseTree
+#define ParseTree
 
 // these are the types of operands that can appear in a CNF expression
 #define INT 1

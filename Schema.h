@@ -59,7 +59,7 @@ public:
 	int GetSortOrder (OrderMaker &order);
 
 	// Merge two schema into one
-	Schema (const Schema &left, const Schema &right) ;
+	Schema (const Schema &left, const Schema &right);
 
 	~Schema ();
 

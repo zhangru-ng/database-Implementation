@@ -1,7 +1,7 @@
 #ifndef FUNCTION_H
 #define FUNCTION_H
 #include "Record.h"
-#include "ParseFunc.h"
+#include "ParseTree.h"
 
 #define MAX_DEPTH 100
 
@@ -18,7 +18,7 @@ struct Arithmatic {
 };
 
 class Function {
-
+friend class PlanTree;
 private:
 
 	Arithmatic *opList;
