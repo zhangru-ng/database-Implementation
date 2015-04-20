@@ -35,6 +35,19 @@ Attribute *Schema :: GetAtts () {
 	return myAtts;
 }
 
+void Schema :: Print () {
+	for (int i = 0; i < numAtts; i++ ) {
+		cout << "Att" << i << " " << myAtts[i].name << ": ";
+		if (myAtts[i].myType == Int) {
+			cout << "Int" << endl;
+		} else if (myAtts[i].myType == Double) {
+			cout << "Double" << endl;
+		} else if(myAtts[i].myType == String) {
+			cout << "String" << endl;
+		} 		
+	}
+}
+
 Schema :: Schema (const Schema &left, const Schema &right) {
 	fileName = NULL;
 	numAtts = left.numAtts + right.numAtts;

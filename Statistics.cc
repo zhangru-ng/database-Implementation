@@ -452,6 +452,14 @@ std::pair<double, double> Statistics::CheckAtts(std::string &lname, std::string 
 	return std::make_pair(liter->second, riter->second);
 }
 
+int Statistics::GetNumTuples (const char *relName) {
+	if(relations.find(relName) == relations.end()) {
+		cerr << "ERROR: Relation does not appear in Statistics!" << endl;
+		exit(1);
+	}
+	return relations.at(relName)->numTuples;
+}
+
 void Statistics::Print () const {
 	std::unordered_set<std::string> names;
 	for (auto const &rel : relations) {

@@ -61,6 +61,9 @@ public:
 	// Merge two schema into one
 	Schema (const Schema &left, const Schema &right);
 
+	// print the schema
+	void Print();
+
 	~Schema ();
 
 };

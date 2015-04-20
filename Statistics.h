@@ -89,6 +89,7 @@ public:
 	double Estimate(const struct AndList *parseTree, char **relNames, int numToJoin);
 	
 	void Print() const;
+	int GetNumTuples(const char *relName);
 	
 };
 
