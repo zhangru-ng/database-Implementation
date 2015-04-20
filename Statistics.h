@@ -22,7 +22,9 @@ using std::endl;
 
 // attribute name, number of distinct value
 typedef std::unordered_map<std::string,double> AttInfo;
+// vector of subset name
 typedef std::vector<std::string> Subset;
+// number of tuples, selectivity
 typedef std::pair<double,float> EstimateInfo;
 // number of tuples, attribute list
 typedef struct RelInfo_{
@@ -31,6 +33,7 @@ typedef struct RelInfo_{
 	AttInfo atts;
 	Subset subset;
 	RelInfo_(double num) : numTuples(num), hasJoined(false), atts(), subset() { }
+	// move constructor
 	RelInfo_(RelInfo_ && rhs) : numTuples(rhs.numTuples), hasJoined(rhs.hasJoined) {
 		atts = std::move(rhs.atts);
 		subset = std::move(rhs.subset);
@@ -42,6 +45,7 @@ typedef struct RelInfo_{
 		subset = std::move(rhs.subset);
 		return *this;
 	}
+	// copy constructor deleted
 	RelInfo_(const RelInfo_ & rhs) = delete;
 	RelInfo_ & operator =(RelInfo_ &rhs) = delete;
 	void AddAtt(std::string attName, long numDistincts) {
@@ -61,34 +65,45 @@ class Statistics {
 friend class PlanTree;
 private:
 	Relations relations;
-	std::unordered_map<std::string, float> sizeParameters;
+	// initial selection attribute name from ComparisonOp
 	std::string InitAttsName (struct ComparisonOp *pCom);
-	double CheckAtts(std::string &name, AttInfo &latts, AttInfo &ratts);
-	std::pair<double, double> CheckAtts(std::string &lname, std::string &rname, AttInfo &latts, AttInfo &ratts);
+	// get number of distinct value of a attribute
+	double GetAttsDistinct(std::string &name, AttInfo &latts, AttInfo &ratts);
+	std::pair<double, double> GetAttsDistinct(std::string &lname, std::string &rname, AttInfo &latts, AttInfo &ratts);
+	// compute selectivity
 	void SetSelectivity(std::string &name, std::vector<std::string> &attNames, float &selToSet, float sel);
-	void BuildSubset(RelInfo &rel1, RelInfo &rel2, std::vector<std::string> &repOfSet); 
+	// estimate the result of cross product
 	EstimateInfo EstimateProduct(std::vector<std::string> &relname);
+	// estimate the result of selection
 	EstimateInfo EstimateSelection(const struct AndList *pAnd, std::vector<std::string> &relname);
+	// estimate the result of join
 	EstimateInfo EstimateJoin(const struct AndList *pAnd, std::vector<std::string> &relname);
+	// simulate the operation in the parseTree and return estimate result
 	EstimateInfo Simulate (const struct AndList *parseTree, char **relNames, int numToJoin, std::vector<std::string> &repOfSet);
+	// find if a attribute appears in the attribute list of relName list
 	int	FindAtts(char **relName, std::string &AttsName, int relToJoin) const;
 	void CheckRels(const char* relName) const;
 	
 public:
 	Statistics();
 	Statistics(Statistics const &copyMe);	 // Performs deep copy
-
+	// add a relation to the statistics
 	void AddRel(char *relName, long numTuples);
+	// add an attribute to the statistics
 	void AddAtt(char *relName, char *attName, long numDistincts);
+	// copy relation
 	void CopyRel(char *oldName, char *newName);
-	
+	// read statistics from file
 	void Read(const char *fromWhere);
+	// write statistics from file
 	void Write(const char *fromWhere);
-
+	// apply the result of performing parseTree
 	void Apply(const struct AndList *parseTree, char **relNames, int numToJoin);
+	// estimate the result of performing parseTree
 	double Estimate(const struct AndList *parseTree, char **relNames, int numToJoin);
-	
+	// print the statistics
 	void Print() const;
+	// get number of tuples of a relation
 	int GetNumTuples(const char *relName);
 	
 };

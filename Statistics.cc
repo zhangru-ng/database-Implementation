@@ -362,7 +362,7 @@ EstimateInfo Statistics::EstimateJoin(const struct AndList *pAnd, std::vector<st
 				std::string lname(pCom->left->value);
 				std::string rname(pCom->right->value);
 				// check if each of the two attributes belong to the relations
-				auto numDistinctsPair = CheckAtts(lname, rname, latts, ratts);
+				auto numDistinctsPair = GetAttsDistinct(lname, rname, latts, ratts);
 				double lTuples = lrel.numTuples;
 				double rTuples = rrel.numTuples;
 				double max = std::max(numDistinctsPair.first, numDistinctsPair.second);				
@@ -378,7 +378,7 @@ EstimateInfo Statistics::EstimateJoin(const struct AndList *pAnd, std::vector<st
 			else if (lOperand | rOperand > 4) {
 				std::string name = InitAttsName(pCom);
 				//pair store the number of distinct and which side the attribute belong to
-				double distinct = CheckAtts(name, latts, ratts);
+				double distinct = GetAttsDistinct(name, latts, ratts);
 				float sel =  (EQUALS == op) ? 1.0f / distinct : 1.0f / 3;
 				SetSelectivity(name, attNames, orSel, sel);
 			} else {
@@ -420,7 +420,7 @@ void Statistics::SetSelectivity(std::string &name, std::vector<std::string> &att
 	selToSet = selToSet < 1 ? selToSet : 1;
 }
 
-double Statistics::CheckAtts(std::string &name, AttInfo &latts, AttInfo &ratts) {
+double Statistics::GetAttsDistinct(std::string &name, AttInfo &latts, AttInfo &ratts) {
 	auto iter = latts.find(name);
 	//if the attribute is not in left relation
 	if (iter == latts.end()) {
@@ -435,7 +435,7 @@ double Statistics::CheckAtts(std::string &name, AttInfo &latts, AttInfo &ratts) 
 }
 
 
-std::pair<double, double> Statistics::CheckAtts(std::string &lname, std::string &rname, AttInfo &latts, AttInfo &ratts) {
+std::pair<double, double> Statistics::GetAttsDistinct(std::string &lname, std::string &rname, AttInfo &latts, AttInfo &ratts) {
 	auto liter = latts.find(lname);
 	auto riter = ratts.find(rname);
 	// There are only two cases:

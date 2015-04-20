@@ -12,20 +12,20 @@
 typedef struct AndList* Predicate;
 
 typedef struct {
-	int left;
-	int right;
-	Predicate p;
+	int left;	// left relation index,
+	int right;	// right relation index
+	Predicate p;	//join predicate
 }JoinRelInfo;
 
 typedef struct {
-	std::vector<int> relNo;
-	Predicate p;
+	std::vector<int> relNo;		// relation indices in the cross selection
+	Predicate p;	// cross selcet predicate
 }CrossSelectInfo;
 
 typedef struct {
-	DBFile *dbf;
-	Schema *sch;
-	Predicate initPred;
+	DBFile *dbf;	// corresponding DBFile
+	Schema *sch;	// corresponding schema
+	Predicate initPred;	// corresponding default select file predicate (R.a = R.a)
 }TableInfo;
 
 class PlanNode;
@@ -35,27 +35,31 @@ class PlanTree {
 private:
 	PlanNode *root;
 	Statistics &s;
-	int numToJoin;
-	// store all the alias relation name
-	std::vector<char*> relNames;
-	// hashtable for alias and corresponding origin realtion name
-	std::unordered_map<char *, char *> tableList;
-	std::unordered_map<std::string, TableInfo> tableInfo;
-	std::unordered_map<char*, Predicate> selectList;
-	std::vector<JoinRelInfo> joinList;
-	std::vector<CrossSelectInfo> crossSelectList;
-	//store builded node expect first 2 single relation, which stores in nodeList
-	std::vector<PlanNode*> bulidedNodes;
+	int numToJoin;	// store number of relations in the tree	
+	std::vector<char*> relNames;	// store all the alias relation name	
+	std::unordered_map<char *, char *> tableList;	// hash table for alias and corresponding origin realtion name	
+	std::unordered_map<std::string, TableInfo> tableInfo;	// hash table for relation name and relation infomation
+	std::unordered_map<char*, Predicate> selectList;	// hash table for relation name and selection predicate on this relation
+	std::vector<JoinRelInfo> joinList;	//set of join predicate
+	std::vector<CrossSelectInfo> crossSelectList;	// set of cross select predicate(that one selection predicate select on more than one attribute) 
+	std::vector<PlanNode*> bulidedNodes;	//store builded node expect select file node, which stores in nodeList
 
+	// separate select, join and cross select predicate
 	void SeparatePredicate(struct AndList *parseTree);
+	// check if any cross select predicate can be apply
 	int CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<int> &joinedTable);	
+	// init default select file predicate for relation
 	void InitPredicate(char *attName, Predicate &initPred);
+	// set up necessary table infomation for each relation in table name
 	void CreateTable(char* tableName);
+	// get the type of result of function
 	Type GetSumType(Function *func);
 
 	void GrowSelectFileNode(std::vector<PlanNode*> &nodeList);
 	void GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, int numOfRels);
+	// Grow first join node, which join two select file node
 	void GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &nodeList);
+	// Grow the cooked join node, which join one select file node and a (join node | select pipe node)
 	void GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &nodeList, int numOfRels);
 	void GrowProjectNode (struct NameList *attsToSelect);
 	void GrowDuplicateRemovalNode ();
@@ -75,17 +79,17 @@ public:
 };
 
 enum NodeType { Unary, Binary };
-
+// plan node base class
 class PlanNode {
 public:
-	PlanNode *parent;
 	NodeType type;	
+	PlanNode *parent;	
 	PlanNode *child;
-	int inPipeID;
-	int outPipeID;
-	Schema *outSch;
-	double numTuples;
-	PlanNode() : parent(nullptr), type(Unary), child(nullptr), inPipeID(-1), outPipeID(-1) { }
+	int inPipeID;	// input pipe ID
+	int outPipeID;	// output pipe ID
+	Schema *outSch;	// output schema
+	double numTuples;	//number of tuples of the node 
+	PlanNode() : type(Unary), parent(nullptr), child(nullptr), inPipeID(-1), outPipeID(-1) { }
 	virtual ~PlanNode() {
 		delete outSch;
 		outSch = nullptr;

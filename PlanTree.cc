@@ -193,6 +193,7 @@ void PlanTree::GrowSelectFileNode(std::vector<PlanNode*> &nodeList) {
 		CNF *cnf = new CNF();
 		SelectFileNode *treeNode = nullptr;
 		auto it = selectList.find(relNames[i]);
+		// if there is a select on the relation, grow cnf using the selection predicate
 		if( it != selectList.end()) {
 			char *rels[] = { it->first };
 			struct AndList *p = it->second;			
@@ -201,6 +202,7 @@ void PlanTree::GrowSelectFileNode(std::vector<PlanNode*> &nodeList) {
 			treeNode->numTuples = s.Estimate(p, rels , 1);
 			s.Apply(p, rels , 1);
 		} else {
+			// otherwise grow cnf using default predicate (R.a = R.a) store in tableInfo
 			cnf->GrowFromParseTree(ti.initPred, ti.sch, *rec);
 			treeNode = new SelectFileNode(ti.dbf, cnf, rec);
 			treeNode->numTuples = s.GetNumTuples(tableList.at(relNames[i]));
@@ -213,10 +215,12 @@ void PlanTree::GrowSelectFileNode(std::vector<PlanNode*> &nodeList) {
 
 void PlanTree::GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, int numOfRels) {
 	int predNo;
+	// check if any cross selection predicate can be apply
 	while ( (predNo = CheckCrossSelect(crossSelectList, joinedTable)) != -1) {		
 		Record *rec = new Record();
 		CNF *cnf = new CNF();	
 		int current = bulidedNodes.size() - 1;
+		// grow cnf using the cross selection predicate
 		cnf->GrowFromParseTree (crossSelectList[predNo].p, bulidedNodes[current]->outSch, *rec);
 		SelectPipeNode *treeNode = new SelectPipeNode(cnf, rec);
 		treeNode->outSch = bulidedNodes[current]->outSch;
@@ -280,13 +284,14 @@ void PlanTree::GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*>
 
 	JoinNode *treeNode = new JoinNode(cnf, rec);
 	treeNode->outSch = new Schema(*lti.sch, *rti.sch);
-	nodeList[leftID]->outPipeID = 1;
 	treeNode->numTuples = s.Estimate(minIt->p, &minList[0] , 2);
+	// initial first 2 output pipe
 	nodeList[leftID]->outPipeID = 1;
 	nodeList[rightID]->outPipeID = 2;
 	BuildBinaryNode(nodeList[leftID], nodeList[rightID], treeNode, 3);
 	bulidedNodes.push_back(treeNode);
 
+	// apply the join predicate and erase the predicate in join list
 	s.Apply(minIt->p, &minList[0] , 2);
 	joinList.erase(minIt);
 }
@@ -351,7 +356,7 @@ void PlanTree::GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<cha
 
 	BuildBinaryNode (lchild, rchild, treeNode, bulidedNodes[current]->outPipeID + 2);
 	bulidedNodes.push_back(treeNode);
-
+	// apply the join predicate and erase the predicate in join list
 	s.Apply(minIt->p, &minList[0] , numOfRels);
 	joinList.erase(minIt);
 }
@@ -376,6 +381,7 @@ void PlanTree::GrowProjectNode (struct NameList *attsToSelect) {
 		} 		
 		p = p->next;
 	}
+	// build attribute indices to keep and attributes to keep
 	int *keepMe = new int[numAttsOutput];
 	Attribute *inAtts = inSch->GetAtts();
 	Attribute *atts = new Attribute[numAttsOutput];
@@ -396,6 +402,7 @@ void PlanTree::GrowDuplicateRemovalNode () {
 	Schema *inSch = bulidedNodes[current]->outSch;
 	DuplicateRemovalNode *treeNode = new DuplicateRemovalNode(inSch);
 	treeNode->outSch = inSch;
+	// half number of tuples
 	treeNode->numTuples = 0.5 * bulidedNodes[current]->numTuples;
 	BuildUnaryNode(bulidedNodes[current], treeNode);
 	bulidedNodes.push_back(treeNode);
@@ -413,7 +420,9 @@ void PlanTree::GrowSumNode (struct FuncOperator *finalFunction) {
 	int current = bulidedNodes.size() - 1;	
 	Schema *inSch = bulidedNodes[current]->outSch;
 	Function *func = new Function();
+	// remove the relation name prefix in finalFunction
 	RemovePrefix(finalFunction);
+	// grow Function using the finalFunction and input schema
 	func->GrowFromParseTree (finalFunction, *inSch);
 	SumNode *treeNode = new SumNode(func);
 	Attribute *atts = new Attribute;	
@@ -442,12 +451,14 @@ void PlanTree::GrowGroupByNode (struct FuncOperator *finalFunction, struct NameL
 				exit(1);
 			}
 			Type type = inSch->FindType(p->name);
+			// add the group attribute into ordermaker
 			om->Add(index, type);
 			indices.push_back(index);
 			++numAtts;
 		} 		
 		p = p->next;
 	}
+	// build the remaining attributes list
 	Attribute *inAtts = inSch->GetAtts();
 	Attribute *atts = new Attribute[numAtts + 1];
 	for(int i = 0; i < numAtts; i++) {
@@ -455,12 +466,14 @@ void PlanTree::GrowGroupByNode (struct FuncOperator *finalFunction, struct NameL
 		atts[i].name = strdup(inAtts[indices[i]].name);
 	}
 	Function *func = new Function();
+	// remove the relation name prefix in finalFunction
 	RemovePrefix(finalFunction);
 	func->GrowFromParseTree (finalFunction, *inSch);
 	atts[numAtts].myType = GetSumType(func);
 	atts[numAtts].name = strdup("SUM");
 	GroupByNode *treeNode = new GroupByNode(om, func);
 	treeNode->outSch = new Schema ("group_sch", numAtts + 1, atts);
+	// half the number of tuples
 	treeNode->numTuples = 0.5 * bulidedNodes[current]->numTuples;
 	BuildUnaryNode(bulidedNodes[current], treeNode);
 	bulidedNodes.push_back(treeNode);
@@ -477,6 +490,7 @@ void PlanTree::GrowWriteOutNode(const char* filename) {
 	bulidedNodes.push_back(treeNode);
 }
 
+// consturct family for unary node
 void PlanTree::BuildUnaryNode(PlanNode *child, PlanNode *parent) {	
 	parent->type = Unary;	
 	parent->child = child;
@@ -488,6 +502,7 @@ void PlanTree::BuildUnaryNode(PlanNode *child, PlanNode *parent) {
 	}
 }
 
+// consturct family for binary node
 void PlanTree::BuildBinaryNode (PlanNode *lchild, PlanNode *rchild, JoinNode *parent, int outID) {
 	parent->type = Binary;
 	parent->child = lchild;
@@ -502,6 +517,7 @@ void PlanTree::BuildBinaryNode (PlanNode *lchild, PlanNode *rchild, JoinNode *pa
 	}
 }
 
+// inorder print the plan tree
 void PlanTree::PrintTree () {
 	if (!root) {
 		cerr << "The plan tree is empty!" << endl;
@@ -510,6 +526,7 @@ void PlanTree::PrintTree () {
 	PrintNode(root);
 }
 
+// recursively print the plan node
 void PlanTree::PrintNode (PlanNode *treeNode) {
 	if (!treeNode) {
 		return;
