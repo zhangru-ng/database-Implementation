@@ -30,26 +30,6 @@ void PlanTree::BuildTableList(struct TableList *tables) {
 	}
 }
 
-void PlanTree::InitPredicate(char *attName, Predicate &initPred) {
-	struct Operand *lOperand = (struct Operand *) malloc (sizeof (struct Operand));
-	lOperand->value = attName;
-	lOperand->code = NAME;
-	struct Operand *rOperand = (struct Operand *) malloc (sizeof (struct Operand));
-	rOperand->value = attName;
-	rOperand->code = NAME;
-	struct ComparisonOp *pCom  = (struct ComparisonOp *)malloc (sizeof (struct ComparisonOp));
-	pCom->left = lOperand;
-	pCom->code = EQUALS;
-	pCom->right = rOperand;
-	struct OrList *pOr = (struct OrList *) malloc (sizeof (struct OrList));
-	pOr->left = pCom;
-	pOr->rightOr = NULL;
-	struct AndList *pAnd = (struct AndList *) malloc (sizeof (struct AndList));
-	pAnd->left = pOr;
-	pAnd->rightAnd = NULL;
-	initPred = pAnd;
-}
-
 void PlanTree::CreateTable(char* tableName) {
 	TableInfo tblInfo;
 	tblInfo.sch = new Schema(catalog_path.c_str(), tableName);
@@ -59,11 +39,12 @@ void PlanTree::CreateTable(char* tableName) {
 	// string load_path(tbl_prefix + std::string(tableName)+".tbl");
 	// tblInfo.dbf->Load (*tblInfo.sch, load_path.c_str());	
 	Attribute *atts = tblInfo.sch->GetAtts();
-	InitPredicate(atts[0].name, tblInfo.initPred);
+	InitDefaultPredicate(atts[0].name, tblInfo.initPred);
 	tableInfo.emplace(tableName, std::move(tblInfo));
 }
 
 void PlanTree::SeparatePredicate(struct AndList *pAnd) {
+	// remove relation name prefix in the predicate 
 	RemovePrefix(pAnd);
 	while (pAnd != nullptr) {
 		bool containJoin = false;	
@@ -133,11 +114,12 @@ void PlanTree::SeparatePredicate(struct AndList *pAnd) {
 	}
 }
 
-void PlanTree::GetJoinOrder(struct AndList *pAnd) {
-	// a hash table stores the relations have been joined
-	// joinedTable[i] = 1 means relName[i] has been joined,  0 means not been joined	
+void PlanTree::GetJoinOrder(struct AndList *pAnd) {	
+	// check if the sum predicate is legal
+	CheckSumPredicate(finalFunction, groupingAtts, attsToSelect);
 	SeparatePredicate(pAnd);
 	int numOfRels = 1;
+	// store the all select file nodes
 	std::vector<PlanNode*> nodeList;
 	nodeList.reserve(numToJoin);
 	GrowSelectFileNode(nodeList);
@@ -146,6 +128,8 @@ void PlanTree::GetJoinOrder(struct AndList *pAnd) {
 		return;
 	}
 	++numOfRels;
+	// a hash table stores the relations have been joined
+	// joinedTable[i] = 1 means relName[i] has been joined,  0 means not been joined	
 	std::vector<int> joinedTable(numToJoin, 0);
 	// minimun cost relation sequence
 	std::vector<char*> minList;
@@ -166,18 +150,31 @@ void PlanTree::GetJoinOrder(struct AndList *pAnd) {
 	}
 
 	if (groupingAtts && finalFunction) {
+		if (distinctFunc) {
+			CheckDistinctFunc(finalFunction, groupingAtts);
+			GrowProjectNode(groupingAtts);
+			GrowDuplicateRemovalNode();
+		}
 		GrowGroupByNode(finalFunction, groupingAtts);
-	} else if(finalFunction) {
+	} else if (finalFunction) {
+		if (distinctFunc) {			
+			GrowDuplicateRemovalNode();
+		}
 		GrowSumNode(finalFunction);
+	} else if (groupingAtts) {
+		GrowProjectNode(groupingAtts);
+		GrowDuplicateRemovalNode();
+	}
+
+	if (attsToSelect) {
+		GrowProjectNode(attsToSelect);
 	}
 
 	if (distinctAtts) {
 	 	GrowDuplicateRemovalNode();
 	}
 
-	if (attsToSelect) {
-		GrowProjectNode(attsToSelect);
-	}
+	
 	// distinctFunc;  // 1 if there is a DISTINCT in an aggregate query
 	// if(writeOutFile) {
 	// 	GrowWriteOutNode(writeOutFile);
@@ -195,7 +192,7 @@ void PlanTree::GrowSelectFileNode(std::vector<PlanNode*> &nodeList) {
 		auto it = selectList.find(relNames[i]);
 		// if there is a select on the relation, grow cnf using the selection predicate
 		if( it != selectList.end()) {
-			char *rels[] = { it->first };
+			char *rels[] = { (char*) it->first.c_str() };
 			struct AndList *p = it->second;			
 			cnf->GrowFromParseTree (p, ti.sch, *rec);
 			treeNode = new SelectFileNode(ti.dbf, cnf, rec);
@@ -348,9 +345,7 @@ void PlanTree::GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<cha
 	//*****put the smaller relation on the left, use array to eliminate branch*****
 	PlanNode *minNodes[] = { bulidedNodes[current], nodeList[minId] };
 	double leftNumTuples = bulidedNodes[current]->numTuples;
-	cout << leftNumTuples << endl;
 	double rightNumTuples = nodeList[minId]->numTuples;
-	cout << rightNumTuples << endl;
 	PlanNode *lchild = minNodes[leftNumTuples > rightNumTuples];
 	PlanNode *rchild = minNodes[leftNumTuples <= rightNumTuples];	
 
@@ -465,14 +460,20 @@ void PlanTree::GrowGroupByNode (struct FuncOperator *finalFunction, struct NameL
 		atts[i].myType = inAtts[indices[i]].myType;
 		atts[i].name = strdup(inAtts[indices[i]].name);
 	}
-	Function *func = new Function();
-	// remove the relation name prefix in finalFunction
-	RemovePrefix(finalFunction);
-	func->GrowFromParseTree (finalFunction, *inSch);
-	atts[numAtts].myType = GetSumType(func);
-	atts[numAtts].name = strdup("SUM");
-	GroupByNode *treeNode = new GroupByNode(om, func);
-	treeNode->outSch = new Schema ("group_sch", numAtts + 1, atts);
+	GroupByNode *treeNode;
+	if(finalFunction) {
+		Function *func = new Function();
+		// remove the relation name prefix in finalFunction
+		RemovePrefix(finalFunction);
+		func->GrowFromParseTree (finalFunction, *inSch);
+		atts[numAtts].myType = GetSumType(func);
+		atts[numAtts].name = strdup("SUM");
+		treeNode = new GroupByNode(om, func);
+		treeNode->outSch = new Schema ("group_sch", numAtts + 1, atts);
+	} else {
+		treeNode = new GroupByNode(om, nullptr);
+		treeNode->outSch = new Schema ("group_sch", numAtts, atts);
+	}	
 	// half the number of tuples
 	treeNode->numTuples = 0.5 * bulidedNodes[current]->numTuples;
 	BuildUnaryNode(bulidedNodes[current], treeNode);
@@ -569,11 +570,13 @@ void ProjectNode::Print() {
 	cout << "Output Schema:" << endl;
 	outSch->Print();	
 	cout << "Attributes to keep: " << endl;
+	cout << "{ ";
 	for(int i = 0; i < numAttsOutput; i++) {
 		cout << keepMe[i] << " ";
 	}
+	cout << "}\n";
 	cout << "Estimate number of tuples: " << numTuples << endl;
-	cout << "\n********" <<endl;
+	cout << "********\n" <<endl;
 }
 
 void JoinNode::Print() { 

@@ -452,7 +452,7 @@ std::pair<double, double> Statistics::GetAttsDistinct(std::string &lname, std::s
 	return std::make_pair(liter->second, riter->second);
 }
 
-int Statistics::GetNumTuples (const char *relName) {
+int Statistics::GetNumTuples (const std::string &relName) const {
 	if(relations.find(relName) == relations.end()) {
 		cerr << "ERROR: Relation does not appear in Statistics!" << endl;
 		exit(1);

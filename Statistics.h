@@ -104,7 +104,7 @@ public:
 	// print the statistics
 	void Print() const;
 	// get number of tuples of a relation
-	int GetNumTuples(const char *relName);
+	int GetNumTuples(const std::string &relName) const;
 	
 };
 

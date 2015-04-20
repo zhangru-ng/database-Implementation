@@ -9,8 +9,6 @@
 #include <cstring>
 #include <string>
 
-typedef struct AndList* Predicate;
-
 typedef struct {
 	int left;	// left relation index,
 	int right;	// right relation index
@@ -37,9 +35,9 @@ private:
 	Statistics &s;
 	int numToJoin;	// store number of relations in the tree	
 	std::vector<char*> relNames;	// store all the alias relation name	
-	std::unordered_map<char *, char *> tableList;	// hash table for alias and corresponding origin realtion name	
+	std::unordered_map<string, string> tableList;	// hash table for alias and corresponding origin realtion name	
 	std::unordered_map<std::string, TableInfo> tableInfo;	// hash table for relation name and relation infomation
-	std::unordered_map<char*, Predicate> selectList;	// hash table for relation name and selection predicate on this relation
+	std::unordered_map<string, Predicate> selectList;	// hash table for relation name and selection predicate on this relation
 	std::vector<JoinRelInfo> joinList;	//set of join predicate
 	std::vector<CrossSelectInfo> crossSelectList;	// set of cross select predicate(that one selection predicate select on more than one attribute) 
 	std::vector<PlanNode*> bulidedNodes;	//store builded node expect select file node, which stores in nodeList
@@ -48,8 +46,6 @@ private:
 	void SeparatePredicate(struct AndList *parseTree);
 	// check if any cross select predicate can be apply
 	int CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<int> &joinedTable);	
-	// init default select file predicate for relation
-	void InitPredicate(char *attName, Predicate &initPred);
 	// set up necessary table infomation for each relation in table name
 	void CreateTable(char* tableName);
 	// get the type of result of function

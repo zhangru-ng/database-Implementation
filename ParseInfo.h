@@ -6,7 +6,11 @@
 #include <string.h>
 #include "ParseTree.h"
 
+#include <unordered_set>
+
 using namespace std;
+
+typedef struct AndList* Predicate;
 
 void print_Operand(struct Operand *pOperand);
 
@@ -34,6 +38,7 @@ void print_groupAtts(struct NameList *names);
 
 void print_selectAtts(struct NameList *names);
 
+// remove relation name prefix in sum predicate
 void RemovePrefix (struct FuncOperator *fOperator);
 
 void RemoveOperandPrefix (struct FuncOperand *fOperand);
@@ -44,6 +49,23 @@ void RemovePrefixComparisonOp(struct ComparisonOp *pCom);
 
 void RemovePrefixOrList(struct OrList *pOr);
 
+// remove relation name prefix in where predicate
 void RemovePrefix(struct AndList *pAnd);
+
+// init default select file predicate for relation
+void InitDefaultPredicate(char *attName, Predicate &initPred);
+
+// check if the sum prediacte is legal
+void CheckSumPredicate(struct FuncOperator *finalFunction, struct NameList *groupingAtts, struct NameList *attsToSelect);
+
+// check if all the select attribute are in grouping list
+void CheckGroupAndSelect(struct NameList *groupingAtts, struct NameList *attsToSelect);
+
+// check if the sum distinct attribute in grouping list
+void CheckDistinctFunc(struct FuncOperator *finalFunction, struct NameList *groupingAtts);
+
+void CheckFuncOperand (struct FuncOperand *fOperand, std::unordered_set<std::string> &names);
+
+void CheckFuncOperator (struct FuncOperator *fOperator, std::unordered_set<std::string> &names);
 
 #endif

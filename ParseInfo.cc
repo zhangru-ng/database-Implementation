@@ -3,8 +3,7 @@
 void print_Operand(struct Operand *pOperand) {
 	if(pOperand!=NULL){
 		cout<< pOperand->value;
-	} else
-		return;
+	}
 }
 
 void print_ComparisonOp(struct ComparisonOp *pCom){
@@ -19,8 +18,6 @@ void print_ComparisonOp(struct ComparisonOp *pCom){
                     cout << " = ";
         }
         print_Operand(pCom->right);
-    } else {
-        return;
     }
 }
 
@@ -32,9 +29,7 @@ void print_OrList(struct OrList *pOr) {
             cout << " OR ";
             print_OrList(pOr->rightOr);
         }
-    } else {
-        return;
-    }
+    } 
 }
 
 void print_AndList(struct AndList *pAnd) {
@@ -47,9 +42,7 @@ void print_AndList(struct AndList *pAnd) {
             cout << "AND ";
             print_AndList(pAnd->rightAnd);
         }
-    } else {
-        return;
-    }
+    } 
 }
 
 void print_predicate(struct AndList *pAnd) {
@@ -105,9 +98,7 @@ void print_FuncOperator (struct FuncOperator *fOperator) {
 			cout << " " << static_cast<char>(fOperator->code) << " ";
 		print_FuncOperator(fOperator->right);
 		if(!fOperator->leftOperand) { cout << ")"; }			
-    } else {
-        return;
-    }
+    } 
 }
 
 void print_aggregate(struct FuncOperator *fOperator) {
@@ -150,9 +141,7 @@ void RemovePrefix (struct FuncOperator *fOperator) {
 		RemovePrefix(fOperator->leftOperator);
 		RemoveOperandPrefix(fOperator->leftOperand);
 		RemovePrefix(fOperator->right);		
-    } else {
-        return;
-    }
+    } 
 }
 
 void RemoveOperandPrefix (struct FuncOperand *fOperand) {
@@ -201,7 +190,88 @@ void RemovePrefix(struct AndList *pAnd) {
         if(pAnd->rightAnd) {
             RemovePrefix(pAnd->rightAnd);
         }
-    } else {
-        return;
-    }
+    } 
+}
+
+void InitDefaultPredicate(char *attName, Predicate &initPred) {
+	struct Operand *lOperand = (struct Operand *) malloc (sizeof (struct Operand));
+	lOperand->value = attName;
+	lOperand->code = NAME;
+	struct Operand *rOperand = (struct Operand *) malloc (sizeof (struct Operand));
+	rOperand->value = attName;
+	rOperand->code = NAME;
+	struct ComparisonOp *pCom  = (struct ComparisonOp *)malloc (sizeof (struct ComparisonOp));
+	pCom->left = lOperand;
+	pCom->code = EQUALS;
+	pCom->right = rOperand;
+	struct OrList *pOr = (struct OrList *) malloc (sizeof (struct OrList));
+	pOr->left = pCom;
+	pOr->rightOr = NULL;
+	struct AndList *pAnd = (struct AndList *) malloc (sizeof (struct AndList));
+	pAnd->left = pOr;
+	pAnd->rightAnd = NULL;
+	initPred = pAnd;
+}
+
+void CheckGroupAndSelect(struct NameList *groupingAtts, struct NameList *attsToSelect) {
+	std::unordered_set<string> names;
+	struct NameList *p = groupingAtts;
+	while (p) {
+		if (p->name) {
+			names.insert(p->name);
+		} 		
+		p = p->next;
+	}
+	p = attsToSelect;
+	while (p) {
+		if (p->name) {
+			auto ibp = names.insert(p->name);			
+			// if the select attribute is not in the groupby name list 
+			if(ibp.second) {
+				cerr << "SQL ERROR: SELECT on attributes dose not exist in GROUP BY" << endl;
+				exit(1);
+			}
+		} 		
+		p = p->next;
+	}
+}
+
+void CheckSumPredicate(struct FuncOperator *finalFunction, struct NameList *groupingAtts, struct NameList *attsToSelect) {
+	if (!groupingAtts && attsToSelect && finalFunction) {
+		cerr << "SQL ERROR: SELECT on attributes that does not exist after SUM" << endl;
+		exit(1);
+	} else if (groupingAtts && attsToSelect) {
+		CheckGroupAndSelect(groupingAtts, attsToSelect);
+	}
+}
+
+void CheckDistinctFunc(struct FuncOperator *finalFunction, struct NameList *groupingAtts) {
+	std::unordered_set<string> names;
+	struct NameList *p = groupingAtts;
+	while (p) {
+		if (p->name) {
+			names.insert(p->name);
+		} 		
+		p = p->next;
+	}
+	CheckFuncOperator(finalFunction, names);
+}
+
+
+void CheckFuncOperand (struct FuncOperand *fOperand, std::unordered_set<string> &names) {
+	if (fOperand) {
+		auto ibp = names.insert(fOperand->value);
+		if(ibp.second) {
+			cerr << "SQL ERROR: SUM DISTINCT attributes dose not exist in GROUP BY" << endl;
+			exit(1);
+		}
+	}
+}
+
+void CheckFuncOperator (struct FuncOperator *fOperator, std::unordered_set<string> &names) {	
+	if(fOperator) {
+		CheckFuncOperator(fOperator->leftOperator, names);
+		CheckFuncOperand(fOperator->leftOperand, names);
+		CheckFuncOperator(fOperator->right, names);
+	}
 }
