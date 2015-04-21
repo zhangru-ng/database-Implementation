@@ -114,7 +114,7 @@ void PlanTree::SeparatePredicate(struct AndList *pAnd) {
 	}
 }
 
-void PlanTree::GetJoinOrder(struct AndList *pAnd) {	
+void PlanTree::GetPlanTree(struct AndList *pAnd) {	
 	// check if the sum predicate is legal
 	CheckSumPredicate(finalFunction, groupingAtts, attsToSelect);
 	SeparatePredicate(pAnd);

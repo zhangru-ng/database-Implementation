@@ -20,6 +20,13 @@
 	int distinctAtts; // 1 if there is a DISTINCT in a non-aggregate query 
 	int distinctFunc;  // 1 if there is a DISTINCT in an aggregate query
 
+	int operationType;
+	char* tableName;
+	char* dbfileName;
+	char* outfileName;
+	struct AttList *attsList;
+	struct NameList *sortAtts;
+	int outputMode;
 %}
 
 // this stores all of the types returned by production rules
@@ -32,8 +39,10 @@
 	struct OrList *myOrList;
 	struct AndList *myAndList;
 	struct NameList *myNames;
+	struct AttList *myAtt;
 	char *actualChars;
 	char whichOne;
+	char myAttType;
 }
 
 %token <actualChars> Name
@@ -50,6 +59,24 @@
 %token AS
 %token AND
 %token OR
+%token CREATE
+%token TABLE
+%token INTEGER_
+%token DOUBLE_
+%token STRING_
+%token HEAP
+%token SORTED
+%token ON
+%token INSERT
+%token INTO
+%token DROP
+%token SET
+%token OUTPUT
+%token STDOUT
+%token NONE
+%token UPDATE
+%token STATISTICS
+%token FOR
 
 %type <myOrList> OrList
 %type <myAndList> AndList
@@ -61,6 +88,9 @@
 %type <myTables> Tables
 %type <myBoolOperand> Literal
 %type <myNames> Atts
+%type <myAtt> AttsList
+%type <myAttType> Type
+%type <myNames> SortAtts
 
 %start SQL
 
@@ -79,6 +109,7 @@ SQL: SELECT WhatIWant FROM Tables WHERE AndList
 	tables = $4;
 	boolean = $6;	
 	groupingAtts = NULL;
+	operationType = QUERY_;
 }
 
 | SELECT WhatIWant FROM Tables WHERE AndList GROUP BY Atts
@@ -86,7 +117,9 @@ SQL: SELECT WhatIWant FROM Tables WHERE AndList
 	tables = $4;
 	boolean = $6;	
 	groupingAtts = $9;
-};
+	operationType = QUERY_;
+}
+;
 
 WhatIWant: Function ',' Atts 
 {
@@ -357,6 +390,110 @@ Float
         $$ = (struct FuncOperand *) malloc (sizeof (struct FuncOperand));
         $$->code = NAME;
         $$->value = $1;
+}
+;
+
+SQL: CREATE TABLE Name '(' AttsList ')'  AS HEAP
+{
+	tableName = $3;
+	attsList = $5;
+	operationType = CREATE_HEAP_;
+}
+
+| CREATE TABLE Name '(' AttsList ')' AS SORTED ON SortAtts
+{
+	tableName = $3;
+	attsList = $5;
+	sortAtts = $10;
+	operationType = CREATE_SORTED_;
+}
+
+| INSERT String INTO Name 
+{
+	dbfileName = $2;
+	tableName = $4;
+	operationType = INSERT_;
+}
+
+| DROP TABLE Name  
+{
+	tableName = $3;
+	operationType = DROP_;
+}
+
+| SET OUTPUT Mode
+{
+	operationType = OUTPUT_;
+}
+
+| UPDATE STATISTICS FOR Name
+{
+	tableName = $4;
+	operationType = UPDATE_;
+}
+;
+
+AttsList: Name Type ',' AttsList
+{
+	$$ = (struct AttList *) malloc (sizeof (struct AttList));
+	$$->name = $1;
+	$$->code = $2;
+	$$->next = $4;
+}
+
+| Name Type
+{
+	$$ = (struct AttList *) malloc (sizeof (struct AttList));
+	$$->name = $1;
+	$$->code = $2;
+	$$->next = NULL;
+}
+;
+
+Type: INTEGER_
+{
+	$$ = INT;
+}
+
+| DOUBLE_
+{
+	$$ = DOUBLE;
+}
+
+| STRING_
+{
+	$$ = STRING;
+}
+;
+
+SortAtts: Name ',' SortAtts
+{
+	$$ = (struct NameList *) malloc (sizeof (struct NameList));
+	$$->name = $1;
+	$$->next = $3;
+} 
+
+| Name
+{
+	$$ = (struct NameList *) malloc (sizeof (struct NameList));
+	$$->name = $1;
+	$$->next = NULL;
+}
+
+Mode: STDOUT
+{
+	outputMode = STDOUT_;
+}
+
+| String
+{
+	outfileName = $1;
+	outputMode = OUTFILE;
+}
+
+| NONE
+{
+	outputMode = NONE_;
 }
 ;
 

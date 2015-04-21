@@ -70,7 +70,7 @@ private:
 public:
 	PlanTree(Statistics &stat);
 	void BuildTableList(struct TableList *tables);
-	void GetJoinOrder(struct AndList *pAnd);
+	void GetPlanTree(struct AndList *pAnd);
 	void PrintTree();	
 };
 

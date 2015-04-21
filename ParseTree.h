@@ -10,6 +10,16 @@
 #define LESS_THAN 5
 #define GREATER_THAN 6
 #define EQUALS 7
+#define CREATE_HEAP_ 8
+#define CREATE_SORTED_ 9
+#define INSERT_ 10
+#define DROP_ 11
+#define OUTPUT_ 12
+#define UPDATE_ 13
+#define QUERY_ 14
+#define STDOUT_ 15
+#define OUTFILE 16
+#define NONE_ 17
 
 // used in computational (funcional) expressions
 struct FuncOperand {
@@ -95,6 +105,12 @@ struct AndList {
         // note that this can be NULL if the right is a disjunction
         struct AndList *rightAnd;
 
+};
+
+struct AttList {
+	char *name;
+	int code;
+	struct AttList *next;
 };
 
 #endif
