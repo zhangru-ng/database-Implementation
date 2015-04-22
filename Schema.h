@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
 #include "Record.h"
 #include "Schema.h"
 #include "File.h"
@@ -16,7 +17,7 @@ struct att_pair {
 };
 
 struct Attribute {
-	char *name;
+	std::string name;
 	Type myType;
 };
 
@@ -28,7 +29,7 @@ class Schema {
 	Attribute *myAtts;
 
 	// gives the physical location of the binary file storing the relation
-	char *fileName;
+	std::string fileName;
 
 	friend class Record;
 
@@ -48,6 +49,9 @@ public:
 	// this finds the type of the given attribute
 	Type FindType (char *attName);
 
+	// finds the type of the given index
+	Type GetType (int index);
+
 	// this reads the specification for the schema in from a file
 	Schema (const char *fName, const char *relName);
 
@@ -63,6 +67,23 @@ public:
 
 	// print the schema
 	void Print();
+
+	Schema() = default;
+
+	Schema(Schema &&rhs) {
+		numAtts = rhs.numAtts;
+		myAtts = rhs.myAtts;
+		rhs.myAtts = nullptr;
+		fileName = std::move(rhs.fileName);
+	}
+
+	Schema& operator = (Schema &&rhs) {
+		numAtts = rhs.numAtts;
+		myAtts = rhs.myAtts;
+		rhs.myAtts = nullptr;
+		fileName = std::move(rhs.fileName);
+		return *this;
+	}
 
 	~Schema ();
 

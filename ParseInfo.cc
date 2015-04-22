@@ -193,12 +193,12 @@ void RemovePrefix(struct AndList *pAnd) {
     } 
 }
 
-void InitDefaultPredicate(char *attName, Predicate &initPred) {
+void InitDefaultPredicate(std::string attName, Predicate &initPred) {
 	struct Operand *lOperand = (struct Operand *) malloc (sizeof (struct Operand));
-	lOperand->value = attName;
+	lOperand->value = strdup(attName.c_str());
 	lOperand->code = NAME;
 	struct Operand *rOperand = (struct Operand *) malloc (sizeof (struct Operand));
-	rOperand->value = attName;
+	rOperand->value = strdup(attName.c_str());
 	rOperand->code = NAME;
 	struct ComparisonOp *pCom  = (struct ComparisonOp *)malloc (sizeof (struct ComparisonOp));
 	pCom->left = lOperand;
@@ -257,7 +257,6 @@ void CheckDistinctFunc(struct FuncOperator *finalFunction, struct NameList *grou
 	CheckFuncOperator(finalFunction, names);
 }
 
-
 void CheckFuncOperand (struct FuncOperand *fOperand, std::unordered_set<string> &names) {
 	if (fOperand) {
 		auto ibp = names.insert(fOperand->value);
@@ -273,5 +272,48 @@ void CheckFuncOperator (struct FuncOperator *fOperator, std::unordered_set<strin
 		CheckFuncOperator(fOperator->leftOperator, names);
 		CheckFuncOperand(fOperator->leftOperand, names);
 		CheckFuncOperator(fOperator->right, names);
+	}
+}
+
+void GetSumOperandAtts (struct FuncOperand *fOperand, std::vector<char*> &sumAtts) {
+	if (fOperand) {
+		sumAtts.push_back(fOperand->value);
+	}
+}
+
+void GetSumOperatorAtts(struct FuncOperator *fOperator, std::vector<char*> &sumAtts) {
+	if(fOperator) {
+		GetSumOperatorAtts(fOperator->leftOperator, sumAtts);
+		GetSumOperandAtts(fOperator->leftOperand, sumAtts);
+		GetSumOperatorAtts(fOperator->right, sumAtts);
+	}
+}
+
+struct NameList* GetSumAtts(struct FuncOperator *fOperator) {
+	std::vector<char*> sumAtts;
+	GetSumOperatorAtts(fOperator, sumAtts);	
+	if(sumAtts.empty()) {
+		return NULL;
+	}
+	struct NameList *p = (struct NameList *) malloc (sizeof(struct NameList));
+	for(auto it = sumAtts.begin(); it != sumAtts.end(); ++it) {	
+		p->name = strdup(*it);
+		if(it + 1 == sumAtts.end()) {
+			p->next = NULL;
+		} else {
+			p->next = (struct NameList *) malloc (sizeof(struct NameList));
+			p = p->next;
+		}		
+	}
+	return p;
+}
+
+void DestroyNameList(struct NameList *names) {
+	struct NameList *p = names;
+	while(p) {
+		free(p->name);
+		struct NameList *temp = p->next;
+		free(p);
+		p = temp;
 	}
 }

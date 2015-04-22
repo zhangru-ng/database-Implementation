@@ -25,7 +25,13 @@ private:
 	bool AssertInit();
 public:
 	DBFile (); 
-
+	DBFile(DBFile &&rhs) {
+		myInternalPoniter = std::move(rhs.myInternalPoniter);
+	}
+	DBFile& operator =(DBFile &&rhs) {
+		myInternalPoniter = std::move(rhs.myInternalPoniter);
+		return *this;
+	}
 	int Create (const char *fpath, fType file_type, void *startup);
 	int Open (const char *fpath);
 	int Close ();

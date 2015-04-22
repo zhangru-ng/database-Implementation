@@ -9,69 +9,25 @@
 #include <cstring>
 #include <string>
 
-typedef struct {
+struct JoinRelInfo{
 	int left;	// left relation index,
 	int right;	// right relation index
 	Predicate p;	//join predicate
-}JoinRelInfo;
+};
 
-typedef struct {
+struct CrossSelectInfo{
 	std::vector<int> relNo;		// relation indices in the cross selection
 	Predicate p;	// cross selcet predicate
-}CrossSelectInfo;
+};
 
-typedef struct {
-	DBFile *dbf;	// corresponding DBFile
-	Schema *sch;	// corresponding schema
-	Predicate initPred;	// corresponding default select file predicate (R.a = R.a)
-}TableInfo;
-
-class PlanNode;
-class JoinNode;
-
-class PlanTree {
-private:
-	PlanNode *root;
-	Statistics &s;
-	int numToJoin;	// store number of relations in the tree	
-	std::vector<char*> relNames;	// store all the alias relation name	
-	std::unordered_map<string, string> tableList;	// hash table for alias and corresponding origin realtion name	
-	std::unordered_map<std::string, TableInfo> tableInfo;	// hash table for relation name and relation infomation
-	std::unordered_map<string, Predicate> selectList;	// hash table for relation name and selection predicate on this relation
-	std::vector<JoinRelInfo> joinList;	//set of join predicate
-	std::vector<CrossSelectInfo> crossSelectList;	// set of cross select predicate(that one selection predicate select on more than one attribute) 
-	std::vector<PlanNode*> bulidedNodes;	//store builded node expect select file node, which stores in nodeList
-
-	// separate select, join and cross select predicate
-	void SeparatePredicate(struct AndList *parseTree);
-	// check if any cross select predicate can be apply
-	int CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<int> &joinedTable);	
-	// set up necessary table infomation for each relation in table name
-	void CreateTable(char* tableName);
-	// get the type of result of function
-	Type GetSumType(Function *func);
-
-	void GrowSelectFileNode(std::vector<PlanNode*> &nodeList);
-	void GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, int numOfRels);
-	// Grow first join node, which join two select file node
-	void GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &nodeList);
-	// Grow the cooked join node, which join one select file node and a (join node | select pipe node)
-	void GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<PlanNode*> &nodeList, int numOfRels);
-	void GrowProjectNode (struct NameList *attsToSelect);
-	void GrowDuplicateRemovalNode ();
-	void GrowSumNode (struct FuncOperator *finalFunction);
-	void GrowGroupByNode (struct FuncOperator *finalFunction, struct NameList *groupingAtts);
-	void GrowWriteOutNode(const char* filename);
-
-	void BuildUnaryNode(PlanNode *child, PlanNode *parent);
-	void BuildBinaryNode (PlanNode *lchild, PlanNode *rchild, JoinNode *parent, int outID);
-	void PrintNode(PlanNode *root);
-
-public:
-	PlanTree(Statistics &stat);
-	void BuildTableList(struct TableList *tables);
-	void GetPlanTree(struct AndList *pAnd);
-	void PrintTree();	
+struct TableInfo{
+	DBFile dbf;	// corresponding DBFile
+	Schema sch;	// corresponding schema
+	TableInfo() = default;
+	TableInfo(TableInfo &&rhs) {
+		dbf = std::move(rhs.dbf);
+		sch = std::move(rhs.sch);
+	}
 };
 
 enum NodeType { Unary, Binary };
@@ -85,10 +41,8 @@ public:
 	int outPipeID;	// output pipe ID
 	Schema *outSch;	// output schema
 	double numTuples;	//number of tuples of the node 
-	PlanNode() : type(Unary), parent(nullptr), child(nullptr), inPipeID(-1), outPipeID(-1) { }
+	PlanNode() : type(Unary), parent(nullptr), child(nullptr), inPipeID(-1), outPipeID(-1), outSch(nullptr), numTuples(-1) { }
 	virtual ~PlanNode() {
-		delete outSch;
-		outSch = nullptr;
 		if(child) {
 			delete child;
 			child = nullptr;
@@ -108,8 +62,8 @@ public:
 	SelectFileNode & operator =(const SelectFileNode &sf) = delete;
 	void Print();
 	~SelectFileNode() {
-		delete selOp;
-		delete literal;
+		delete selOp;		
+		delete literal;		
 	}
 };
 
@@ -124,7 +78,7 @@ public:
 	void Print();
 	~SelectPipeNode() {
 		delete selOp;
-		delete literal;
+		delete literal;		
 	}
 };
 
@@ -139,7 +93,8 @@ public:
 	ProjectNode & operator =(const ProjectNode &pn) = delete;
 	void Print();
 	~ProjectNode() {
-		delete keepMe;
+		delete[] keepMe;
+		delete outSch;
 	}
 };
 
@@ -156,10 +111,11 @@ public:
 	void Print();
 	~JoinNode() {
 		delete selOp;
-		delete literal;
+		delete literal;	
+		delete outSch;
 		if(rchild) {
 			delete rchild;
-			child = nullptr;
+			rchild = nullptr;
 		}
 	}
 };
@@ -185,6 +141,7 @@ public:
 	void Print();
 	~SumNode() {
 		delete computeMe;
+		delete outSch;
 	}
 };
 
@@ -200,6 +157,7 @@ public:
 	~GroupByNode() {
 		delete groupAtts;
 		delete computeMe;
+		delete outSch;
 	}
 };
 
@@ -216,6 +174,55 @@ public:
 	~WriteOutNode() {
 		// nothing
 	}
+};
+
+class PlanTree {
+private:
+	PlanNode *root;
+	Statistics &s;
+	int numOfRels;	// store number of relations in the tree	
+	std::vector<char*> relNames;	// store all the alias relation name	
+	std::unordered_map<string, string> tableList;	// hash table for alias and corresponding origin realtion name	
+	std::unordered_map<std::string, TableInfo> tableInfo;	// hash table for relation name and relation infomation
+	std::unordered_map<string, Predicate> selectList;	// hash table for relation name and selection predicate on this relation
+	std::vector<JoinRelInfo> joinList;	//set of join predicate
+	std::vector<CrossSelectInfo> crossSelectList;	// set of cross select predicate(that one selection predicate select on more than one attribute) 
+	std::vector<PlanNode*> selectFileList;
+	std::vector<PlanNode*> buildedNodes;	//store builded node expect select file node, which stores in selectFileList
+
+	// separate select, join and cross select predicate
+	void SeparatePredicate(struct AndList *parseTree);
+	// check if any cross select predicate can be apply
+	int CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<int> &joinedTable);	
+	// set up necessary table infomation for each relation in table name
+	void CreateTable(char* tableName);
+	// get the type of result of function
+	Type GetSumType(Function *func);
+
+	void GrowSelectFileNode();
+	void GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, int numOfRels);
+	// Grow first join node, which join two select file node
+	void GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList);
+	// Grow the cooked join node, which join one select file node and a (join node | select pipe node)
+	void GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, int numOfRels);
+	void GrowProjectNode (struct NameList *attsToSelect);
+	void GrowDuplicateRemovalNode ();
+	void GrowSumNode (struct FuncOperator *finalFunction);
+	void GrowGroupByNode (struct FuncOperator *finalFunction, struct NameList *groupingAtts);
+	void GrowWriteOutNode(const char* filename);
+
+	void BuildUnaryNode(PlanNode *child, PlanNode *parent);
+	void BuildBinaryNode (PlanNode *lchild, PlanNode *rchild, JoinNode *parent, int outID);
+	void PrintNode(PlanNode *root);
+
+public:
+	PlanTree(Statistics &stat);
+	~PlanTree() {
+		delete root;
+	}
+	void BuildTableList(struct TableList *tables);
+	void GetPlanTree(struct AndList *pAnd);
+	void PrintTree();	
 };
 
 

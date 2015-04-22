@@ -7,6 +7,7 @@
 #include "ParseTree.h"
 
 #include <unordered_set>
+#include <vector>
 
 using namespace std;
 
@@ -53,7 +54,7 @@ void RemovePrefixOrList(struct OrList *pOr);
 void RemovePrefix(struct AndList *pAnd);
 
 // init default select file predicate for relation
-void InitDefaultPredicate(char *attName, Predicate &initPred);
+void InitDefaultPredicate(std::string attName, Predicate &initPred);
 
 // check if the sum prediacte is legal
 void CheckSumPredicate(struct FuncOperator *finalFunction, struct NameList *groupingAtts, struct NameList *attsToSelect);
@@ -67,5 +68,14 @@ void CheckDistinctFunc(struct FuncOperator *finalFunction, struct NameList *grou
 void CheckFuncOperand (struct FuncOperand *fOperand, std::unordered_set<std::string> &names);
 
 void CheckFuncOperator (struct FuncOperator *fOperator, std::unordered_set<std::string> &names);
+
+// get the attribute list in SUM
+struct NameList* GetSumAtts(struct FuncOperator *fOperator);
+
+void GetSumOperandAtts (struct FuncOperand *fOperand, std::vector<char*> &sumAtts);
+
+void GetSumOperatorAtts(struct FuncOperator *fOperator, std::vector<char*> &sumAtts);
+
+void DestroyNameList(struct NameList *names);
 
 #endif

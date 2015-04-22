@@ -100,6 +100,11 @@ class CNF {
 	int numAnds;
 
 public:
+
+	CNF() = default;
+
+	// initial default select file cnf
+	CNF(Schema &schema);
 	// this returns an instance of the OrderMaker class that
 	// allows the CNF to be implemented using a sort-based
 	// algorithm such as a sort-merge join.  Returns a 0 if and

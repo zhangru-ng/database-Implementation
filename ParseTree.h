@@ -1,7 +1,6 @@
 
 #ifndef ParseTree
 #define ParseTree
-
 // these are the types of operands that can appear in a CNF expression
 #define INT 1
 #define DOUBLE 2
@@ -28,7 +27,7 @@ struct FuncOperand {
 	int code;
 
 	// this is the actual operand
-	char *value;
+	char* value;
 };
 
 struct FuncOperator {
@@ -46,10 +45,10 @@ struct FuncOperator {
 struct TableList {
 
 	// this is the original table name
-	char *tableName;
+	char* tableName;
 
 	// this is the value it is aliased to
-	char *aliasAs;
+	char* aliasAs;
 
 	// and this the next alias
 	struct TableList *next;
@@ -58,7 +57,7 @@ struct TableList {
 struct NameList {
 
 	// this is the name
-	char *name;
+	char* name;
 
 	// and this is the next name in the list
 	struct NameList *next;
@@ -72,7 +71,7 @@ struct Operand {
         int code;
 
         // this is the actual operand
-        char *value;
+        char* value;
 };
 
 struct ComparisonOp {
@@ -108,7 +107,7 @@ struct AndList {
 };
 
 struct AttList {
-	char *name;
+	char* name;
 	int code;
 	struct AttList *next;
 };

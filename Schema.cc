@@ -6,7 +6,7 @@
 int Schema :: Find (char *attName) {
 
 	for (int i = 0; i < numAtts; i++) {
-		if (!strcmp (attName, myAtts[i].name)) {
+		if (!myAtts[i].name.compare(attName)) {
 			return i;
 		}
 	}
@@ -18,13 +18,21 @@ int Schema :: Find (char *attName) {
 Type Schema :: FindType (char *attName) {
 
 	for (int i = 0; i < numAtts; i++) {
-		if (!strcmp (attName, myAtts[i].name)) {
+		if (!myAtts[i].name.compare(attName)) {
 			return myAtts[i].myType;
 		}
 	}
 
 	// if we made it here, the attribute was not found
 	return Int;
+}
+
+Type Schema :: GetType (int index) {
+	if (index >= numAtts) {
+		cerr << "ERROR: Index out of bound!\n";
+		exit(1);
+	}
+	return myAtts[index].myType;
 }
 
 int Schema :: GetNumAtts () {
@@ -49,18 +57,16 @@ void Schema :: Print () {
 }
 
 Schema :: Schema (const Schema &left, const Schema &right) {
-	fileName = NULL;
 	numAtts = left.numAtts + right.numAtts;
 	myAtts = new Attribute[numAtts];
 	for (int i = 0; i < numAtts; i++) {
 		Type attType;
-		char *name;
 		if(i < left.numAtts) {
 			attType = left.myAtts[i].myType;
-			name = strdup (left.myAtts[i].name);
+			myAtts[i].name = left.myAtts[i].name;
 		} else {
 			attType = right.myAtts[i - left.numAtts].myType;
-			name = strdup (right.myAtts[i - left.numAtts].name);
+			myAtts[i].name = right.myAtts[i - left.numAtts].name;
 		}
 		if (attType == Int) {
 			myAtts[i].myType = Int;
@@ -76,12 +82,11 @@ Schema :: Schema (const Schema &left, const Schema &right) {
 			delete [] myAtts;
 			exit (1);
 		}
-		myAtts[i].name = name;
 	}
 }
 
 Schema :: Schema (const char *fpath, int num_atts, Attribute *atts) {
-	fileName = strdup (fpath);
+	fileName = fpath;
 	numAtts = num_atts;
 	myAtts = new Attribute[numAtts];
 	for (int i = 0; i < numAtts; i++ ) {
@@ -99,7 +104,7 @@ Schema :: Schema (const char *fpath, int num_atts, Attribute *atts) {
 			delete [] myAtts;
 			exit (1);
 		}
-		myAtts[i].name = strdup (atts[i].name);
+		myAtts[i].name = atts[i].name;
 	}
 }
 
@@ -150,7 +155,7 @@ Schema :: Schema (const char *fName, const char *relName) {
 	// suck in the file name
 	fscanf (foo, "%s", space);
 	totscans++;
-	fileName = strdup (space);
+	fileName = space;
 
 	// count the number of attributes specified
 	numAtts = 0;
@@ -179,7 +184,7 @@ Schema :: Schema (const char *fName, const char *relName) {
 
 		// read in the attribute name
 		fscanf (foo, "%s", space);	
-		myAtts[i].name = strdup (space);
+		myAtts[i].name = space;
 
 		// read in the attribute type
 		fscanf (foo, "%s", space);
@@ -199,11 +204,7 @@ Schema :: Schema (const char *fName, const char *relName) {
 }
 
 Schema :: ~Schema () {
-	for (int i = 0; i < numAtts; i++ ) {
-		free(myAtts[i].name);
-	}
-	delete [] myAtts;
-	free(fileName);
+	delete [] myAtts;	
 	myAtts = 0;
 }
 

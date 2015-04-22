@@ -181,6 +181,17 @@ void OrderMaker :: Print () {
 }
 
 
+CNF :: CNF(Schema &schema) {
+	orList[0][0].operand1 = Left;
+	orList[0][0].whichAtt1 = 0;	
+	orList[0][0].op = Equals;	
+	orList[0][0].operand2 = Left;
+	orList[0][0].whichAtt2 = 0;	
+	orList[0][0].attType = schema.GetType(0);
+	orLens[0] = 1;
+	numAnds = 1;
+}
+
 int CNF :: GetSortOrders (OrderMaker &left, OrderMaker &right) {
 
 	// initialize the size of the OrderMakers
@@ -377,6 +388,7 @@ void CNF :: GrowFromParseTree (struct AndList *parseTree, Schema *leftSchema,
 	
 			// catch-all case
 			} else {
+				cout << myOr->left->left->value << endl;
 				cerr << "You gave me some strange type for an operand that I do not recognize!!\n";
 				exit (1);
 			}
@@ -432,6 +444,7 @@ void CNF :: GrowFromParseTree (struct AndList *parseTree, Schema *leftSchema,
 	
 			// catch-all case
 			} else {
+				cout << myOr->left->right->value << endl;
 				cerr << "You gave me some strange type for an operand that I do not recognize!!\n";
 				exit (1);
 			}
@@ -575,6 +588,7 @@ void CNF :: GrowFromParseTree (struct AndList *parseTree, Schema *mySchema,
 	
 			// catch-all case
 			} else {
+				cout << myOr->left->left->value << endl;
 				cerr << "You gave me some strange type for an operand that I do not recognize!!\n";
 				exit (1);
 			}
@@ -623,6 +637,7 @@ void CNF :: GrowFromParseTree (struct AndList *parseTree, Schema *mySchema,
 	
 			// catch-all case
 			} else {
+				cout << myOr->left->right->value << endl;
 				cerr << "You gave me some strange type for an operand that I do not recognize!!\n";
 				exit (1);
 			}
@@ -632,6 +647,10 @@ void CNF :: GrowFromParseTree (struct AndList *parseTree, Schema *mySchema,
 			if (typeLeft != typeRight) {
 				cerr << "ERROR! Type mismatch in CNF.  " << myOr->left->left->value << " and "
 					<< myOr->left->right->value << " were found to not match.\n";
+					cout << typeLeft << endl;
+					cout << typeRight << endl;
+					cout << myOr->left->left->code <<endl;
+					cout << myOr->left->right->code <<endl;
 				exit (1);
 			}
 
