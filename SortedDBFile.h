@@ -10,10 +10,10 @@
 
 using std::unique_ptr;
 
-typedef struct _SortInfo {
+struct SortInfo {
 	OrderMaker *order;
 	int runlen;
-}SortInfo;
+};
 
 class SortedDBFile : public GenericDBFile{
 	FRIEND_TEST(SortedFileTest, SortedTypeHeaderFile);

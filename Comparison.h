@@ -60,6 +60,9 @@ public:
 	// based upon ALL of their attributes
 	OrderMaker(Schema *schema);
 
+	// construct order maker using input name list
+	OrderMaker(struct NameList *sortAtts, Schema &schema);
+
 	//overload ofstream << operator to write OrderMaker to file
 	friend ofstream & operator << (ofstream &out, const OrderMaker &om);
 

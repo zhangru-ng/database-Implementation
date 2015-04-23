@@ -107,9 +107,15 @@ struct AndList {
 };
 
 struct AttList {
+
+	// this is the input attribute name
 	char* name;
+
+	// this is the input attribute type
 	int code;
+
 	struct AttList *next;
+	
 };
 
 #endif

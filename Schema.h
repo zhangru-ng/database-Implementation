@@ -58,6 +58,9 @@ public:
 	// this composes a schema instance in-memory
 	Schema (const char *fName, int num_atts, Attribute *atts);
 
+	// compose a schema using input attribute list in CREATE TABLE
+	Schema (struct AttList *attsList);
+
 	// this constructs a sort order structure that can be used to
 	// place a lexicographic ordering on the records using this type of schema
 	int GetSortOrder (OrderMaker &order);

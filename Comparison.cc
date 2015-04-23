@@ -166,6 +166,16 @@ int OrderMaker :: Add(int attIndex, Type attType){
 }
 /**************************************************************************************************/
 
+OrderMaker :: OrderMaker(struct NameList *sortAtts, Schema &schema) {
+	numAtts = 0;
+	struct NameList *p = sortAtts;
+	while(p) {
+		Add(schema.Find(p->name), schema.FindType(p->name));
+		++numAtts;
+		p = p->next;
+	}
+}
+
 void OrderMaker :: Print () {
 	printf("NumAtts = %5d\n", numAtts);
 	for (int i = 0; i < numAtts; i++)

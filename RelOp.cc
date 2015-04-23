@@ -502,7 +502,7 @@ void* Sum::InternalThreadEntry () {
 	string result;
 	struct Attribute att;
 	if (inPipe->Remove(&tempRec)) {
-		att.name = strdup("SUM");
+		att.name = "SUM";
 		att.myType = computeMe->Apply(tempRec, intSum, doubleSum);	
 		//check attribute type to decide following step
 		switch (att.myType) {
@@ -521,8 +521,7 @@ void* Sum::InternalThreadEntry () {
 		result.append("|");
 		tempRec.ComposeRecord (&sumSchema, result.c_str());
 		outPipe->Insert(&tempRec);	
-		//free memory allocate by strdup
-		free(att.name);	
+		
 	}
 	//shut down output pipe
 	outPipe->ShutDown();	
@@ -597,7 +596,7 @@ void* GroupBy::InternalThreadEntry () {
 	if (output.Remove(&tempRec)) {
 		//initial the aggregation attribute
 		struct Attribute att;
-		att.name = strdup("SUM");
+		att.name = "SUM";
 		att.myType = computeMe->Apply(tempRec, intSum, doubleSum);
 		Schema sumSchema("tempSchema", 1, &att);
 		int numAtts = tempRec.GetNumAtts();
@@ -690,10 +689,18 @@ void GroupBy::GroupDouble (Pipe &output, Record &lastRec, int numAtts, int numGr
 /*************************************WriteOut***********************************************/
 WriteOut::WriteOut() : inPipe(nullptr), outFile(nullptr), mySchema(nullptr){ }
 
-void WriteOut::Run (Pipe &inPipe, FILE *outFile, Schema &mySchema) {
+void WriteOut::Run (Pipe &inPipe, Schema &mySchema, int outputMode) {
+	this->inPipe = &inPipe;
+	this->mySchema = &mySchema;
+	this->outputMode = outputMode;
+	StartInternalThread();
+}
+
+void WriteOut::Run (Pipe &inPipe, FILE *outFile, Schema &mySchema, int outputMode) {
 	this->inPipe = &inPipe;
 	this->outFile = outFile;
 	this->mySchema = &mySchema;
+	this->outputMode = outputMode;
 	StartInternalThread();
 }
 
@@ -708,43 +715,48 @@ void WriteOut::Use_n_Pages (int n) {
 // WriteOut accepts an input pipe, a schema, and a FILE*, and uses the schema to write
 // text version of the output records to the file.
 void* WriteOut::InternalThreadEntry() {
-	Record tempRec;
-	int n = mySchema->GetNumAtts();
-	Attribute *atts = mySchema->GetAtts();
-
-	while (inPipe->Remove(&tempRec)) {
-		// loop through all of the attributes
-		for (int i = 0; i < n; i++) {
-			// print the attribute name
-			//*fprintf(outFile, "%s: [", atts[i].name);
-			// use the i^th slot at the head of the record to get the
-			// offset to the correct attribute in the record
-			int pointer = ((int *) tempRec.bits)[i + 1];
-			// here we determine the type, which given in the schema;
-			// depending on the type we then print out the contents
-			// first is integer
-			if (atts[i].myType == Int) {
-				int *myInt = (int *) &(tempRec.bits[pointer]);
-				fprintf(outFile, "%d", *myInt);
-				fprintf(outFile, "|");
-			// then is a double
-			} else if (atts[i].myType == Double) {
-				double *myDouble = (double *) &(tempRec.bits[pointer]);
-				fprintf(outFile, "%f", *myDouble);
-				fprintf(outFile, "|");
-			// then is a character string
-			} else if (atts[i].myType == String) {
-				char *myString = (char *) &(tempRec.bits[pointer]);
-				fprintf(outFile, "%s", myString);
-				fprintf(outFile, "|");
-			} 
-			// *fprintf(outFile, "]");
-			// *print out a comma as needed to make things pretty
-			// *if (i != n - 1) {
-			// *	fprintf(outFile, ", ");
-			// *}
-		}
-		fprintf(outFile, "\n");	
+	Record tempRec;	
+	if (STDOUT_== outputMode) {
+		while (inPipe->Remove(&tempRec)) {
+			tempRec.Print(mySchema);			
+		}	
+	} else if (OUTFILE == outputMode) {
+		int n = mySchema->GetNumAtts();
+		Attribute *atts = mySchema->GetAtts();
+		while (inPipe->Remove(&tempRec)) {
+			// loop through all of the attributes
+			for (int i = 0; i < n; i++) {
+				// print the attribute name
+				//*fprintf(outFile, "%s: [", atts[i].name);
+				// use the i^th slot at the head of the record to get the
+				// offset to the correct attribute in the record
+				int pointer = ((int *) tempRec.bits)[i + 1];
+				// here we determine the type, which given in the schema;
+				// depending on the type we then print out the contents
+				// first is integer
+				if (atts[i].myType == Int) {
+					int *myInt = (int *) &(tempRec.bits[pointer]);
+					fprintf(outFile, "%d", *myInt);
+					fprintf(outFile, "|");
+				// then is a double
+				} else if (atts[i].myType == Double) {
+					double *myDouble = (double *) &(tempRec.bits[pointer]);
+					fprintf(outFile, "%f", *myDouble);
+					fprintf(outFile, "|");
+				// then is a character string
+				} else if (atts[i].myType == String) {
+					char *myString = (char *) &(tempRec.bits[pointer]);
+					fprintf(outFile, "%s", myString);
+					fprintf(outFile, "|");
+				} 
+				// *fprintf(outFile, "]");
+				// *print out a comma as needed to make things pretty
+				// *if (i != n - 1) {
+				// *	fprintf(outFile, ", ");
+				// *}
+			}
+			fprintf(outFile, "\n");	
+		}	
 	}		
 	pthread_exit(nullptr);
 }

@@ -176,11 +176,13 @@ class WriteOut : public RelationalOp, public Thread {
 private:
 	Pipe *inPipe;
 	FILE *outFile;
-	Schema *mySchema;	
+	Schema *mySchema;
+	int outputMode;	
 	void* InternalThreadEntry();
 public:
 	WriteOut();
-	void Run (Pipe &inPipe, FILE *outFile, Schema &mySchema);
+	void Run (Pipe &inPipe, Schema &mySchema, int outputMode);
+	void Run (Pipe &inPipe, FILE *outFile, Schema &mySchema, int outputMode);
 	void WaitUntilDone ();
 	void Use_n_Pages (int n);
 };

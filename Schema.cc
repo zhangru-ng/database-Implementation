@@ -56,6 +56,28 @@ void Schema :: Print () {
 	}
 }
 
+Schema :: Schema (struct AttList *attsList) {
+	struct AttList *p = attsList;
+	numAtts = 0;
+	while (p) {
+		++numAtts;
+		p = p->next;
+	}
+	myAtts = new Attribute[numAtts];
+	p = attsList;
+	for (int i = 0; i < numAtts; i++) {
+		myAtts[i].name = strdup(p->name);
+		if (p->code == INT) {
+			myAtts[i].myType = Int;
+		} else if (p->code == DOUBLE) {
+			myAtts[i].myType = Double;
+		} else if (p->code == STRING) {
+			myAtts[i].myType = String;
+		} 
+		p = p->next;
+	}
+}
+
 Schema :: Schema (const Schema &left, const Schema &right) {
 	numAtts = left.numAtts + right.numAtts;
 	myAtts = new Attribute[numAtts];
