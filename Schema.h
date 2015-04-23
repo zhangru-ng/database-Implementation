@@ -71,22 +71,13 @@ public:
 	// print the schema
 	void Print();
 
-	Schema() = default;
+	Schema();
 
-	Schema(Schema &&rhs) {
-		numAtts = rhs.numAtts;
-		myAtts = rhs.myAtts;
-		rhs.myAtts = nullptr;
-		fileName = std::move(rhs.fileName);
-	}
+	// move constructor
+	Schema(Schema &&rhs);
 
-	Schema& operator = (Schema &&rhs) {
-		numAtts = rhs.numAtts;
-		myAtts = rhs.myAtts;
-		rhs.myAtts = nullptr;
-		fileName = std::move(rhs.fileName);
-		return *this;
-	}
+	// move assignment
+	Schema& operator = (Schema &&rhs);
 
 	~Schema ();
 

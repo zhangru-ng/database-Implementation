@@ -14,6 +14,10 @@ std::vector<Pipe *> PlanNode::pipePool;
 
 PlanTree::PlanTree(Statistics &s, std::unordered_map<std::string, TableInfo> &tbl) : root(nullptr), numOfRels(0), stat(s), tableInfo(tbl) { }
 
+PlanTree::~PlanTree() {
+	delete root;
+}
+
 void PlanTree::BuildTableList(struct TableList *tables) {
 	struct TableList *p = tables;
 	while (p) {		
@@ -191,7 +195,8 @@ void PlanTree::GetPlanTree(struct AndList *pAnd) {
 	int current = buildedNodes.size() - 1;
 	root = buildedNodes[current];
 	root->pipePool.resize(buildedNodes[current]->outPipeID, new Pipe(pipesz));
-	PrintTree();
+	PrintVisitor printVisitor;
+	VisitTree(printVisitor);	
 }
 
 void PlanTree::GrowSelectFileNode() {
@@ -538,164 +543,273 @@ void PlanTree::BuildBinaryNode (PlanNode *lchild, PlanNode *rchild, JoinNode *pa
 }
 
 // inorder print the plan tree
-void PlanTree::PrintTree () {
+void PlanTree::VisitTree(PlanNodeVisitor &v) {
 	if (!root) {
 		cerr << "The plan tree is empty!" << endl;
 		exit(1);
 	}
-	PrintNode(root);
+	VisitNode(root, v);
 }
 
 // recursively print the plan node
-void PlanTree::PrintNode (PlanNode *treeNode) {
+void PlanTree::VisitNode (PlanNode *treeNode, PlanNodeVisitor &v) {
 	if (!treeNode) {
 		return;
 	}
-	PrintNode(treeNode->child);
-	treeNode->Print();
+	VisitNode(treeNode->child, v);
+	treeNode->Visit(v);
 	if(Binary == treeNode->type) {
-		PrintNode(dynamic_cast<JoinNode*>(treeNode)->rchild);
+		VisitNode(static_cast<JoinNode*>(treeNode)->rchild, v);
 	}	
 }
 
-void SelectFileNode::Print() {
+SelectFileNode::SelectFileNode(DBFile *dbf, CNF *cnf, Record *rec) : inFile(dbf), selOp(cnf), literal(rec) { }
+
+SelectFileNode::~SelectFileNode() {
+	delete selOp;		
+	delete literal;		
+}
+
+void SelectFileNode::Visit(PlanNodeVisitor &v) {
+	v.VisitSelectFileNode(this);
+}
+
+void PrintVisitor::VisitSelectFileNode(SelectFileNode *node) {
 	cout << "********\nSelect File Operation" << endl;
 	cout << "Input from File " << endl;
-	cout << "Output pipe ID " << outPipeID << endl;
+	cout << "Output pipe ID " << node->outPipeID << endl;
 	cout << "Output Schema:" << endl;
-	outSch->Print();	
+	node->outSch->Print();	
 	cout << "Select Pipe CNF: " << endl;
-	selOp->Print();
-	cout << "Estimate number of tuples: " << numTuples << endl;
+	node->selOp->Print();
+	cout << "Estimate number of tuples: " << node->numTuples << endl;
 	cout << "********\n" <<endl;
 }
 
-void SelectPipeNode::Print() {
+void RunVisitor::VisitSelectFileNode(SelectFileNode *node) {
+	node->sf.Run(*(node->inFile), *(node->pipePool[node->outPipeID]), *(node->selOp), *(node->literal));
+}
+
+SelectPipeNode::SelectPipeNode(CNF *cnf, Record *rec) : selOp(cnf), literal(rec) { }
+
+SelectPipeNode::~SelectPipeNode() {
+	delete selOp;
+	delete literal;		
+}
+
+void SelectPipeNode::Visit(PlanNodeVisitor &v) {
+	v.VisitSelectPipeNode(this);
+}
+
+void PrintVisitor::VisitSelectPipeNode(SelectPipeNode *node) {
 	cout << "********\nSelect Pipe Operation" << endl;
-	cout << "Input pipe ID " << inPipeID << endl;
-	cout << "Output pipe ID " << outPipeID << endl;
+	cout << "Input pipe ID " << node->inPipeID << endl;
+	cout << "Output pipe ID " << node->outPipeID << endl;
 	cout << "Output Schema:" << endl;
-	outSch->Print();	
+	node->outSch->Print();	
 	cout << "Select Pipe CNF: " << endl;
-	selOp->Print();
-	cout << "Estimate number of tuples: " << numTuples << endl;
+	node->selOp->Print();
+	cout << "Estimate number of tuples: " << node->numTuples << endl;
 	cout << "********\n" <<endl;
 }
 
-void ProjectNode::Print() { 
+void RunVisitor::VisitSelectPipeNode(SelectPipeNode *node) {
+	node->sp.Run(*(node->pipePool[node->inPipeID]), *(node->pipePool[node->outPipeID]), *(node->selOp), *(node->literal));
+}
+
+ProjectNode::ProjectNode(int *atts, int numIn, int numOut) : keepMe(atts), numAttsInput(numIn), numAttsOutput(numOut) { }
+	
+ProjectNode::~ProjectNode() {
+	delete[] keepMe;
+	delete outSch;
+}
+
+void ProjectNode::Visit(PlanNodeVisitor &v) {
+	v.VisitProjectNode(this);
+}
+
+void PrintVisitor::VisitProjectNode(ProjectNode *node) { 
 	cout << "********\nProject Operation" << endl;
-	cout << "Input pipe ID " << inPipeID << endl;
-	cout << "Output pipe ID " << outPipeID << endl;
+	cout << "Input pipe ID " << node->inPipeID << endl;
+	cout << "Output pipe ID " << node->outPipeID << endl;
 	cout << "Output Schema:" << endl;
-	outSch->Print();	
+	node->outSch->Print();	
 	cout << "Attributes to keep: " << endl;
 	cout << "{ ";
-	for(int i = 0; i < numAttsOutput; i++) {
-		cout << keepMe[i] << " ";
+	for(int i = 0; i < node->numAttsOutput; i++) {
+		cout << node->keepMe[i] << " ";
 	}
 	cout << "}\n";
-	cout << "Estimate number of tuples: " << numTuples << endl;
+	cout << "Estimate number of tuples: " << node->numTuples << endl;
 	cout << "********\n" <<endl;
 }
+	
+void RunVisitor::VisitProjectNode(ProjectNode *node) { 
+	node->pj.Run(*(node->pipePool[node->inPipeID]), *(node->pipePool[node->outPipeID]), node->keepMe, node->numAttsInput, node->numAttsOutput);
+}
 
-void JoinNode::Print() { 
+
+JoinNode::JoinNode(CNF *cnf, Record *rec) : selOp(cnf), literal(rec), rchild(nullptr), rightInPipeID(-1) { }
+	
+JoinNode::~JoinNode() {
+	delete selOp;
+	delete literal;	
+	delete outSch;
+	if(rchild) {
+		delete rchild;
+		rchild = nullptr;
+	}
+}
+
+void JoinNode::Visit(PlanNodeVisitor &v) {
+	v.VisitJoinNode(this);
+}
+
+void PrintVisitor::VisitJoinNode(JoinNode *node) { 
 	cout << "********\nJoin Operation" << endl;
-	cout << "Input pipe ID " << inPipeID << endl;
-	cout << "Input pipe ID " << rightInPipeID << endl;
-	cout << "Output pipe ID " << outPipeID << endl;
+	cout << "Input pipe ID " << node->inPipeID << endl;
+	cout << "Input pipe ID " << node->rightInPipeID << endl;
+	cout << "Output pipe ID " << node->outPipeID << endl;
 	cout << "Output Schema:" << endl;
-	outSch->Print();	
+	node->outSch->Print();	
 	cout << "Join CNF: " << endl;
-	selOp->Print();
-	cout << "Estimate number of tuples: " << numTuples << endl;
+	node->selOp->Print();
+	cout << "Estimate number of tuples: " << node->numTuples << endl;
 	cout << "********\n" <<endl;
 }
 
-void DuplicateRemovalNode::Print() {
+void RunVisitor::VisitJoinNode(JoinNode *node) { 
+	node->jn.Run(*(node->pipePool[node->inPipeID]), *(node->pipePool[node->rightInPipeID]), *(node->pipePool[node->outPipeID]), *(node->selOp), *(node->literal));
+}
+
+DuplicateRemovalNode::DuplicateRemovalNode(Schema * sch) : mySchema(sch) { }
+
+DuplicateRemovalNode::~DuplicateRemovalNode() {
+	// nothing to do
+}
+
+void DuplicateRemovalNode::Visit(PlanNodeVisitor &v) {
+	v.VisitDuplicateRemovalNode(this);
+}
+
+void PrintVisitor::VisitDuplicateRemovalNode(DuplicateRemovalNode *node) {
 	cout << "********\nDuplicate Removal Operation" << endl;
-	cout << "Input pipe ID " << inPipeID << endl;
-	cout << "Output pipe ID " << outPipeID << endl;
+	cout << "Input pipe ID " << node->inPipeID << endl;
+	cout << "Output pipe ID " << node->outPipeID << endl;
 	cout << "Output Schema:" << endl;
-	outSch->Print();
-	cout << "Estimate number of tuples: " << numTuples << endl;
+	node->outSch->Print();
+	cout << "Estimate number of tuples: " << node->numTuples << endl;
 	cout << "********\n" <<endl;
 }
 
-void SumNode::Print() {
+void RunVisitor::VisitDuplicateRemovalNode(DuplicateRemovalNode *node) {
+	node->dr.Run(*(node->pipePool[node->inPipeID]), *(node->pipePool[node->outPipeID]), *(node->mySchema));
+}
+
+
+SumNode::SumNode(Function *func) : computeMe(func) { }
+
+SumNode::~SumNode() {
+	delete computeMe;
+	delete outSch;
+}
+
+void SumNode::Visit(PlanNodeVisitor &v) {
+	v.VisitSumNode(this);
+}
+
+void PrintVisitor::VisitSumNode(SumNode *node) {
 	cout << "********\nSum Operation" << endl;
-	cout << "Input pipe ID " << inPipeID << endl;
-	cout << "Output pipe ID " << outPipeID << endl;
+	cout << "Input pipe ID " << node->inPipeID << endl;
+	cout << "Output pipe ID " << node->outPipeID << endl;
 	cout << "Output Schema:" << endl;
-	outSch->Print();	
+	node->outSch->Print();	
 	cout << "Sum Function:" << endl;
-	computeMe->Print();
-	cout << "Estimate number of tuples: " << numTuples << endl;
+	node->computeMe->Print();
+	cout << "Estimate number of tuples: " << node->numTuples << endl;
 	cout << "********\n" <<endl;
 }
 
-void GroupByNode::Print() {
+void RunVisitor::VisitSumNode(SumNode *node) {
+	node->sm.Run(*(node->pipePool[node->inPipeID]), *(node->pipePool[node->outPipeID]), *(node->computeMe));
+}
+
+
+GroupByNode::GroupByNode(OrderMaker *om, Function *func) : groupAtts(om), computeMe(func) { }	
+
+GroupByNode::~GroupByNode() {
+	delete groupAtts;
+	delete computeMe;
+	delete outSch;
+}
+	
+void GroupByNode::Visit(PlanNodeVisitor &v) {
+	v.VisitGroupByNode(this);
+}
+
+void PrintVisitor::VisitGroupByNode(GroupByNode *node) {
 	cout << "********\nGroupBy Operation" << endl;
-	cout << "Input pipe ID " << inPipeID << endl;
-	cout << "Output pipe ID " << outPipeID << endl;
+	cout << "Input pipe ID " << node->inPipeID << endl;
+	cout << "Output pipe ID " << node->outPipeID << endl;
 	cout << "Output Schema:" << endl;
-	outSch->Print();
+	node->outSch->Print();
 	cout << "GroupBy OrderMaker:" << endl;
-	groupAtts->Print();
+	node->groupAtts->Print();
 	cout << "GroupBy Function:" << endl;
-	computeMe->Print();
-	cout << "Estimate number of tuples: " << numTuples << endl;
+	node->computeMe->Print();
+	cout << "Estimate number of tuples: " << node->numTuples << endl;
 	cout << "********\n" <<endl;
 }
 
-void WriteOutNode::Print() {
+void RunVisitor::VisitGroupByNode(GroupByNode *node) {
+	node->gb.Run(*(node->pipePool[node->inPipeID]), *(node->pipePool[node->outPipeID]), *node->groupAtts, *(node->computeMe));
+}
+
+
+WriteOutNode::WriteOutNode(Schema *sch, int mode) : mySchema(sch), outputMode(mode) { }
+
+WriteOutNode::WriteOutNode(FILE *f, Schema *sch, std::string name, int mode) : outFile(f), mySchema(sch), filename(name), outputMode(mode) { }
+
+
+WriteOutNode::~WriteOutNode() {
+	fclose(outFile);
+}
+
+void WriteOutNode::Visit(PlanNodeVisitor &v) {
+	v.VisitWriteOutNode(this);
+}
+
+void PrintVisitor::VisitWriteOutNode(WriteOutNode *node) {
 	cout << "********\nWriteOut Operation" << endl;
-	cout << "Input pipe ID " << inPipeID << endl;
-	cout << "Output file name" << filename << endl;
+	cout << "Input pipe ID " << node->inPipeID << endl;
+	cout << "Output file name" << node->filename << endl;
 	cout << "Output Schema:" << endl;
-	outSch->Print();
-	cout << "Estimate number of tuples: " << numTuples << endl;
+	node->outSch->Print();
+	cout << "Estimate number of tuples: " << node->numTuples << endl;
 	cout << "********\n" << endl;
 }
 
-
-void SelectFileNode::Run() {
-	sf.Run(*inFile, *pipePool[outPipeID], *selOp, *literal);
-}
-
-void SelectPipeNode::Run() {
-	sp.Run(*pipePool[inPipeID], *pipePool[outPipeID], *selOp, *literal);
-}
-
-void ProjectNode::Run() { 
-	pj.Run(*pipePool[inPipeID], *pipePool[outPipeID], keepMe, numAttsInput, numAttsOutput);
-}
-
-void JoinNode::Run() { 
-	jn.Run(*pipePool[inPipeID], *pipePool[rightInPipeID], *pipePool[outPipeID], *selOp, *literal);
-}
-
-void DuplicateRemovalNode::Run() {
-	dr.Run(*pipePool[inPipeID], *pipePool[outPipeID], *mySchema);
-}
-
-void SumNode::Run() {
-	sm.Run(*pipePool[inPipeID], *pipePool[outPipeID], *computeMe);
-}
-
-void GroupByNode::Run() {
-	gb.Run(*pipePool[inPipeID], *pipePool[outPipeID], *groupAtts, *computeMe);
-}
-
-void WriteOutNode::Run() {
+void RunVisitor::VisitWriteOutNode(WriteOutNode *node) {
 	if (STDOUT_ == outputMode) {
-		wo.Run (*pipePool[inPipeID], *mySchema, outputMode);
+		node->wo.Run (*(node->pipePool[node->inPipeID]), *(node->mySchema), node->outputMode);
 	} else if (OUTFILE == outputMode){
-		wo.Run (*pipePool[inPipeID], outFile, *mySchema, outputMode);
+		node->wo.Run (*(node->pipePool[node->inPipeID]), node->outFile, *(node->mySchema), node->outputMode);
 	}	
 }
-	
-void PlanNode::DestroyPipePool() {
+
+
+PlanNode::PlanNode() : type(Unary), parent(nullptr), child(nullptr), inPipeID(-1), outPipeID(-1), outSch(nullptr), numTuples(-1) { }
+
+PlanNode::~PlanNode() {
+	if(child) {
+		delete child;
+		child = nullptr;
+	}
+}
+
+void PlanNode::ClearPipePool() {
 	for (auto &pipe_ptr : pipePool) {
 		delete pipe_ptr;
 	}
+	pipePool.clear();
 }

@@ -45,7 +45,7 @@ Attribute *Schema :: GetAtts () {
 
 void Schema :: Print () {
 	for (int i = 0; i < numAtts; i++ ) {
-		cout << "Att" << i << " " << myAtts[i].name << ": ";
+		cout << "No." << i << "  " << myAtts[i].name << "  ";
 		if (myAtts[i].myType == Int) {
 			cout << "Int" << endl;
 		} else if (myAtts[i].myType == Double) {
@@ -54,6 +54,26 @@ void Schema :: Print () {
 			cout << "String" << endl;
 		} 		
 	}
+}
+
+Schema :: Schema() {
+	numAtts = 0;
+	myAtts = NULL;
+}
+
+Schema :: Schema(Schema &&rhs) {
+	numAtts = rhs.numAtts;
+	myAtts = rhs.myAtts;
+	rhs.myAtts = nullptr;
+	fileName = std::move(rhs.fileName);
+}
+
+Schema& Schema :: operator = (Schema &&rhs) {
+	numAtts = rhs.numAtts;
+	myAtts = rhs.myAtts;
+	rhs.myAtts = nullptr;
+	fileName = std::move(rhs.fileName);
+	return *this;
 }
 
 Schema :: Schema (struct AttList *attsList) {

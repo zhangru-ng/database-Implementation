@@ -16,10 +16,7 @@ struct TableInfo{
 	DBFile dbf;	// corresponding DBFile
 	Schema sch;	// corresponding schema
 	TableInfo() = default;
-	TableInfo(TableInfo &&rhs) {
-		dbf = std::move(rhs.dbf);
-		sch = std::move(rhs.sch);
-	}
+	TableInfo(TableInfo &&rhs);
 };
 
 class Tables {
@@ -32,9 +29,11 @@ public:
 	Tables(std::unordered_map<std::string, TableInfo> &tbl);
 	void Create(const char *tableName, struct AttList *attsList);
 	void Create(const char *tableName, struct AttList *attsList, struct NameList *sortAtts);
+	void CreateAll();
 	void Load(const char *tableName, std::string fileName);
 	void Drop(const char *tableName);
 	void UpdateStats(const char *tableName, Statistics &stat);
+	void Print() const;
 };
 
 #endif

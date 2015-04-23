@@ -113,10 +113,10 @@ OrderMaker :: OrderMaker(Schema *schema) {
 ofstream & operator << (ofstream &out, const OrderMaker &om) {    
 	out << om.numAtts << endl;
 	for(int i = 0; i < om.numAtts; i++){
-		out << om.whichAtts[i] << endl;
+		out << om.whichAtts[i] << " ";
         out << om.whichTypes[i] << endl;
 	}	
-    	return out;
+    return out;
 }
 
 //overload ifstream >> operator to read OrderMaker from file	 
@@ -166,12 +166,16 @@ int OrderMaker :: Add(int attIndex, Type attType){
 }
 /**************************************************************************************************/
 
-OrderMaker :: OrderMaker(struct NameList *sortAtts, Schema &schema) {
-	numAtts = 0;
+OrderMaker :: OrderMaker(struct NameList *sortAtts, Schema &schema) {	
 	struct NameList *p = sortAtts;
+	numAtts = 0;
 	while(p) {
-		Add(schema.Find(p->name), schema.FindType(p->name));
-		++numAtts;
+		int attIndex = schema.Find(p->name);
+		if (-1 == attIndex) {
+			cerr << "ERROR: Sort attribute does not exist in schema!\n";
+			exit(1);
+		}
+		Add(attIndex, schema.FindType(p->name));
 		p = p->next;
 	}
 }

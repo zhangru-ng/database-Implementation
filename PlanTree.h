@@ -25,11 +25,11 @@ class PlanTree;
 
 enum NodeType { Unary, Binary };
 
+class PlanNodeVisitor;
+
 // plan node base class
 class PlanNode {
-friend class PlanTree;
-friend class RelOp;
-protected:
+public:
 	static std::vector<Pipe *> pipePool;
 	NodeType type;	
 	PlanNode *parent;	
@@ -38,161 +38,149 @@ protected:
 	int outPipeID;	// output pipe ID
 	Schema *outSch;	// output schema
 	double numTuples;	//number of tuples of the node 
-public:
-	PlanNode() : type(Unary), parent(nullptr), child(nullptr), inPipeID(-1), outPipeID(-1), outSch(nullptr), numTuples(-1) { }
-	virtual ~PlanNode() {
-		if(child) {
-			delete child;
-			child = nullptr;
-		}
-	}
-	virtual void Print() = 0;
-	virtual void Run() = 0;
-	static void DestroyPipePool();
+	PlanNode();
+	virtual ~PlanNode();
+	virtual void Visit(PlanNodeVisitor &v) = 0;
+	static void ClearPipePool();
 };
 
 class SelectFileNode : public PlanNode { 
-private:
+public:
 	DBFile *inFile;
 	CNF *selOp;
 	Record *literal;
 	SelectFile sf;
-public:
-	SelectFileNode(DBFile *dbf, CNF *cnf, Record *rec) : inFile(dbf), selOp(cnf), literal(rec) { }
+	SelectFileNode(DBFile *dbf, CNF *cnf, Record *rec);
 	SelectFileNode(const SelectFileNode &sf) = delete;
 	SelectFileNode & operator =(const SelectFileNode &sf) = delete;
-	void Print();
-	void Run();
-	~SelectFileNode() {
-		delete selOp;		
-		delete literal;		
-	}
+	void Visit(PlanNodeVisitor &v);
+	~SelectFileNode();
 };
 
 class SelectPipeNode : public PlanNode  {
-private:
+public:
 	CNF *selOp;
 	Record *literal;
 	SelectPipe sp;
-public:
-	SelectPipeNode(CNF *cnf, Record *rec) : selOp(cnf), literal(rec) { }
+	SelectPipeNode(CNF *cnf, Record *rec);
 	SelectPipeNode(const SelectPipeNode &sf) = delete;
 	SelectPipeNode & operator =(const SelectPipeNode &sf) = delete;
-	void Print();
-	void Run();
-	~SelectPipeNode() {
-		delete selOp;
-		delete literal;		
-	}
+	void Visit(PlanNodeVisitor &v);
+	~SelectPipeNode();
 };
 
 class ProjectNode : public PlanNode { 
-private:
+public:
 	int *keepMe;
 	int numAttsInput;
 	int numAttsOutput;
 	Project pj;
-public:
-	ProjectNode(int *atts, int numIn, int numOut) : keepMe(atts), numAttsInput(numIn), numAttsOutput(numOut) { }
+	ProjectNode(int *atts, int numIn, int numOut);
 	ProjectNode(const ProjectNode &pn) = delete;
 	ProjectNode & operator =(const ProjectNode &pn) = delete;
-	void Print();
-	void Run();
-	~ProjectNode() {
-		delete[] keepMe;
-		delete outSch;
-	}
+	void Visit(PlanNodeVisitor &v);
+	~ProjectNode();
 };
 
 class JoinNode : public PlanNode { 
-private:
+public:
 	CNF *selOp;
 	Record *literal;
 	Join jn;
-public:
 	PlanNode *rchild;
 	int rightInPipeID;
-	JoinNode(CNF *cnf, Record *rec) : selOp(cnf), literal(rec), rchild(nullptr), rightInPipeID(-1) { }
+	JoinNode(CNF *cnf, Record *rec);
 	JoinNode(const JoinNode &jn) = delete;
 	JoinNode & operator = (const JoinNode &jn) = delete;
-	void Print();
-	void Run();
-	~JoinNode() {
-		delete selOp;
-		delete literal;	
-		delete outSch;
-		if(rchild) {
-			delete rchild;
-			rchild = nullptr;
-		}
-	}
+	void Visit(PlanNodeVisitor &v);
+	~JoinNode();
 };
 
 class DuplicateRemovalNode : public PlanNode {
-private:
+public:
 	Schema *mySchema;
 	DuplicateRemoval dr;
-public:
-	DuplicateRemovalNode(Schema * sch) : mySchema(sch) { }
-	void Print();
-	void Run();
-	~DuplicateRemovalNode() {
-		// nothing
-	}
+	DuplicateRemovalNode(Schema * sch);
+	DuplicateRemovalNode(const DuplicateRemovalNode &dr) = delete;
+	DuplicateRemovalNode& operator = (const DuplicateRemovalNode &dr) = delete ;
+	void Visit(PlanNodeVisitor &v);
+	~DuplicateRemovalNode();
 };
 
 class SumNode : public PlanNode {
-private:
+public:
 	Function *computeMe;
 	Sum sm;
-public:	
-	SumNode(Function *func) : computeMe(func) { }
+	SumNode(Function *func);
 	SumNode(const SumNode &sn) = delete;
 	SumNode & operator = (const SumNode &sn) = delete;
-	void Print();
-	void Run();
-	~SumNode() {
-		delete computeMe;
-		delete outSch;
-	}
+	void Visit(PlanNodeVisitor &v);
+	~SumNode();
 };
 
 class GroupByNode : public PlanNode {
-private:
+public:
 	OrderMaker *groupAtts;
 	Function *computeMe;
 	GroupBy gb;
-public:
-	GroupByNode(OrderMaker *om, Function *func) : groupAtts(om), computeMe(func) { }
+	GroupByNode(OrderMaker *om, Function *func);
 	GroupByNode(const GroupByNode *gn) = delete;
 	GroupByNode & operator = (const GroupByNode *gn) = delete;
-	void Print();
-	void Run();
-	~GroupByNode() {
-		delete groupAtts;
-		delete computeMe;
-		delete outSch;
-	}
+	void Visit(PlanNodeVisitor &v);
+	~GroupByNode();
 };
 
 class WriteOutNode : public PlanNode {
-private:
+public:
 	FILE *outFile;
 	Schema *mySchema;
 	std::string filename;
 	int outputMode;
 	WriteOut wo;
-public:
-	WriteOutNode(Schema *sch, int mode) : mySchema(sch), outputMode(mode) { }
-	WriteOutNode(FILE *f, Schema *sch, std::string name, int mode) : outFile(f), mySchema(sch), filename(name), outputMode(mode) { }
+	WriteOutNode(Schema *sch, int mode);
+	WriteOutNode(FILE *f, Schema *sch, std::string name, int mode);
 	WriteOutNode(const WriteOutNode &wn) = delete;
 	WriteOutNode & operator =(const WriteOutNode &wn) = delete;
-	void Print();
-	void Run();
-	~WriteOutNode() {
-		fclose(outFile);
-	}
+	void Visit(PlanNodeVisitor &v);
+	~WriteOutNode();
 };
+
+class PlanNodeVisitor {
+public:
+	virtual void VisitSelectFileNode(SelectFileNode *node) = 0;
+	virtual void VisitSelectPipeNode(SelectPipeNode *node) = 0;
+	virtual void VisitJoinNode(JoinNode *node) = 0;
+	virtual void VisitProjectNode(ProjectNode *node) = 0;
+	virtual void VisitDuplicateRemovalNode(DuplicateRemovalNode *node) = 0;
+	virtual void VisitSumNode(SumNode *node) = 0;
+	virtual void VisitGroupByNode(GroupByNode *node) = 0;
+	virtual void VisitWriteOutNode(WriteOutNode *node) = 0;
+};
+
+class PrintVisitor : public PlanNodeVisitor {
+public:
+	void VisitSelectFileNode(SelectFileNode *node);
+	void VisitSelectPipeNode(SelectPipeNode *node);
+	void VisitJoinNode(JoinNode *node);
+	void VisitProjectNode(ProjectNode *node);
+	void VisitDuplicateRemovalNode (DuplicateRemovalNode *node);
+	void VisitSumNode(SumNode *node);
+	void VisitGroupByNode(GroupByNode *node);
+	void VisitWriteOutNode(WriteOutNode *node);
+};
+
+class RunVisitor : public PlanNodeVisitor {
+public:
+	void VisitSelectFileNode(SelectFileNode *node);
+	void VisitSelectPipeNode(SelectPipeNode *node);
+	void VisitJoinNode(JoinNode *node);
+	void VisitProjectNode(ProjectNode *node);
+	void VisitDuplicateRemovalNode(DuplicateRemovalNode *node);
+	void VisitSumNode(SumNode *node);
+	void VisitGroupByNode(GroupByNode *node);
+	void VisitWriteOutNode(WriteOutNode *node);
+};
+
 
 class PlanTree {
 private:
@@ -225,23 +213,21 @@ private:
 	// Grow the cooked join node, which join one select file node and a (join node | select pipe node)
 	void GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, int numOfRels);
 	void GrowProjectNode (struct NameList *attsToSelect);
-	void GrowDuplicateRemovalNode ();
-	void GrowSumNode (struct FuncOperator *finalFunction);
-	void GrowGroupByNode (struct FuncOperator *finalFunction, struct NameList *groupingAtts);
+	void GrowDuplicateRemovalNode();
+	void GrowSumNode(struct FuncOperator *finalFunction);
+	void GrowGroupByNode(struct FuncOperator *finalFunction, struct NameList *groupingAtts);
 	void GrowWriteOutNode(const char* filename, int outputMode);
 
 	void BuildUnaryNode(PlanNode *child, PlanNode *parent);
 	void BuildBinaryNode (PlanNode *lchild, PlanNode *rchild, JoinNode *parent, int outID);
-	void PrintNode(PlanNode *root);
+	void VisitNode(PlanNode *root, PlanNodeVisitor &v);
 
 public:
 	PlanTree(Statistics &stat, std::unordered_map<std::string, TableInfo> &tableInfo);
-	~PlanTree() {
-		delete root;
-	}
+	~PlanTree();
 	void BuildTableList(struct TableList *tables);
 	void GetPlanTree(struct AndList *pAnd);
-	void PrintTree();	
+	void VisitTree(PlanNodeVisitor &v);	
 };
 
 
