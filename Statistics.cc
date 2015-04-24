@@ -505,9 +505,10 @@ int	Statistics::FindAtts(char **relNames, std::string &AttsName, int numToJoin) 
 	exit(1);
 }
 
-void Statistics::CheckRels(const char* relName) const {	
+int Statistics::CheckRels(const char* relName) const {	
 	if (relations.find(relName) == relations.end()) {
 		cerr << "ERROR: Current statistics does not contain " << relName << endl;
-		exit(1);
-	}		
+		return DISCARD;
+	}
+	return RESUME;
 }

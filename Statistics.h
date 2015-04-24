@@ -20,6 +20,9 @@ using std::endl;
 #define LEFT 0
 #define RIGHT 1
 
+#define RESUME 1
+#define DISCARD -1
+
 // attribute name, number of distinct value
 typedef std::unordered_map<std::string,double> AttInfo;
 // vector of subset name
@@ -82,7 +85,6 @@ private:
 	EstimateInfo Simulate (const struct AndList *parseTree, char **relNames, int numToJoin, std::vector<std::string> &repOfSet);
 	// find if a attribute appears in the attribute list of relName list
 	int	FindAtts(char **relName, std::string &AttsName, int relToJoin) const;
-	void CheckRels(const char* relName) const;
 	
 public:
 	Statistics();
@@ -105,7 +107,8 @@ public:
 	void Print() const;
 	// get number of tuples of a relation
 	int GetNumTuples(const std::string &relName) const;
-	
+	// check if the statistics contain a relation
+	int CheckRels(const char* relName) const;	
 };
 
 #endif

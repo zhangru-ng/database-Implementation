@@ -25,16 +25,17 @@ void SelectFile::Use_n_Pages (int n) {
 void* SelectFile::InternalThreadEntry() {
 	Record tempRec;
 	ComparisonEngine comp;
+	Schema sch("catalog", "nation");
 	// assume that this file is all set up, it has been opened and is ready to go
 	inFile->MoveFirst();
 	while (1 == inFile->GetNext(tempRec)) {
-		//if the record is accepted by input CNF
+		// if the record is accepted by input CNF
 		if (1 == comp.Compare(&tempRec, literal, selOp)) {
+			// cout << "select file" << endl;
 			outPipe->Insert(&tempRec);
 		}
 	}
 	outPipe->ShutDown();
-	pthread_exit(nullptr);
 }
 /*************************************SelectFile*********************************************/
 
@@ -66,11 +67,11 @@ void* SelectPipe::InternalThreadEntry () {
 	while (1 == inPipe->Remove(&tempRec)) {
 		//if the record is accepted by input CNF
 		if (1 == comp.Compare(&tempRec, literal, selOp)) {
+			// cout << "select pipe" << endl;
 			outPipe->Insert(&tempRec);
 		}
 	}
 	outPipe->ShutDown();
-	pthread_exit(nullptr);
 }
 /*************************************SelectPipe*********************************************/
 
@@ -104,10 +105,10 @@ void* Project::InternalThreadEntry () {
 	while (1 == inPipe->Remove(&tempRec)) {
 		//Project (int *attsToKeep, int numAttsToKeep, int numAttsNow);
 		tempRec.Project(keepMe, numAttsOutput, numAttsInput);
+		// cout << "project" << endl;
 		outPipe->Insert(&tempRec);		
 	}	
 	outPipe->ShutDown();
-	pthread_exit(nullptr);
 }
 /**************************************Project***********************************************/
 
@@ -149,7 +150,6 @@ void* Join::InternalThreadEntry() {
 	 	SortMergeJoin(sortorderL, sortorderR);
 	}	
 	outPipe->ShutDown();
-	pthread_exit(nullptr);
 }
 
 void Join::NestedLoopJoin() {
@@ -409,6 +409,7 @@ int Join::OutputTuple (Record &left, Record &right, Pipe &outputL, Pipe &outputR
 	//merge all matched records
 	for (auto itL = leftRecords.begin(); itL != leftRecords.end(); ++itL) {
 		for (auto itR = rightRecords.begin(); itR != rightRecords.end(); ++itR) {
+			// cout << "join "  << numAttsToKeep << endl;
 			joinRec.MergeRecords (&(*itL), &(*itR), numAttsLeft, numAttsRight, attsToKeep, numAttsToKeep, numAttsLeft);
 			outPipe->Insert(&joinRec);
 		}
@@ -465,12 +466,12 @@ void* DuplicateRemoval::InternalThreadEntry () {
 		if (0 != comp.Compare(&tempRec, &lastRec, &DRorder)) {
 			//pipe Insert will consume tempRec, have to save it before Insert
 			lastRec = tempRec;
+			// cout << "duplicte" << endl;
 			outPipe->Insert(&tempRec);
 		}					
 	}
 	//shut down output pipe
 	outPipe->ShutDown();
-	pthread_exit(nullptr);
 }
 /**********************************DuplicateRemoval******************************************/
 
@@ -520,12 +521,12 @@ void* Sum::InternalThreadEntry () {
 		//ComposeRecord use terminate symbol '|' to calculate attribute length
 		result.append("|");
 		tempRec.ComposeRecord (&sumSchema, result.c_str());
+		// cout << "sum" << endl;
 		outPipe->Insert(&tempRec);	
 		
 	}
 	//shut down output pipe
 	outPipe->ShutDown();	
-	pthread_exit(nullptr);	
 }
 
 string Sum::IntSum () {
@@ -615,7 +616,6 @@ void* GroupBy::InternalThreadEntry () {
 	//clean up
 	delete[] attsToKeep;
 	outPipe->ShutDown();
-	pthread_exit(nullptr);		
 }
 
 void GroupBy::GroupInt (Pipe &output, Record &lastRec, int numAtts, int numGroupAtts, int *attsToKeep, Schema &sumSchema) {
@@ -637,6 +637,7 @@ void GroupBy::GroupInt (Pipe &output, Record &lastRec, int numAtts, int numGroup
 			sumnRecord.ComposeRecord (&sumSchema, result.c_str());
 			//compose record				
 			groupRec.MergeRecords (&sumnRecord, &lastRec, 1, numAtts, attsToKeep, numGroupAtts + 1, 1);
+			// cout << "group" << endl;
 			outPipe->Insert(&groupRec);		
 			computeMe->Apply(tempRec, intSum, dummy);	
 			lastRec.Consume(&tempRec);
@@ -670,6 +671,7 @@ void GroupBy::GroupDouble (Pipe &output, Record &lastRec, int numAtts, int numGr
 			sumnRecord.ComposeRecord (&sumSchema, result.c_str());
 			//compose record				
 			groupRec.MergeRecords (&sumnRecord, &lastRec, 1, numAtts, attsToKeep, numGroupAtts + 1, 1);
+			// cout << "group" << endl;
 			outPipe->Insert(&groupRec);		
 			computeMe->Apply(tempRec, dummy, doubleSum);	
 			lastRec.Consume(&tempRec);
@@ -724,6 +726,7 @@ void* WriteOut::InternalThreadEntry() {
 		int n = mySchema->GetNumAtts();
 		Attribute *atts = mySchema->GetAtts();
 		while (inPipe->Remove(&tempRec)) {
+			// cout << "write" << endl;
 			// loop through all of the attributes
 			for (int i = 0; i < n; i++) {
 				// print the attribute name
@@ -756,9 +759,9 @@ void* WriteOut::InternalThreadEntry() {
 				// *}
 			}
 			fprintf(outFile, "\n");	
-		}	
-	}		
-	pthread_exit(nullptr);
+		}
+	}
+	fflush(outFile);
 }
 /*************************************WriteOut***********************************************/
 

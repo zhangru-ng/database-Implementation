@@ -247,6 +247,6 @@ Schema :: Schema (const char *fName, const char *relName) {
 
 Schema :: ~Schema () {
 	delete [] myAtts;	
-	myAtts = 0;
+	myAtts = NULL;
 }
 
