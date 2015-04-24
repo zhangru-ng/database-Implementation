@@ -15,27 +15,47 @@ std::vector<Pipe *> PlanNode::pipePool;
 PlanTree::PlanTree(Statistics &s, std::unordered_map<std::string, TableInfo> &tbl) : root(nullptr), numOfRels(0), stat(s), tableInfo(tbl) { }
 
 PlanTree::~PlanTree() {
+	root->ClearPipePool();
 	delete root;
 }
 
-void PlanTree::BuildTableList(struct TableList *tables) {
+int PlanTree::BuildTableList(struct TableList *tables) {
 	struct TableList *p = tables;
 	while (p) {		
-		CheckRels(p->tableName);
-		stat.CheckRels(p->tableName);
-		stat.CopyRel(p->tableName, p->aliasAs);
+		if(DISCARD == CheckRels(p->tableName)) {
+			return DISCARD;
+		}
+		if (DISCARD == stat.CheckRels(p->tableName)) {
+			cerr << "Current statistics does not contain " << p->tableName << ". " 
+				 << "Can not perform query optimization. Do you still want to run this query? [y/n]" << endl;
+			while(true) {
+				char key;
+				cin >> key;
+				if (key == 'y') {
+					return OPTIMIZED_OFF;
+				} else if (key == 'n'){
+					return DISCARD;
+				} else {
+					cout << "Please input y or n." << endl;
+				}
+			}	
+		} else {
+			stat.CopyRel(p->tableName, p->aliasAs);
+		}		
 		tableList.emplace(p->aliasAs, p->tableName);
 		relNames.push_back(p->aliasAs);
 		++numOfRels;
 		p = p->next;
 	}
+	return OPTIMIZED_ON;
 }
 
-void PlanTree::CheckRels(const char* relName) {
+int PlanTree::CheckRels(const char* relName) {
 	if(tableInfo.find(relName) == tableInfo.end()) {
 		cerr << "Table is no exist in Database currently!\n";
-		exit(1);
+		return DISCARD;
 	}
+	return RESUME;
 }
 
 void PlanTree::SeparatePredicate(struct AndList *pAnd) {
@@ -44,8 +64,8 @@ void PlanTree::SeparatePredicate(struct AndList *pAnd) {
 	while (pAnd != nullptr) {
 		bool containJoin = false;	
 		bool containCrossSelect = false;	
-		char* oldname = "";
-		Predicate p = nullptr;
+		string oldname = "";
+		Predicate p = pAnd;
 		// store the relations of cross selection, 0 means not, crossRelNo[i] = 1 means relNames[i] is contained in the Predicate
 		// e.g. crossRelNo = {0, 1, 1} means cross selection contain relNames[1], relNames[2]
 		std::vector<int> crossRelNo(numOfRels, 0);
@@ -57,11 +77,12 @@ void PlanTree::SeparatePredicate(struct AndList *pAnd) {
 			int rOperand = pCom->right->code;
 			// NAME op NAME  (NAME = 4, thus NAME | NAME = 4)
 			if (NAME == lOperand && NAME ==rOperand) {
-				p = pAnd;
+				// p = pAnd;
 				std::string lname(pCom->left->value);				
 				std::string rname(pCom->right->value);
 				if(0 == lname.compare(rname)) {
 					pOr = pOr->rightOr;
+					containJoin = true;		//should be modified later
 					continue;
 				}	
 				//find relation ID of left and right attribute
@@ -77,18 +98,19 @@ void PlanTree::SeparatePredicate(struct AndList *pAnd) {
 					cerr << "ERROR: Join and selection in one AND";
 					exit(1);
 				}
-				p = pAnd;
+				// p = pAnd;
 				std::string name = stat.InitAttsName(pCom);
+				// cout << name << endl;
 				int i = stat.FindAtts(&relNames[0], name, numOfRels);
 				// set the corresponding relation slot in crossRelNo to 1
 				crossRelNo[i] = 1;
 				// if the oldname is empty, set to the first met relation
-				if (!strcmp(oldname,"")) {
+				if (!oldname.compare("")) {
 					oldname = relNames[i];		
 				} else {
 					//if conatin more than one relation in a selection Predicate
 					//e.g. (l.l_orderkey < 100 OR o.o_orderkey < 100) 
-					if(strcmp(oldname, relNames[i])) {
+					if(oldname.compare(relNames[i])) {
 						containCrossSelect = true;
 					}
 				}						
@@ -101,7 +123,10 @@ void PlanTree::SeparatePredicate(struct AndList *pAnd) {
 			if (!containCrossSelect) {				
 				auto ibp = selectList.emplace(oldname, p);
 				if(false == ibp.second) {
-					selectList.at(oldname)->rightAnd = p;
+					Predicate curList = selectList.at(oldname);
+					// find the rightmost and list
+					while(curList->rightAnd) { curList = curList->rightAnd; }
+					curList->rightAnd = p;
 				}
 			} else {
 				// otherwise the Predicate can not be pushed down to bottom, put into cross selection list
@@ -113,7 +138,11 @@ void PlanTree::SeparatePredicate(struct AndList *pAnd) {
 	}
 }
 
-void PlanTree::GetPlanTree(struct AndList *pAnd) {	
+void PlanTree::GetPlanTree(struct AndList *pAnd) {
+	int flag = BuildTableList(tables);
+	if(DISCARD == flag) {
+		return;
+	}
 	// check if the sum predicate is legal
 	CheckSumPredicate(finalFunction, groupingAtts, attsToSelect);
 	SeparatePredicate(pAnd);
@@ -125,31 +154,36 @@ void PlanTree::GetPlanTree(struct AndList *pAnd) {
 	GrowSelectFileNode();
 	if (1 == numOfRels) {
 		buildedNodes.push_back(selectFileList[0]);
-		buildedNodes[0]->outPipeID = 1;
+		buildedNodes[0]->outPipeID = 0;
 	}
 	// stat.Print();
-	if (!joinList.empty()) {		
-		int numToJoin = 2;
-		// a hash table stores the relations have been joined
-		// joinedTable[i] = 1 means relName[i] has been joined,  0 means not been joined	
-		std::vector<int> joinedTable(numOfRels, 0);
-		// minimun cost relation sequence
-		std::vector<char*> minList;
-		//use greedy algorithm, find the minimum cost join and apply
-		GrowRowJoinNode(joinedTable, minList);
-		// find if any cross selection can be performed
-		GrowSelectPipeNode(joinedTable, minList, numToJoin);
-		// stat.Print();
-		++numToJoin;
-		// keep finding minimum cost join and apply while joinList is not empty 
-		while(!joinList.empty()) {		
-			GrowCookedJoinNode(joinedTable, minList, numToJoin);
+	if (!joinList.empty()) {
+		if(OPTIMIZED_ON == flag) {
+			int numToJoin = 2;
+			// a hash table stores the relations have been joined
+			// joinedTable[i] = 1 means relName[i] has been joined,  0 means not been joined	
+			std::vector<int> joinedTable(numOfRels, 0);
+			// minimun cost relation sequence
+			std::vector<char*> minList;
+			//use greedy algorithm, find the minimum cost join and apply
+			GrowRowJoinNode(joinedTable, minList);
 			// find if any cross selection can be performed
-			GrowSelectPipeNode(joinedTable, minList, numToJoin);		
+			GrowSelectPipeNode(joinedTable, minList, numToJoin);
 			// stat.Print();
-			// increment number of relations
 			++numToJoin;
-		}
+			// keep finding minimum cost join and apply while joinList is not empty 
+			while(!joinList.empty()) {		
+				GrowCookedJoinNode(joinedTable, minList, numToJoin);
+				// find if any cross selection can be performed
+				GrowSelectPipeNode(joinedTable, minList, numToJoin);		
+				// stat.Print();
+				// increment number of relations
+				++numToJoin;
+			}
+		} else {
+			cerr << "optimize off, not yet implemented\n";
+			exit(1);
+		}		
 	}
 	// if both SUM and GROUP BY are on
 	if (groupingAtts && finalFunction) {
@@ -187,16 +221,39 @@ void PlanTree::GetPlanTree(struct AndList *pAnd) {
 	if (distinctAtts) {
 	 	GrowDuplicateRemovalNode();
 	}
+
+	GrowWriteOutNode("outfileName", OUTFILE);
 	// if SET output to file
-	if(STDOUT_ == outputMode || OUTFILE == outputMode) {
-		GrowWriteOutNode(outfileName, outputMode);
-	}
+	// if(STDOUT_ == outputMode || OUTFILE == outputMode) {
+	// 	GrowWriteOutNode(outfileName, outputMode);
+	// }
 	// set root pointer of the plan tree
 	int current = buildedNodes.size() - 1;
-	root = buildedNodes[current];
-	root->pipePool.resize(buildedNodes[current]->outPipeID, new Pipe(pipesz));
+	root = buildedNodes[current];	
+}
+
+void PlanTree::Print() {
 	PrintVisitor printVisitor;
-	VisitTree(printVisitor);	
+	VisitTree(printVisitor);
+}
+
+void PlanTree::Execute() {
+	int current = buildedNodes.size() - 1;
+	root->InitPipePool(buildedNodes[current]->outPipeID + 1);	
+	RunVisitor runVisitor;
+	VisitTree(runVisitor);
+
+}
+
+void PlanTree::Wait() {
+	WaitVisitor joinVisitor;
+	VisitTree(joinVisitor);
+}
+
+void PlanTree::Clear() {
+	delete root;
+	root = nullptr;
+	numOfRels = 0;
 }
 
 void PlanTree::GrowSelectFileNode() {
@@ -216,12 +273,13 @@ void PlanTree::GrowSelectFileNode() {
 			stat.Apply(p, rels , 1);
 		} else {
 			// otherwise grow cnf using default predicate (R.a = R.a) 
-			CNF *initCNF = new CNF(ti.sch);			
+			CNF *initCNF = new CNF(ti.sch);	
 			treeNode = new SelectFileNode(&ti.dbf, initCNF, rec);
 			treeNode->numTuples = stat.GetNumTuples(tableList.at(relNames[i]));
 		}
 		treeNode->outSch = &ti.sch;
 		treeNode->type = Unary;
+		treeNode->dbf_name = ti.dbf_name;
 		selectFileList.push_back(treeNode);
 	}
 }
@@ -299,9 +357,9 @@ void PlanTree::GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*>
 	treeNode->outSch = new Schema(lti.sch, rti.sch);
 	treeNode->numTuples = stat.Estimate(minIt->p, &minList[0] , 2);
 	// initial first 2 output pipe
-	selectFileList[leftID]->outPipeID = 1;
-	selectFileList[rightID]->outPipeID = 2;
-	BuildBinaryNode(selectFileList[leftID], selectFileList[rightID], treeNode, 3);
+	selectFileList[leftID]->outPipeID = 0;
+	selectFileList[rightID]->outPipeID = 1;
+	BuildBinaryNode(selectFileList[leftID], selectFileList[rightID], treeNode, 2);
 	buildedNodes.push_back(treeNode);
 
 	// apply the join predicate and erase the predicate in join list
@@ -359,11 +417,13 @@ void PlanTree::GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<cha
 	treeNode->numTuples = stat.Estimate(minIt->p, &minList[0] , numToJoin);
 	selectFileList[minId]->outPipeID = buildedNodes[current]->outPipeID + 1;
 	//*****put the smaller relation on the left, use array to eliminate branch*****
-	PlanNode *minNodes[] = { buildedNodes[current], selectFileList[minId] };
-	double leftNumTuples = buildedNodes[current]->numTuples;
-	double rightNumTuples = selectFileList[minId]->numTuples;
-	PlanNode *lchild = minNodes[leftNumTuples > rightNumTuples];
-	PlanNode *rchild = minNodes[leftNumTuples <= rightNumTuples];	
+	// PlanNode *minNodes[] = { buildedNodes[current], selectFileList[minId] };
+	// double leftNumTuples = buildedNodes[current]->numTuples;
+	// double rightNumTuples = selectFileList[minId]->numTuples;
+	// PlanNode *lchild = minNodes[leftNumTuples > rightNumTuples];
+	// PlanNode *rchild = minNodes[leftNumTuples <= rightNumTuples];	
+	 PlanNode *lchild = buildedNodes[current];
+	PlanNode *rchild = selectFileList[minId];
 
 	BuildBinaryNode (lchild, rchild, treeNode, buildedNodes[current]->outPipeID + 2);
 	buildedNodes.push_back(treeNode);
@@ -397,9 +457,11 @@ void PlanTree::GrowProjectNode (struct NameList *attsToSelect) {
 	Attribute *inAtts = inSch->GetAtts();
 	Attribute *atts = new Attribute[numAttsOutput];
 	for(int i = 0; i < numAttsOutput; i++) {
-		keepMe[i] = indices[i];
-		atts[i].myType = inAtts[indices[i]].myType;
-		atts[i].name = inAtts[indices[i]].name;
+		// namelist is produced from LR grammar, need to reverse the order
+		int rindex = numAttsOutput - i - 1;
+		keepMe[i] = indices[rindex];
+		atts[i].myType = inAtts[indices[rindex]].myType;
+		atts[i].name = inAtts[indices[rindex]].name;
 	}
 	ProjectNode *treeNode = new ProjectNode(keepMe, inSch->GetNumAtts(), numAttsOutput);
 	treeNode->outSch =  new Schema("project_sch", numAttsOutput, atts);
@@ -475,8 +537,10 @@ void PlanTree::GrowGroupByNode (struct FuncOperator *finalFunction, struct NameL
 	Attribute *inAtts = inSch->GetAtts();
 	Attribute *atts = new Attribute[numAtts + 1];
 	for(int i = 0; i < numAtts; i++) {
-		atts[i].myType = inAtts[indices[i]].myType;
-		atts[i].name = inAtts[indices[i]].name;
+		// namelist is produced from LR grammar, need to reverse the order
+		int rindex = numAtts - i - 1;
+		atts[i].myType = inAtts[indices[rindex]].myType;
+		atts[i].name = inAtts[indices[rindex]].name;
 	}
 	GroupByNode *treeNode;
 	if(finalFunction) {
@@ -505,9 +569,8 @@ void PlanTree::GrowWriteOutNode(const char* filename, int outputMode) {
 	WriteOutNode *treeNode = nullptr;
 	if(STDOUT_ == outputMode) {
 		treeNode = new WriteOutNode(inSch, outputMode);
-	} else if (OUTFILE == outputMode) {
-		FILE *writefile = fopen (filename, "w");
-		treeNode = new WriteOutNode(writefile, inSch, filename, outputMode);
+	} else if (OUTFILE == outputMode) {		
+		treeNode = new WriteOutNode(nullptr, inSch, filename, outputMode);
 	} 
 	treeNode->outSch = inSch;
 	treeNode->numTuples = buildedNodes[current]->numTuples;
@@ -587,8 +650,14 @@ void PrintVisitor::VisitSelectFileNode(SelectFileNode *node) {
 }
 
 void RunVisitor::VisitSelectFileNode(SelectFileNode *node) {
+	node->inFile->Open(node->dbf_name.c_str());
 	node->sf.Run(*(node->inFile), *(node->pipePool[node->outPipeID]), *(node->selOp), *(node->literal));
 }
+
+void WaitVisitor::VisitSelectFileNode(SelectFileNode *node) {
+	node->sf.WaitUntilDone();
+}
+
 
 SelectPipeNode::SelectPipeNode(CNF *cnf, Record *rec) : selOp(cnf), literal(rec) { }
 
@@ -616,6 +685,11 @@ void PrintVisitor::VisitSelectPipeNode(SelectPipeNode *node) {
 void RunVisitor::VisitSelectPipeNode(SelectPipeNode *node) {
 	node->sp.Run(*(node->pipePool[node->inPipeID]), *(node->pipePool[node->outPipeID]), *(node->selOp), *(node->literal));
 }
+
+void WaitVisitor::VisitSelectPipeNode(SelectPipeNode *node) {
+	node->sp.WaitUntilDone();
+}
+
 
 ProjectNode::ProjectNode(int *atts, int numIn, int numOut) : keepMe(atts), numAttsInput(numIn), numAttsOutput(numOut) { }
 	
@@ -646,6 +720,10 @@ void PrintVisitor::VisitProjectNode(ProjectNode *node) {
 	
 void RunVisitor::VisitProjectNode(ProjectNode *node) { 
 	node->pj.Run(*(node->pipePool[node->inPipeID]), *(node->pipePool[node->outPipeID]), node->keepMe, node->numAttsInput, node->numAttsOutput);
+}
+
+void WaitVisitor::VisitProjectNode(ProjectNode *node) { 
+	node->pj.WaitUntilDone();
 }
 
 
@@ -679,7 +757,12 @@ void PrintVisitor::VisitJoinNode(JoinNode *node) {
 }
 
 void RunVisitor::VisitJoinNode(JoinNode *node) { 
+	node->jn.Use_n_Pages(node->pagenum);
 	node->jn.Run(*(node->pipePool[node->inPipeID]), *(node->pipePool[node->rightInPipeID]), *(node->pipePool[node->outPipeID]), *(node->selOp), *(node->literal));
+}
+
+void WaitVisitor::VisitJoinNode(JoinNode *node) { 
+	node->jn.WaitUntilDone();
 }
 
 DuplicateRemovalNode::DuplicateRemovalNode(Schema * sch) : mySchema(sch) { }
@@ -703,7 +786,12 @@ void PrintVisitor::VisitDuplicateRemovalNode(DuplicateRemovalNode *node) {
 }
 
 void RunVisitor::VisitDuplicateRemovalNode(DuplicateRemovalNode *node) {
+	node->dr.Use_n_Pages(node->pagenum);
 	node->dr.Run(*(node->pipePool[node->inPipeID]), *(node->pipePool[node->outPipeID]), *(node->mySchema));
+}
+
+void WaitVisitor::VisitDuplicateRemovalNode(DuplicateRemovalNode *node) {
+	node->dr.WaitUntilDone();
 }
 
 
@@ -734,6 +822,10 @@ void RunVisitor::VisitSumNode(SumNode *node) {
 	node->sm.Run(*(node->pipePool[node->inPipeID]), *(node->pipePool[node->outPipeID]), *(node->computeMe));
 }
 
+void WaitVisitor::VisitSumNode(SumNode *node) {
+	node->sm.WaitUntilDone();
+}
+
 
 GroupByNode::GroupByNode(OrderMaker *om, Function *func) : groupAtts(om), computeMe(func) { }	
 
@@ -762,7 +854,12 @@ void PrintVisitor::VisitGroupByNode(GroupByNode *node) {
 }
 
 void RunVisitor::VisitGroupByNode(GroupByNode *node) {
+	node->gb.Use_n_Pages(node->pagenum);
 	node->gb.Run(*(node->pipePool[node->inPipeID]), *(node->pipePool[node->outPipeID]), *node->groupAtts, *(node->computeMe));
+}
+
+void WaitVisitor::VisitGroupByNode(GroupByNode *node) {
+	node->gb.WaitUntilDone();
 }
 
 
@@ -772,7 +869,9 @@ WriteOutNode::WriteOutNode(FILE *f, Schema *sch, std::string name, int mode) : o
 
 
 WriteOutNode::~WriteOutNode() {
-	fclose(outFile);
+	// if (OUTFILE == outputMode) {
+	// 	fclose(outFile);
+	// }
 }
 
 void WriteOutNode::Visit(PlanNodeVisitor &v) {
@@ -782,7 +881,7 @@ void WriteOutNode::Visit(PlanNodeVisitor &v) {
 void PrintVisitor::VisitWriteOutNode(WriteOutNode *node) {
 	cout << "********\nWriteOut Operation" << endl;
 	cout << "Input pipe ID " << node->inPipeID << endl;
-	cout << "Output file name" << node->filename << endl;
+	cout << "Output file name: " << node->filename << endl;
 	cout << "Output Schema:" << endl;
 	node->outSch->Print();
 	cout << "Estimate number of tuples: " << node->numTuples << endl;
@@ -790,13 +889,17 @@ void PrintVisitor::VisitWriteOutNode(WriteOutNode *node) {
 }
 
 void RunVisitor::VisitWriteOutNode(WriteOutNode *node) {
-	if (STDOUT_ == outputMode) {
-		node->wo.Run (*(node->pipePool[node->inPipeID]), *(node->mySchema), node->outputMode);
-	} else if (OUTFILE == outputMode){
-		node->wo.Run (*(node->pipePool[node->inPipeID]), node->outFile, *(node->mySchema), node->outputMode);
+	if (STDOUT_ == node->outputMode) {
+		node->wo.Run(*(node->pipePool[node->inPipeID]), *(node->mySchema), node->outputMode);
+	} else if (OUTFILE == node->outputMode) {
+		node->outFile = fopen(node->filename.c_str(), "w");
+		node->wo.Run(*(node->pipePool[node->inPipeID]), node->outFile, *(node->mySchema), node->outputMode);
 	}	
 }
 
+void WaitVisitor::VisitWriteOutNode(WriteOutNode *node) {
+	node->wo.WaitUntilDone ();
+}
 
 PlanNode::PlanNode() : type(Unary), parent(nullptr), child(nullptr), inPipeID(-1), outPipeID(-1), outSch(nullptr), numTuples(-1) { }
 
@@ -807,8 +910,15 @@ PlanNode::~PlanNode() {
 	}
 }
 
+void PlanNode::InitPipePool(int poolSize) {
+	pipePool.reserve(poolSize);
+	for(int i = 0; i < poolSize; ++i ) {
+		pipePool.push_back(new Pipe(pipesz));
+	}
+}
+
 void PlanNode::ClearPipePool() {
-	for (auto &pipe_ptr : pipePool) {
+	for (auto &pipe_ptr : pipePool) {		
 		delete pipe_ptr;
 	}
 	pipePool.clear();

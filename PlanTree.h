@@ -10,6 +10,11 @@
 #include <cstring>
 #include <string>
 
+#define RESUME 1
+#define OPTIMIZED_ON 1
+#define OPTIMIZED_OFF 0
+#define DISCARD -1
+
 struct JoinRelInfo{
 	int left;	// left relation index,
 	int right;	// right relation index
@@ -31,6 +36,8 @@ class PlanNodeVisitor;
 class PlanNode {
 public:
 	static std::vector<Pipe *> pipePool;
+	constexpr static int pipesz = 100;
+	constexpr static int pagenum = 100;
 	NodeType type;	
 	PlanNode *parent;	
 	PlanNode *child;
@@ -42,6 +49,7 @@ public:
 	virtual ~PlanNode();
 	virtual void Visit(PlanNodeVisitor &v) = 0;
 	static void ClearPipePool();
+	static void InitPipePool(int poolSize);
 };
 
 class SelectFileNode : public PlanNode { 
@@ -49,6 +57,7 @@ public:
 	DBFile *inFile;
 	CNF *selOp;
 	Record *literal;
+	std::string dbf_name;
 	SelectFile sf;
 	SelectFileNode(DBFile *dbf, CNF *cnf, Record *rec);
 	SelectFileNode(const SelectFileNode &sf) = delete;
@@ -181,10 +190,21 @@ public:
 	void VisitWriteOutNode(WriteOutNode *node);
 };
 
+class WaitVisitor : public PlanNodeVisitor {
+public:
+	void VisitSelectFileNode(SelectFileNode *node);
+	void VisitSelectPipeNode(SelectPipeNode *node);
+	void VisitJoinNode(JoinNode *node);
+	void VisitProjectNode(ProjectNode *node);
+	void VisitDuplicateRemovalNode(DuplicateRemovalNode *node);
+	void VisitSumNode(SumNode *node);
+	void VisitGroupByNode(GroupByNode *node);
+	void VisitWriteOutNode(WriteOutNode *node);
+};
+
 
 class PlanTree {
-private:
-	static const int pipesz = 100;
+private:	
 	PlanNode *root;
 	int numOfRels;	// store number of relations in the tree	
 	Statistics &stat;
@@ -194,15 +214,15 @@ private:
 	std::unordered_map<string, Predicate> selectList;	// hash table for relation name and selection predicate on this relation
 	std::vector<JoinRelInfo> joinList;	//set of join predicate
 	std::vector<CrossSelectInfo> crossSelectList;	// set of cross select predicate(that one selection predicate select on more than one attribute) 
-	std::vector<PlanNode*> selectFileList;
-	std::vector<PlanNode*> buildedNodes;	//store builded node expect select file node, which stores in selectFileList
+	std::vector<PlanNode*> selectFileList;	//store builded selectFile nodes
+	std::vector<PlanNode*> buildedNodes;	//store builded nodes expect select file node, which stores in selectFileList
 
 	// separate select, join and cross select predicate
 	void SeparatePredicate(struct AndList *parseTree);
 	// check if any cross select predicate can be apply
 	int CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<int> &joinedTable);	
 	// check if the tables in predicates exist in database
-	void CheckRels(const char* relName);
+	int CheckRels(const char* relName);
 	// get the type of result of function
 	Type GetSumType(Function *func);
 
@@ -225,9 +245,13 @@ private:
 public:
 	PlanTree(Statistics &stat, std::unordered_map<std::string, TableInfo> &tableInfo);
 	~PlanTree();
-	void BuildTableList(struct TableList *tables);
+	int BuildTableList(struct TableList *tables);
 	void GetPlanTree(struct AndList *pAnd);
 	void VisitTree(PlanNodeVisitor &v);	
+	void Print();
+	void Execute();
+	void Wait();
+	void Clear();
 };
 
 
