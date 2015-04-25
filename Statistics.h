@@ -20,8 +20,8 @@ using std::endl;
 #define LEFT 0
 #define RIGHT 1
 
-#define RESUME 1
-#define DISCARD -1
+#define FOUND 1
+#define NOTFOUND -1
 
 // attribute name, number of distinct value
 typedef std::unordered_map<std::string,double> AttInfo;
@@ -30,18 +30,18 @@ typedef std::vector<std::string> Subset;
 // number of tuples, selectivity
 typedef std::pair<double,float> EstimateInfo;
 // number of tuples, attribute list
-typedef struct RelInfo_{
+struct RelInfo{
 	double numTuples;
 	bool hasJoined;
 	AttInfo atts;
 	Subset subset;
-	RelInfo_(double num) : numTuples(num), hasJoined(false), atts(), subset() { }
+	RelInfo(double num) : numTuples(num), hasJoined(false), atts(), subset() { }
 	// move constructor
-	RelInfo_(RelInfo_ && rhs) : numTuples(rhs.numTuples), hasJoined(rhs.hasJoined) {
+	RelInfo(RelInfo && rhs) : numTuples(rhs.numTuples), hasJoined(rhs.hasJoined) {
 		atts = std::move(rhs.atts);
 		subset = std::move(rhs.subset);
 	}
-	RelInfo_ & operator = (RelInfo_ && rhs) {
+	RelInfo & operator = (RelInfo && rhs) {
 		numTuples = rhs.numTuples;
 		hasJoined = rhs.hasJoined;
 		atts = std::move(rhs.atts);
@@ -49,8 +49,8 @@ typedef struct RelInfo_{
 		return *this;
 	}
 	// copy constructor deleted
-	RelInfo_(const RelInfo_ & rhs) = delete;
-	RelInfo_ & operator =(RelInfo_ &rhs) = delete;
+	RelInfo(const RelInfo & rhs) = delete;
+	RelInfo & operator =(RelInfo &rhs) = delete;
 	void AddAtt(std::string attName, long numDistincts) {
 		auto p = atts.emplace(attName, numDistincts);
 		// if the attribute is in statisics, upadte number of distinct value of this attribute
@@ -59,7 +59,7 @@ typedef struct RelInfo_{
 			(p.first)->second = numDistincts;		
 		}
 	}
-}RelInfo;
+};
 
 // relation name, relation info: number of tuples, attribute list
 typedef std::unordered_map<std::string, std::shared_ptr<RelInfo>> Relations;
@@ -85,6 +85,8 @@ private:
 	EstimateInfo Simulate (const struct AndList *parseTree, char **relNames, int numToJoin, std::vector<std::string> &repOfSet);
 	// find if a attribute appears in the attribute list of relName list
 	int	FindAtts(char **relName, std::string &AttsName, int relToJoin) const;
+	// give a joined relation a new name and delete all the old names
+	void RenameJoinedRel(std::string &newName, std::vector<char*> &relNames);
 	
 public:
 	Statistics();
@@ -108,7 +110,7 @@ public:
 	// get number of tuples of a relation
 	int GetNumTuples(const std::string &relName) const;
 	// check if the statistics contain a relation
-	int CheckRels(const char* relName) const;	
+	int CheckRels(const char* relName) const;
 };
 
 #endif

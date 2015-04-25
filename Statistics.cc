@@ -506,9 +506,17 @@ int	Statistics::FindAtts(char **relNames, std::string &AttsName, int numToJoin) 
 }
 
 int Statistics::CheckRels(const char* relName) const {	
-	if (relations.find(relName) == relations.end()) {
-		cerr << "ERROR: Current statistics does not contain " << relName << endl;
-		return DISCARD;
+	if (relations.find(relName) == relations.end()) {		
+		return NOTFOUND;
 	}
-	return RESUME;
+	return FOUND;
+}
+
+void Statistics::RenameJoinedRel(std::string &newName, std::vector<char*> &relNames) {
+	std::shared_ptr<RelInfo> new_ptr = relations.at(relNames[0]);
+	relations.emplace(newName, std::move(new_ptr));
+	for (auto &rn : relNames) {
+		relations.erase(rn);
+	}
+	cout << new_ptr.use_count() << endl;
 }

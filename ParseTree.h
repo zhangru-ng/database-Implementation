@@ -17,8 +17,11 @@
 #define UPDATE_ 13
 #define QUERY_ 14
 #define STDOUT_ 15
-#define OUTFILE 16
+#define OUTFILE_ 16
 #define NONE_ 17
+#define PRINT_TABLE_ 18
+#define PRINT_STATS_ 19
+#define EXIT_ 20
 
 // used in computational (funcional) expressions
 struct FuncOperand {

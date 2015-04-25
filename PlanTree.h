@@ -10,10 +10,10 @@
 #include <cstring>
 #include <string>
 
-#define RESUME 1
+#define FOUND 1
 #define OPTIMIZED_ON 1
 #define OPTIMIZED_OFF 0
-#define DISCARD -1
+#define NOTFOUND -1
 
 struct JoinRelInfo{
 	int left;	// left relation index,
@@ -218,7 +218,7 @@ private:
 	std::vector<PlanNode*> buildedNodes;	//store builded nodes expect select file node, which stores in selectFileList
 
 	// separate select, join and cross select predicate
-	void SeparatePredicate(struct AndList *parseTree);
+	void SeparatePredicate();
 	// check if any cross select predicate can be apply
 	int CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<int> &joinedTable);	
 	// check if the tables in predicates exist in database
@@ -245,8 +245,8 @@ private:
 public:
 	PlanTree(Statistics &stat, std::unordered_map<std::string, TableInfo> &tableInfo);
 	~PlanTree();
-	int BuildTableList(struct TableList *tables);
-	void GetPlanTree(struct AndList *pAnd);
+	int BuildTableList();
+	void GetPlanTree(int outMode);
 	void VisitTree(PlanNodeVisitor &v);	
 	void Print();
 	void Execute();

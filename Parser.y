@@ -5,6 +5,7 @@
 	#include <stdio.h>
 	#include <string.h>
 	#include <stdlib.h>
+	#include <string>
 	#include <iostream>
 
 	extern "C" int yylex();
@@ -77,6 +78,8 @@
 %token UPDATE
 %token STATISTICS
 %token FOR
+%token PRINT
+%token EXIT
 
 %type <myOrList> OrList
 %type <myAndList> AndList
@@ -431,6 +434,21 @@ SQL: CREATE TABLE Name '(' AttsList ')'  AS HEAP
 	tableName = $4;
 	operationType = UPDATE_;
 }
+
+| PRINT TABLE
+{
+	operationType = PRINT_TABLE_;
+}
+
+| PRINT STATISTICS
+{
+	operationType = PRINT_STATS_;
+}
+
+| EXIT
+{
+	operationType = EXIT_;
+}
 ;
 
 AttsList: Name Type ',' AttsList
@@ -488,7 +506,7 @@ Mode: STDOUT
 | String
 {
 	outfileName = $1;
-	outputMode = OUTFILE;
+	outputMode = OUTFILE_;
 }
 
 | NONE

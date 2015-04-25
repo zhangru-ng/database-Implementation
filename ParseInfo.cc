@@ -317,3 +317,11 @@ void DestroyNameList(struct NameList *names) {
 		p = temp;
 	}
 }
+
+struct NameList* BuildNameList(std::string name) {
+	struct NameList *p = (struct NameList *) malloc (sizeof(struct NameList));
+	p->name = strdup(name.c_str());
+	p->next = NULL;
+	return p;
+}
+

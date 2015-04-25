@@ -91,6 +91,10 @@ void yyerror(char*s);
 
 "FOR"       return(FOR);
 
+"PRINT"     return(PRINT);
+
+"EXIT"      return(EXIT);
+
 "("			return('(');
 
 "<"                     return('<');

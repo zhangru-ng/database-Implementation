@@ -76,6 +76,8 @@ void GetSumOperandAtts (struct FuncOperand *fOperand, std::vector<char*> &sumAtt
 
 void GetSumOperatorAtts(struct FuncOperator *fOperator, std::vector<char*> &sumAtts);
 
+struct NameList* BuildNameList(std::string name);
+
 void DestroyNameList(struct NameList *names);
 
 #endif

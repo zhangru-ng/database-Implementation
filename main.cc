@@ -2,59 +2,120 @@
 #include <iostream>
 #include "Record.h"
 #include <stdlib.h>
+#include "PlanTree.h"
+#include "Statistics.h"
+#include "Tables.h"
+#include "time.h"
 using namespace std;
 
 extern "C" {
+	struct YY_BUFFER_STATE *yy_scan_string(const char*);
 	int yyparse(void);   // defined in y.tab.c
 }
 
-extern struct AndList *final;
+extern int operationType;
+extern char* tableName;
+extern char* dbfileName;
+extern struct AttList *attsList;
+extern struct NameList *sortAtts;
+extern int outputMode;
+extern char* outfileName;
 
 int main () {
-
-	// try to parse the CNF
-	cout << "Enter in your CNF: ";
-  	if (yyparse() != 0) {
-		cout << "Can't parse your CNF.\n";
-		exit (1);
-	}
-
-	// suck up the schema from the file
-	Schema lineitem ("catalog", "lineitem");
-
-	// grow the CNF expression from the parse tree 
-	CNF myComparison;
-	Record literal;
-	myComparison.GrowFromParseTree (final, &lineitem, literal);
-	
-	// print out the comparison to the screen
-	myComparison.Print ();
-
-	// now open up the text file and start procesing it
-        FILE *tableFile = fopen ("/cise/tmp/dbi_sp11/DATA/10M/lineitem.tbl", "r");
-
-        Record temp;
-        Schema mySchema ("catalog", "lineitem");
-
-	//char *bits = literal.GetBits ();
-	//cout << " numbytes in rec " << ((int *) bits)[0] << endl;
-	//literal.Print (&supplier);
-
-        // read in all of the records from the text file and see if they match
-	// the CNF expression that was typed in
-	int counter = 0;
-	ComparisonEngine comp;
-        while (temp.SuckNextRecord (&mySchema, tableFile) == 1) {
-		counter++;
-		if (counter % 10000 == 0) {
-			cerr << counter << "\n";
+	char ch;
+	Statistics s;
+	s.Read("STATS.txt");
+	std::unordered_map<std::string, TableInfo> tableInfo;
+	Tables tables(tableInfo);
+	tables.CreateAll();
+	tables.LoadAll();	
+	int outMode = OUTFILE_;
+	cout << "\n*********************************************************************" << endl;
+	cout << "                   Welcome to Rui's database                         " << endl;
+	cout << "*********************************************************************" << endl;
+	while(true) {		
+		cout << "\nPlease input instruction and press Ctrl + D to execute.\n" << endl;
+		cout << ">>> ";
+		if(yyparse() != 0) {
+			cerr << "Please give valid input" << endl;
+			continue;
 		}
 
-		if (comp.Compare (&temp, &literal, &myComparison))
-                	temp.Print (&mySchema);
-
-        }
-
+		switch (operationType) {
+			case CREATE_HEAP_:
+				cout << "Creating heap file for table " << tableName << endl;
+				tables.Create(tableName, attsList);
+				break;
+			case CREATE_SORTED_:
+				cout << "Creating sorted file for table " << tableName << endl;
+				tables.Create(tableName, attsList, sortAtts);
+				break;
+			case INSERT_:
+				cout << "Loading table " << tableName << " from " << dbfileName << endl;
+				tables.Load(tableName, dbfileName);
+				break;
+			case DROP_:
+				char ch;				
+				while (true) {
+					cout << "Are you sure to delete table " << tableName << "? (y or n)" << endl;
+					cin >> ch;
+					if('y' == ch) {
+						cout << "Deleting table " << tableName << endl;
+						tables.Drop(tableName);
+						break;
+					} else if ('n' == ch) {
+						break;
+					} 
+				}
+				break;
+			case PRINT_TABLE_:
+				tables.Print();
+				break;
+			case OUTPUT_:
+				cout << "Setting output mode:";
+				switch (outputMode) {
+					case STDOUT_:
+						cout << "output to stdout" << endl;
+						break;
+					case OUTFILE_:
+						cout << "output to file " << outfileName << endl;
+						break;
+					case NONE_:
+						cout << "suppress output" << endl;
+						break;
+				}
+				outMode = outputMode;
+				break;
+			case PRINT_STATS_:
+				s.Print();
+				break;
+			case UPDATE_:
+				cout << "Updating statistics for " << tableName << endl;
+				cout << "not yet implemented!" << endl;
+				break;
+			case QUERY_:
+				cout << "Executing query..." << endl;
+				{
+					PlanTree planTree(s, tableInfo);
+					planTree.GetPlanTree(outMode);
+					// double begin = clock();
+					planTree.Execute();
+					planTree.Wait();
+					planTree.Clear();
+					// double end = clock();
+			 	// 	double cpu_time_used = (end - begin) / CLOCKS_PER_SEC;
+			 	// 	cout << "Query spent " << cpu_time_used << endl;
+			 	}
+				break;			
+			case EXIT_:
+				cout << "Thanks! Goodbye." << endl;
+				exit(0);
+				break;
+			default:
+				break;
+		}	
+		cout << "\nSucceed.\n" << endl; 
+	}
 }
 
 

@@ -1,6 +1,6 @@
 #include "Tables.h"
 
-std::string Tables::tblPrefix_ = "/cise/tmp/dbi_sp11/DATA/1G/";
+std::string Tables::tblPrefix_ = "/cise/tmp/dbi_sp11/DATA/10M/";
 std::string Tables::dbfPrefix_ = "dbfile/";
 std::string Tables::tblName_[8] = {"region", "nation", "customer", "part", "partsupp", "supplier", "orders", "lineitem"};
 std::string Tables::catalogPath_ = "catalog";

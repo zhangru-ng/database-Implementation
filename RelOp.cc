@@ -722,7 +722,7 @@ void* WriteOut::InternalThreadEntry() {
 		while (inPipe->Remove(&tempRec)) {
 			tempRec.Print(mySchema);			
 		}	
-	} else if (OUTFILE == outputMode) {
+	} else if (OUTFILE_ == outputMode) {
 		int n = mySchema->GetNumAtts();
 		Attribute *atts = mySchema->GetAtts();
 		while (inPipe->Remove(&tempRec)) {
