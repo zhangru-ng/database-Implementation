@@ -10,10 +10,8 @@
 #include <cstring>
 #include <string>
 
-#define FOUND 1
 #define OPTIMIZED_ON 1
 #define OPTIMIZED_OFF 0
-#define NOTFOUND -1
 
 struct JoinRelInfo{
 	int left;	// left relation index,
@@ -57,7 +55,7 @@ public:
 	DBFile *inFile;
 	CNF *selOp;
 	Record *literal;
-	std::string dbf_name;
+	std::string dbf_path;
 	SelectFile sf;
 	SelectFileNode(DBFile *dbf, CNF *cnf, Record *rec);
 	SelectFileNode(const SelectFileNode &sf) = delete;
@@ -207,8 +205,9 @@ class PlanTree {
 private:	
 	PlanNode *root;
 	int numOfRels;	// store number of relations in the tree	
+	int outMode;
 	Statistics &stat;
-	std::unordered_map<std::string, TableInfo> &tableInfo;	// hash table for relation name and relation infomation	
+	Tables &table;	// table class for table infomation	
 	std::vector<char*> relNames;	// store all the alias relation name	
 	std::unordered_map<string, string> tableList;	// hash table for alias and corresponding origin realtion name		
 	std::unordered_map<string, Predicate> selectList;	// hash table for relation name and selection predicate on this relation
@@ -218,13 +217,15 @@ private:
 	std::vector<PlanNode*> buildedNodes;	//store builded nodes expect select file node, which stores in selectFileList
 
 	// separate select, join and cross select predicate
-	void SeparatePredicate();
+	int SeparatePredicate();
 	// check if any cross select predicate can be apply
 	int CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<int> &joinedTable);	
 	// check if the tables in predicates exist in database
 	int CheckRels(const char* relName);
 	// get the type of result of function
 	Type GetSumType(Function *func);
+	// ask whether to store the result of query or not
+	void StoreResult();
 
 	void GrowSelectFileNode();
 	void GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, int numOfRels);
@@ -243,15 +244,14 @@ private:
 	void VisitNode(PlanNode *root, PlanNodeVisitor &v);
 
 public:
-	PlanTree(Statistics &stat, std::unordered_map<std::string, TableInfo> &tableInfo);
+	PlanTree(Statistics &stat, Tables &tbl, int om);
 	~PlanTree();
 	int BuildTableList();
-	void GetPlanTree(int outMode);
+	int GetPlanTree();
 	void VisitTree(PlanNodeVisitor &v);	
 	void Print();
 	void Execute();
 	void Wait();
-	void Clear();
 };
 
 

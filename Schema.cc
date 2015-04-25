@@ -43,7 +43,7 @@ Attribute *Schema :: GetAtts () {
 	return myAtts;
 }
 
-void Schema :: Print () {
+void Schema :: Print () const {
 	for (int i = 0; i < numAtts; i++ ) {
 		cout << "No." << i << "  " << myAtts[i].name << "  ";
 		if (myAtts[i].myType == Int) {

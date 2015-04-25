@@ -193,27 +193,7 @@ void RemovePrefix(struct AndList *pAnd) {
     } 
 }
 
-void InitDefaultPredicate(std::string attName, Predicate &initPred) {
-	struct Operand *lOperand = (struct Operand *) malloc (sizeof (struct Operand));
-	lOperand->value = strdup(attName.c_str());
-	lOperand->code = NAME;
-	struct Operand *rOperand = (struct Operand *) malloc (sizeof (struct Operand));
-	rOperand->value = strdup(attName.c_str());
-	rOperand->code = NAME;
-	struct ComparisonOp *pCom  = (struct ComparisonOp *)malloc (sizeof (struct ComparisonOp));
-	pCom->left = lOperand;
-	pCom->code = EQUALS;
-	pCom->right = rOperand;
-	struct OrList *pOr = (struct OrList *) malloc (sizeof (struct OrList));
-	pOr->left = pCom;
-	pOr->rightOr = NULL;
-	struct AndList *pAnd = (struct AndList *) malloc (sizeof (struct AndList));
-	pAnd->left = pOr;
-	pAnd->rightAnd = NULL;
-	initPred = pAnd;
-}
-
-void CheckGroupAndSelect(struct NameList *groupingAtts, struct NameList *attsToSelect) {
+int CheckGroupAndSelect(struct NameList *groupingAtts, struct NameList *attsToSelect) {
 	std::unordered_set<string> names;
 	struct NameList *p = groupingAtts;
 	while (p) {
@@ -229,23 +209,24 @@ void CheckGroupAndSelect(struct NameList *groupingAtts, struct NameList *attsToS
 			// if the select attribute is not in the groupby name list 
 			if(ibp.second) {
 				cerr << "SQL ERROR: SELECT on attributes dose not exist in GROUP BY" << endl;
-				exit(1);
+				return DISCARD;
 			}
 		} 		
 		p = p->next;
 	}
+	return RESUME;
 }
 
-void CheckSumPredicate(struct FuncOperator *finalFunction, struct NameList *groupingAtts, struct NameList *attsToSelect) {
+int CheckSumPredicate(struct FuncOperator *finalFunction, struct NameList *groupingAtts, struct NameList *attsToSelect) {
 	if (!groupingAtts && attsToSelect && finalFunction) {
 		cerr << "SQL ERROR: SELECT on attributes that does not exist after SUM" << endl;
-		exit(1);
+		return DISCARD;
 	} else if (groupingAtts && attsToSelect) {
-		CheckGroupAndSelect(groupingAtts, attsToSelect);
+		return CheckGroupAndSelect(groupingAtts, attsToSelect);
 	}
 }
 
-void CheckDistinctFunc(struct FuncOperator *finalFunction, struct NameList *groupingAtts) {
+int CheckDistinctFunc(struct FuncOperator *finalFunction, struct NameList *groupingAtts) {
 	std::unordered_set<string> names;
 	struct NameList *p = groupingAtts;
 	while (p) {
@@ -254,25 +235,33 @@ void CheckDistinctFunc(struct FuncOperator *finalFunction, struct NameList *grou
 		} 		
 		p = p->next;
 	}
-	CheckFuncOperator(finalFunction, names);
+	return CheckFuncOperator(finalFunction, names);
 }
 
-void CheckFuncOperand (struct FuncOperand *fOperand, std::unordered_set<string> &names) {
+int CheckFuncOperand (struct FuncOperand *fOperand, std::unordered_set<string> &names) {
 	if (fOperand) {
 		auto ibp = names.insert(fOperand->value);
 		if(ibp.second) {
 			cerr << "SQL ERROR: SUM DISTINCT attributes dose not exist in GROUP BY" << endl;
-			exit(1);
+			return DISCARD;
 		}
 	}
+	return RESUME;
 }
 
-void CheckFuncOperator (struct FuncOperator *fOperator, std::unordered_set<string> &names) {	
+int CheckFuncOperator (struct FuncOperator *fOperator, std::unordered_set<string> &names) {	
 	if(fOperator) {
-		CheckFuncOperator(fOperator->leftOperator, names);
-		CheckFuncOperand(fOperator->leftOperand, names);
-		CheckFuncOperator(fOperator->right, names);
+		if (DISCARD == CheckFuncOperator(fOperator->leftOperator, names)){
+			return DISCARD;
+		}
+		if (DISCARD == CheckFuncOperand(fOperator->leftOperand, names)) {
+			return DISCARD;
+		}	
+		if (DISCARD == CheckFuncOperator(fOperator->right, names)) {
+			return DISCARD;
+		}
 	}
+	return RESUME;
 }
 
 void GetSumOperandAtts (struct FuncOperand *fOperand, std::vector<char*> &sumAtts) {

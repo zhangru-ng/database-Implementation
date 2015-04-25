@@ -467,7 +467,6 @@ void Statistics::Print () const {
 		if (names.end() == names.find(rel.first)) {
 			names.insert(rel.first);
 			cout <<  "Relation name: " << rel.first << " | num of tuples: " << rel.second->numTuples << endl;
-			cout << (rel.second->hasJoined ? "Joined" : "Not joined") << endl;
 			cout << "Attribute list: " << endl;
 			cout << "{" <<  endl;
 			// print attribute list
@@ -500,9 +499,8 @@ int	Statistics::FindAtts(char **relNames, std::string &AttsName, int numToJoin) 
 			return i;
 		}
 	}
-	cerr << AttsName << endl;
-	cerr << "ERROR: attribute is non-exist!";
-	exit(1);
+	cerr << "ERROR: attribute " << AttsName << " is non-exist in statistics!";
+	return NOTFOUND;
 }
 
 int Statistics::CheckRels(const char* relName) const {	
@@ -512,11 +510,18 @@ int Statistics::CheckRels(const char* relName) const {
 	return FOUND;
 }
 
-void Statistics::RenameJoinedRel(std::string &newName, std::vector<char*> &relNames) {
-	std::shared_ptr<RelInfo> new_ptr = relations.at(relNames[0]);
-	relations.emplace(newName, std::move(new_ptr));
+void Statistics::ClearJoinedRel(std::string &newName, std::vector<char*> &relNames) {
+	std::shared_ptr<RelInfo> new_ptr = relations.at(relNames[0]);	
 	for (auto &rn : relNames) {
 		relations.erase(rn);
 	}
-	cout << new_ptr.use_count() << endl;
+	new_ptr->subset.clear();
+	new_ptr->hasJoined = false;
+	relations.emplace(newName, std::move(new_ptr));
+}
+
+void Statistics::ClearJoinedRel(std::vector<char*> &relNames) {	
+	for (auto &rn : relNames) {
+		relations.erase(rn);
+	}
 }

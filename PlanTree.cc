@@ -11,7 +11,7 @@ extern char* outfileName;
 
 std::vector<Pipe *> PlanNode::pipePool;
 
-PlanTree::PlanTree(Statistics &s, std::unordered_map<std::string, TableInfo> &tbl) : root(nullptr), numOfRels(0), stat(s), tableInfo(tbl) { }
+PlanTree::PlanTree(Statistics &s, Tables &tbl, int om) : root(nullptr), numOfRels(0), outMode(om), stat(s), table(tbl) { }
 
 PlanTree::~PlanTree() {
 	root->ClearPipePool();
@@ -25,19 +25,22 @@ int PlanTree::BuildTableList() {
 			cerr << "Table is no exist in Database currently!\n";
 			return NOTFOUND;
 		}
+		if(false == table.tableInfo.at(p->tableName).loaded) {
+			cerr << "Table " << p->tableName << " is not loaded! Please Load the table." << endl;
+			return NOTFOUND;
+		}
 		if (NOTFOUND == stat.CheckRels(p->tableName)) {
 			cerr << "Current statistics does not contain " << p->tableName << ". " 
-				 << "Can not perform query optimization. Do you still want to run this query? [y/n]" << endl;
+				 << "Can not perform query optimization." << endl;
 			while(true) {
+				cout << "Do you still want to run this query? (y or n) ";
 				char key;
 				cin >> key;
 				if (key == 'y') {
 					return OPTIMIZED_OFF;
 				} else if (key == 'n'){
 					return NOTFOUND;
-				} else {
-					cout << "Please input y or n." << endl;
-				}
+				} 
 			}	
 		} else {
 			stat.CopyRel(p->tableName, p->aliasAs);
@@ -51,13 +54,13 @@ int PlanTree::BuildTableList() {
 }
 
 int PlanTree::CheckRels(const char* relName) {
-	if(tableInfo.find(relName) == tableInfo.end()) {		
+	if(table.tableInfo.find(relName) == table.tableInfo.end()) {
 		return NOTFOUND;
 	}
 	return FOUND;
 }
 
-void PlanTree::SeparatePredicate() {
+int PlanTree::SeparatePredicate() {
 	// remove relation name prefix in the predicate 
 	RemovePrefix(boolean);
 	while (boolean != nullptr) {
@@ -85,7 +88,10 @@ void PlanTree::SeparatePredicate() {
 				}	
 				//find relation ID of left and right attribute
 				int left = stat.FindAtts(&relNames[0], lname, numOfRels);
-				int right = stat.FindAtts(&relNames[0], rname, numOfRels);	
+				int right = stat.FindAtts(&relNames[0], rname, numOfRels);
+				if(NOTFOUND == left || NOTFOUND == right) {
+					return DISCARD;
+				}
 				//push the join infomation into joinList
 				joinList.push_back(std::move(JoinRelInfo{left,right,p}));
 				containJoin = true;
@@ -94,11 +100,14 @@ void PlanTree::SeparatePredicate() {
 			else if (NAME == lOperand || NAME == rOperand) {
 				if (true == containJoin) {
 					cerr << "ERROR: Join and selection in one AND";
-					exit(1);
+					return DISCARD;
 				}
 				std::string name = stat.InitAttsName(pCom);
 				// cout << name << endl;
 				int i = stat.FindAtts(&relNames[0], name, numOfRels);
+				if(NOTFOUND == i) {
+					return DISCARD;
+				}
 				// set the corresponding relation slot in crossRelNo to 1
 				crossRelNo[i] = 1;
 				// if the oldname is empty, set to the first met relation
@@ -135,17 +144,19 @@ void PlanTree::SeparatePredicate() {
 	}
 }
 
-void PlanTree::GetPlanTree(int outMode) {
+int PlanTree::GetPlanTree() {
 	int flag = BuildTableList();
 	if(NOTFOUND == flag) {
-		return;
+		return DISCARD;
 	}
 	// check if the sum predicate is legal
-	CheckSumPredicate(finalFunction, groupingAtts, attsToSelect);
+	if(DISCARD == CheckSumPredicate(finalFunction, groupingAtts, attsToSelect)) {
+		return DISCARD;
+	}
 	SeparatePredicate();
 	if (numOfRels > joinList.size() + 1) {
 		cerr << "Cross product is needed, Do you still want to perform this query?\n";
-		return;
+		return DISCARD;
 	}
 	// store the all select file nodes
 	GrowSelectFileNode();
@@ -179,7 +190,7 @@ void PlanTree::GetPlanTree(int outMode) {
 			}
 		} else {
 			cerr << "optimize off, not yet implemented\n";
-			exit(1);
+			return DISCARD;
 		}		
 	}
 	// if both SUM and GROUP BY are on
@@ -187,7 +198,9 @@ void PlanTree::GetPlanTree(int outMode) {
 		// if  DISTINCT on aggregation		
 		if (distinctFunc) {
 			// attributes in SUM must be also in GROUP BY
-			CheckDistinctFunc(finalFunction, groupingAtts);
+			if(DISCARD == CheckDistinctFunc(finalFunction, groupingAtts)) {
+				return DISCARD;
+			}
 			// project on grouping attribute and remove duplicate before grouping
 			GrowProjectNode(groupingAtts);
 			GrowDuplicateRemovalNode();
@@ -230,7 +243,8 @@ void PlanTree::GetPlanTree(int outMode) {
 	}
 	// set root pointer of the plan tree
 	int current = buildedNodes.size() - 1;
-	root = buildedNodes[current];	
+	root = buildedNodes[current];
+	return RESUME;
 }
 
 void PlanTree::Print() {
@@ -239,10 +253,19 @@ void PlanTree::Print() {
 }
 
 void PlanTree::Execute() {	
+	cout << "\nExecuting query...\n" << endl;
 	int current = buildedNodes.size() - 1;
 	root->InitPipePool(buildedNodes[current]->outPipeID + 1);	
 	RunVisitor runVisitor;
+	double begin = clock();
 	VisitTree(runVisitor);
+	Wait();
+	double end = clock();
+	double cpu_time_used = (end - begin) / CLOCKS_PER_SEC;
+	cout << "Query spent " << cpu_time_used << endl;
+	if(OUTFILE_ == outMode) {
+		StoreResult();
+	}	
 }
 
 void PlanTree::Wait() {
@@ -250,7 +273,18 @@ void PlanTree::Wait() {
 	VisitTree(joinVisitor);
 }
 
-void PlanTree::Clear() {
+void PlanTree::StoreResult() {	
+	while (true) {
+		cout << "Do you want to store the resulting table? (y or n) ";
+		char ch;
+		cin >> ch;		
+		if ('y' == ch) {
+			break;
+		} else if ('n' == ch) {
+			stat.ClearJoinedRel(relNames);
+			return;
+		}
+	}
 	cout << "Please input a new name for the resulting table " << endl;
 	cout << ">>> ";
 	std::string resultName;
@@ -262,22 +296,13 @@ void PlanTree::Clear() {
 		cout << "Name conflict, please input a new name" << endl;
 		cout << ">>> ";
 	}
-	stat.RenameJoinedRel(resultName, relNames);
-	delete root;
-	root = nullptr;
-	numOfRels = 0;
-	relNames.clear();
-	tableList.clear();
-	selectList.clear();
-	joinList.clear();
-	crossSelectList.clear();
-	selectFileList.clear();
-	buildedNodes.clear();
+	stat.ClearJoinedRel(resultName, relNames);
+	table.Store(resultName, *(root->outSch));
 }
 
 void PlanTree::GrowSelectFileNode() {
 	for (int i = 0; i < numOfRels; ++i) {
-		TableInfo &ti = tableInfo.at(tableList.at(relNames[i]));
+		TableInfo &ti = table.tableInfo.at(tableList.at(relNames[i]));
 		Record *rec = new Record();		
 		SelectFileNode *treeNode = nullptr;
 		auto it = selectList.find(relNames[i]);
@@ -298,7 +323,7 @@ void PlanTree::GrowSelectFileNode() {
 		}
 		treeNode->outSch = &ti.sch;
 		treeNode->type = Unary;
-		treeNode->dbf_name = ti.dbf_name;
+		treeNode->dbf_path = ti.dbf_path;
 		selectFileList.push_back(treeNode);
 	}
 }
@@ -368,8 +393,8 @@ void PlanTree::GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*>
 	joinedTable[rightID] = 1;
 	Record *rec = new Record();
 	CNF *cnf = new CNF();
-	TableInfo &lti = tableInfo.at(tableList.at(relNames[leftID]));
-	TableInfo &rti = tableInfo.at(tableList.at(relNames[rightID]));
+	TableInfo &lti = table.tableInfo.at(tableList.at(relNames[leftID]));
+	TableInfo &rti = table.tableInfo.at(tableList.at(relNames[rightID]));
 	cnf->GrowFromParseTree (minIt->p, &lti.sch, &rti.sch, *rec);
 
 	JoinNode *treeNode = new JoinNode(cnf, rec);
@@ -428,7 +453,7 @@ void PlanTree::GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<cha
 	Record *rec = new Record();
 	CNF *cnf = new CNF();	
 	int current = buildedNodes.size() - 1;
-	TableInfo &rti = tableInfo.at(tableList.at(relNames[minId]));
+	TableInfo &rti = table.tableInfo.at(tableList.at(relNames[minId]));
 	cnf->GrowFromParseTree (minIt->p, buildedNodes[current]->outSch, &rti.sch, *rec);
 
 	JoinNode *treeNode = new JoinNode(cnf, rec);
@@ -670,7 +695,7 @@ void PrintVisitor::VisitSelectFileNode(SelectFileNode *node) {
 }
 
 void RunVisitor::VisitSelectFileNode(SelectFileNode *node) {
-	node->inFile->Open(node->dbf_name.c_str());
+	node->inFile->Open(node->dbf_path.c_str());
 	node->sf.Run(*(node->inFile), *(node->pipePool[node->outPipeID]), *(node->selOp), *(node->literal));
 }
 
