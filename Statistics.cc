@@ -511,7 +511,7 @@ int Statistics::CheckRels(const char* relName) const {
 	return FOUND;
 }
 
-void Statistics::ClearJoinedRel(std::string &newName, std::vector<char*> &relNames) {
+void Statistics::ClearRel(std::string &newName, std::vector<char*> &relNames) {
 	std::shared_ptr<RelInfo> new_ptr = relations.at(relNames[0]);	
 	for (auto &rn : relNames) {
 		relations.erase(rn);
@@ -521,7 +521,7 @@ void Statistics::ClearJoinedRel(std::string &newName, std::vector<char*> &relNam
 	relations.emplace(newName, std::move(new_ptr));
 }
 
-void Statistics::ClearJoinedRel(std::vector<char*> &relNames) {	
+void Statistics::ClearRel(std::vector<char*> &relNames) {	
 	for (auto &rn : relNames) {
 		relations.erase(rn);
 	}

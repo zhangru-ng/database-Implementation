@@ -234,9 +234,9 @@ private:
 	void GrowSelectFileNode();
 	void GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, int numOfRels);
 	// Grow first join node, which join two select file node
-	void GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<int> &remainList);
+	void GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<int> &remainList, int optimzie_flag);
 	// Grow the cooked join node, which join one select file node and a (join node | select pipe node)
-	void GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<int> &remainList, int numOfRels);
+	void GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<int> &remainList, int numOfRels, int optimzie_flag);
 	void GrowProjectNode (struct NameList *attsToSelect);
 	void GrowDuplicateRemovalNode();
 	void GrowSumNode(struct FuncOperator *finalFunction);
@@ -244,7 +244,7 @@ private:
 	void GrowWriteOutNode(const char* filename, int outputMode);
 
 	void BuildUnaryNode(PlanNode *child, PlanNode *parent);
-	void BuildBinaryNode (PlanNode *lchild, PlanNode *rchild, JoinNode *parent, int outID);
+	void BuildBinaryNode (PlanNode *lchild, PlanNode *rchild, JoinNode *parent, int outID, int smaller);
 	void VisitNode(PlanNode *root, PlanNodeVisitor &v);
 
 public:

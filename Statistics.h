@@ -86,9 +86,9 @@ private:
 	// find if a attribute appears in the attribute list of relName list
 	int	FindAtts(char **relName, std::string &AttsName, int relToJoin) const;
 	// give a joined relation a new name and delete all the old names
-	void ClearJoinedRel(std::string &newName, std::vector<char*> &relNames);
+	void ClearRel(std::string &newName, std::vector<char*> &relNames);
 	// clear the join result and all the old names
-	void ClearJoinedRel(std::vector<char*> &relNames);
+	void ClearRel(std::vector<char*> &relNames);
 	
 public:
 	Statistics();
