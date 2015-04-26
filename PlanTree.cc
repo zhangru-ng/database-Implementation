@@ -63,9 +63,12 @@ int PlanTree::CheckRels(const char* relName) {
 int PlanTree::SeparatePredicate() {
 	// remove relation name prefix in the predicate 
 	while (boolean != nullptr) {
+		bool containSelect = false;
 		bool containJoin = false;	
-		bool containCrossSelect = false;	
-		string oldname = "";
+		bool containCrossPred = false;
+		string oldname("");
+		int left = NOTFOUND;
+		int right = NOTFOUND;
 		Predicate p = boolean;
 		// store the relations of cross selection, 0 means not, crossRelNo[i] = 1 means relNames[i] is contained in the Predicate
 		// e.g. crossRelNo = {0, 1, 1} means cross selection contain relNames[1], relNames[2]
@@ -78,28 +81,39 @@ int PlanTree::SeparatePredicate() {
 			int rOperand = pCom->right->code;
 			// NAME op NAME  (NAME = 4, thus NAME | NAME = 4)
 			if (NAME == lOperand && NAME ==rOperand) {
+				if (containJoin || containSelect) {
+					containCrossPred = true;
+				}
 				std::string lname(pCom->left->value);				
 				std::string rname(pCom->right->value);				
 				//find relation ID of left and right attribute
-				int left = stat.FindAtts(&relNames[0], lname, numOfRels);
-				int right = stat.FindAtts(&relNames[0], rname, numOfRels);
-				if(left == right) {
-					pOr = pOr->rightOr;
-					containJoin = true;		//should be modified later
-					continue;
-				}	
+				left = stat.FindAtts(&relNames[0], lname, numOfRels);
+				right = stat.FindAtts(&relNames[0], rname, numOfRels);
 				if(NOTFOUND == left || NOTFOUND == right) {
 					return DISCARD;
 				}
-				//push the join infomation into joinList
-				joinList.push_back(std::move(JoinRelInfo{left,right,p}));
+				crossRelNo[left] = 1;
+				crossRelNo[right] = 1;
+				// deal with an attribute join with itself, namely select all tuples in that relation
+				if(left == right) {
+					containSelect = true;
+					CheckCrossPred(oldname, left, containCrossPred);
+					pOr = pOr->rightOr;
+					continue;
+				}
+				// deal with non-equal join
+				if (op != EQUALS) {
+					containCrossPred = true;
+					CheckCrossPred(oldname, left, containCrossPred);
+					pOr = pOr->rightOr;
+					continue;
+				}
 				containJoin = true;
 			}
 			// NAME op value | value op name (NAME = 4 other = [1, 3], thus NAME | other > 4)
 			else if (NAME == lOperand || NAME == rOperand) {
-				if (true == containJoin) {
-					cerr << "ERROR: Join and selection in one AND";
-					return DISCARD;
+				if (containJoin) {
+					containCrossPred = true;
 				}
 				std::string name = stat.InitAttsName(pCom);
 				// cout << name << endl;
@@ -107,40 +121,72 @@ int PlanTree::SeparatePredicate() {
 				if(NOTFOUND == i) {
 					return DISCARD;
 				}
+				containSelect = true;
 				// set the corresponding relation slot in crossRelNo to 1
 				crossRelNo[i] = 1;
-				// if the oldname is empty, set to the first met relation
-				if (!oldname.compare("")) {
-					oldname = relNames[i];		
-				} else {
-					//if conatin more than one relation in a selection Predicate
-					//e.g. (l.l_orderkey < 100 OR o.o_orderkey < 100) 
-					if(oldname.compare(relNames[i])) {
-						containCrossSelect = true;
-					}
-				}
-			} 
+				CheckCrossPred(oldname, i, containCrossPred);
+			}
 			pOr = pOr->rightOr;
-		}		
-		if(!containJoin) {	
-			// if not contain cross select, the selection can be pushed down to bottom
-			// add it to non-cross selectList
-			if (!containCrossSelect) {				
-				auto ibp = selectList.emplace(oldname, p);
-				if(false == ibp.second) {
-					Predicate curList = selectList.at(oldname);
-					// find the rightmost and list
-					while(curList->rightAnd) { curList = curList->rightAnd; }
-					curList->rightAnd = p;
-				}
-			} else {
-				// otherwise the Predicate can not be pushed down to bottom, put into cross selection list
-				crossSelectList.push_back(std::move(CrossSelectInfo{std::move(crossRelNo), p}));
-			}			
 		}
+		/*****************************************************************************************/	
+		// if contain cross relation predicate
+		if (containCrossPred) {
+			crossSelectList.push_back(std::move(CrossSelectInfo{std::move(crossRelNo), p})); 
+		} 
+		// if contain pure join
+		else if (containJoin) {
+			//push the join infomation into joinList
+			joinList.push_back(std::move(JoinRelInfo{left,right,p}));
+		} 
+		// if contain pure selection
+		else {
+			auto ibp = selectList.emplace(oldname, p);
+			if(false == ibp.second) {
+				Predicate curList = selectList.at(oldname);
+				// find the rightmost and list
+				while(curList->rightAnd) { curList = curList->rightAnd; }
+				curList->rightAnd = p;
+			}
+		}
+		/*****************************************************************************************/
 		boolean = boolean->rightAnd;
 		p->rightAnd = nullptr;
 	}
+}
+
+// check if a cross relation predicate exist in the input andlist
+void PlanTree::CheckCrossPred(std::string &oldname, int relID, bool &containCrossPred) {
+	// if the oldname is empty, set to the first met relation
+	if (!oldname.compare("")) {
+		oldname = relNames[relID];		
+	} else {
+		//if conatin more than one relation in a selection Predicate
+		//e.g. (l.l_orderkey < 100 OR o.o_orderkey < 100) 
+		if(oldname.compare(relNames[relID])) {
+			containCrossPred = true;
+		}
+	}
+}
+
+void PlanTree::PrintSeparateResult() {
+	cout << "SELECT list:" << endl;
+	for(auto s : selectList) {
+		print_AndList(s.second);
+		cout << endl;
+	}
+	cout << endl;
+	cout << "JOIN list:" << endl;
+	for(auto j : joinList) {
+		print_AndList(j.p);
+		cout << endl;
+	}
+	cout << endl;
+	cout << "CROSS list:" << endl;
+	for(auto c : crossSelectList) {
+		print_AndList(c.p);
+		cout << endl;
+	}
+	cout << endl;
 }
 
 int PlanTree::GetPlanTree() {	
@@ -154,8 +200,15 @@ int PlanTree::GetPlanTree() {
 	}
 	SeparatePredicate();
 	if (numOfRels > joinList.size() + 1) {
-		cerr << "Cross product is needed, Do you still want to perform this query?\n";
-		return DISCARD;
+		char ch;
+		while (true) {
+			cerr << "Cross product is needed, Do you still want to perform this query? (y or n)\n";
+			if(ch == 'y') {
+				break;
+			} else if (ch == 'n') {
+				return DISCARD;
+			}
+		}
 	}
 	// store the all select file nodes
 	GrowSelectFileNode();
@@ -405,8 +458,7 @@ void PlanTree::GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*>
 		}
 	}	
 	// update joined relation name list
-	minList.push_back(relNames[mini]);
-	minList.push_back(relNames[minj]);
+	minList = { relNames[mini], relNames[minj] };
 	// update remaining list
 	remainList.erase(remainList.begin() + minj);
 	remainList.erase(remainList.begin() + mini);

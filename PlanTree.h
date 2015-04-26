@@ -218,6 +218,10 @@ private:
 
 	// separate select, join and cross select predicate
 	int SeparatePredicate();
+	// print the result of SeparatePredicate
+	void PrintSeparateResult();
+	// check if a cross relation predicate exist in the input andlist
+	void CheckCrossPred(std::string &oldname, int relID, bool &containCrossPred);
 	// check if any cross select predicate can be apply
 	int CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<int> &joinedTable);	
 	// check if the tables in predicates exist in database
