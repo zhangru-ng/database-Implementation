@@ -10,6 +10,9 @@ BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortor
 	}
 }
 
+BigQ::~BigQ () {
+	WaitForInternalThreadToExit();
+}
 
 //two phase multiway merge sort
 void *BigQ::InternalThreadEntry () {
@@ -37,7 +40,6 @@ void *BigQ::InternalThreadEntry () {
 	}
 	out.ShutDown ();
 	//cout << "TPMMS spent totally " << cpu_time_used << " senconds cpu time" << endl;		
-	pthread_exit(NULL);
 }
 
 void BigQ::SortInRun (vector<Record> &oneRunRecords) {

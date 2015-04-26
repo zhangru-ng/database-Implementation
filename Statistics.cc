@@ -64,10 +64,10 @@ void Statistics::CopyRel (char *oldName, char *newName) {
 	rel.hasJoined = old.hasJoined;
 	//rename the attribute and add to attribute list
 	for (auto &att : old.atts) {
-		// std::string newAttName(newName);
-		// newAttName += "." + att.first;
-		// rel.AddAtt(newAttName, att.second);
-		rel.AddAtt(att.first, att.second);
+		std::string newAttName(newName);
+		newAttName += "." + att.first;
+		rel.AddAtt(newAttName, att.second);
+		// rel.AddAtt(att.first, att.second);
 	}
 	relations.emplace(std::move(newName), std::make_shared<RelInfo>(std::move(rel)));
 }
@@ -371,7 +371,8 @@ EstimateInfo Statistics::EstimateJoin(const struct AndList *pAnd, std::vector<st
 					totTuples = (lTuples * rTuples) / max;
 				} else {
 					// non-equal join : number of tuples = (1/3) * (T(R) * T(S)) 
-					totTuples = (lTuples * rTuples) / 3;
+					totTuples = (lTuples * rTuples);
+					orSel = 1.0f / 3;
 				}				
 			}
 			// NAME op value | value op name (NAME = 4 other = [1, 3], thus NAME | other > 4)

@@ -144,9 +144,10 @@ void Join::Use_n_Pages (int n) {
 // equality check) then your Join operation should default to a block-nested loops join
 void* Join::InternalThreadEntry() {
 	OrderMaker sortorderL, sortorderR;
-	if (0 == selOp->GetSortOrders (sortorderL, sortorderR)) {
+	if (nullptr == selOp) {
 		NestedLoopJoin(); 
 	} else {
+		selOp->GetSortOrders (sortorderL, sortorderR);
 	 	SortMergeJoin(sortorderL, sortorderR);
 	}	
 	outPipe->ShutDown();
@@ -760,8 +761,8 @@ void* WriteOut::InternalThreadEntry() {
 			}
 			fprintf(outFile, "\n");	
 		}
+		fclose(outFile);
 	}
-	fflush(outFile);
 }
 /*************************************WriteOut***********************************************/
 
