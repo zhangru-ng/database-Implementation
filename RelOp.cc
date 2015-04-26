@@ -1,5 +1,14 @@
 #include "RelOp.h"
 
+
+void RelationalOp::WaitUntilDone () {
+	 WaitForInternalThreadToExit();
+}
+
+void RelationalOp::Use_n_Pages (int n) {
+	runlen = n;
+}
+
 // @tested
 /*************************************SelectFile*********************************************/
 SelectFile::SelectFile() : inFile(nullptr), outPipe(nullptr), selOp(nullptr), literal(nullptr) { }
@@ -12,26 +21,16 @@ void SelectFile::Run (DBFile &inFile, Pipe &outPipe, CNF &selOp, Record &literal
 	StartInternalThread();
 }
 
-void SelectFile::WaitUntilDone () {
-	 WaitForInternalThreadToExit();
-}
-
-void SelectFile::Use_n_Pages (int n) {
-	//do nothing, only need memory for 1 record
-}
-
 // performs a scan of the underlying file, and for every tuple accepted by the CNF, 
 // it stuffs the tuple into the pipe as output
 void* SelectFile::InternalThreadEntry() {
 	Record tempRec;
 	ComparisonEngine comp;
-	Schema sch("catalog", "nation");
 	// assume that this file is all set up, it has been opened and is ready to go
 	inFile->MoveFirst();
 	while (1 == inFile->GetNext(tempRec)) {
-		// if the record is accepted by input CNF
+		//if the record is accepted by input CNF
 		if (1 == comp.Compare(&tempRec, literal, selOp)) {
-			// cout << "select file" << endl;
 			outPipe->Insert(&tempRec);
 		}
 	}
@@ -51,14 +50,6 @@ void SelectPipe::Run (Pipe &inPipe, Pipe &outPipe, CNF &selOp, Record &literal) 
 	StartInternalThread();
 }
 
-void SelectPipe::WaitUntilDone () {
-	WaitForInternalThreadToExit();
-}
-
-void SelectPipe::Use_n_Pages (int n) { 
-	//do nothing, only need memory for 1 record
-}
-
 // applies that CNF to every tuple that comes through the pipe, and every
 // tuple that is accepted is stuffed into the output pipe
 void* SelectPipe::InternalThreadEntry () {
@@ -67,7 +58,6 @@ void* SelectPipe::InternalThreadEntry () {
 	while (1 == inPipe->Remove(&tempRec)) {
 		//if the record is accepted by input CNF
 		if (1 == comp.Compare(&tempRec, literal, selOp)) {
-			// cout << "select pipe" << endl;
 			outPipe->Insert(&tempRec);
 		}
 	}
@@ -88,14 +78,6 @@ void Project::Run (Pipe &inPipe, Pipe &outPipe, int *keepMe, int numAttsInput, i
 	StartInternalThread();
 }
 
-void Project::WaitUntilDone () {
-	WaitForInternalThreadToExit();
-}
-
-void Project::Use_n_Pages (int n) {
-	//do nothing, only need memory for 1 record
-}
-
 // Project takes an input pipe and an output pipe as input. It also takes an array of integers keepMe 
 // as well as the number of attributes for the records coming through the input pipe and the number of 
 // attributes to keep from those input records. The array of integers tells Project which attributes to 
@@ -105,7 +87,6 @@ void* Project::InternalThreadEntry () {
 	while (1 == inPipe->Remove(&tempRec)) {
 		//Project (int *attsToKeep, int numAttsToKeep, int numAttsNow);
 		tempRec.Project(keepMe, numAttsOutput, numAttsInput);
-		// cout << "project" << endl;
 		outPipe->Insert(&tempRec);		
 	}	
 	outPipe->ShutDown();
@@ -125,15 +106,6 @@ void Join::Run (Pipe &inPipeL, Pipe &inPipeR, Pipe &outPipe, CNF &selOp, Record 
 	StartInternalThread();
 }
 
-void Join::WaitUntilDone () {
-	WaitForInternalThreadToExit();
-
-}
-
-void Join::Use_n_Pages (int n) {
-	runlen = n/2;
-}
-
 // Join takes two input pipes, an output pipe, and a CNF, and joins all of the records from
 // the two pipes according to that CNF. Join should use a BigQ to store all of the tuples
 // coming from the left input pipe, and a second BigQ for the right input pipe, and then
@@ -147,7 +119,10 @@ void* Join::InternalThreadEntry() {
 	if (nullptr == selOp) {
 		NestedLoopJoin(); 
 	} else {
-		selOp->GetSortOrders (sortorderL, sortorderR);
+		if(!selOp->GetSortOrders (sortorderL, sortorderR)) {
+			cerr << "ERROR: Can't not generate join ordermaker!\n";
+			exit(1);
+		}
 	 	SortMergeJoin(sortorderL, sortorderR);
 	}	
 	outPipe->ShutDown();
@@ -156,23 +131,13 @@ void* Join::InternalThreadEntry() {
 void Join::NestedLoopJoin() {
 	Record tempRecL, tempRecR, joinRec;
 	vector<Record> leftRecords;
-	vector<Record> rightRecords;
 	leftRecords.reserve(1024);
-	rightRecords.reserve(1024);
-
 	bool fitInMemory = true;
-
 	//create the temporary file for external block nested join
 	char lfname[80] = "dbfile/temp/JLtemp_XXXXXX";
-	char rfname[80] = "dbfile/temp/JRtemp_XXXXXX";
 	mkstemp(lfname);
-	mkstemp(rfname);
-	// File leftFile, rightFile;
-	// leftFile.Open(0, lfname);
-	// rightFile.Open(0, rfname);
-	DBFile leftFile, rightFile;
+	DBFile leftFile;
 	leftFile.Create(lfname, heap, nullptr);
-	rightFile.Create(rfname, heap, nullptr);
 
 	if (inPipeL->Remove(&tempRecL) && inPipeR->Remove(&tempRecR)) {
 		//initial parameters for MergeRecord
@@ -190,141 +155,79 @@ void Join::NestedLoopJoin() {
 				attsToKeep[i] = i;
 			}
 		}
-		
-		leftRecords.push_back(tempRecL);
-		rightRecords.push_back(tempRecR);
-		int totSize = tempRecL.Size() + tempRecR.Size();
-		//store which relation is smaller
-		bool smaller;
-		//store is the input pipe empty
-		bool left, right;
 		//maximum internal memory join can use
-		long maxsize = 2 * runlen * PAGE_SIZE;
-
-		while (1) {
-			left = inPipeL->Remove(&tempRecL);
-			right = inPipeR->Remove(&tempRecR);
-			//if both left and right relation reach the end 
-			if ( false == (left || right) ) {
-				break;
+		long maxSize = (2 * runlen * PAGE_SIZE) / tempRecL.Size();
+		int curSize = 1;
+		leftRecords.push_back(std::move(tempRecL));
+			
+		while (curSize < maxSize && inPipeL->Remove(&tempRecL)) {
+			leftRecords.push_back(std::move(tempRecL));
+			curSize++;
+		}
+		// if the size of smaller relation greater than max size, external join is needed
+		if (curSize == maxSize) {
+			fitInMemory = false;
+			for (auto &rec : leftRecords) {
+				leftFile.Add(rec);
 			}
-			//if both left and right relation reach the end, test which one is smaller
-			if ( false == left && right) {
-				//left == 0 ? left:right;  0 for left,  1 for right
-				smaller = left == 0 ? LEFT : RIGHT;
-			}
-			//if left input pipe is not empty
-			if (left) {
-				leftRecords.push_back(tempRecL);
-				totSize += tempRecL.Size();
-			}
-			//if right pipe is not empty
-			if (right) {
-				rightRecords.push_back(tempRecR);
-				totSize += tempRecR.Size();
-			}
-			//if the total size exceeds the memory 
-			if (totSize > maxsize) {
-				fitInMemory = false;
-				//write the records to file and perform external algorithm later
-				WriteToFile(leftRecords, leftFile);
-				WriteToFile(rightRecords, rightFile);
-				leftRecords.clear();
-				rightRecords.clear();
-				totSize = 0;
+			while(inPipeL->Remove(&tempRecL)) {
+				leftFile.Add(tempRecL);
 			}			
-		}			
-		//if the size of records do not exceed the maximum memory size setting by Use_n_Pages (int n)
-		//nested scan left and right vector to join records accepted by CNF:selOp
+		}	
 		if (true == fitInMemory) {
-			cerr << "Relations not fit in memory, perform in Memory Block nested loop join \n"; 
-			// use the smaller relation in outter loop
-			if (LEFT == smaller) {
-				FitInMemoryJoin(leftRecords, rightRecords, smaller);
-			}else {
-			 	FitInMemoryJoin(rightRecords, leftRecords, smaller);
-			 }			
-		} else {
-			WriteToFile(leftRecords, leftFile);
-			WriteToFile(rightRecords, rightFile);
-			cerr << "Relations not fit in memory, perform external Block nested loop join \n"; 
-			// use the smaller relation in outter loop
-			if (LEFT== smaller) {
-				JoinRecInFile(leftFile, rightFile, smaller);
-			} else {
-			 	JoinRecInFile(rightFile, leftFile, smaller);
-			}
+			cout << "Relations not fit in memory, perform in Memory Block nested loop join" << endl; 
+			InMemoryJoin(leftRecords, inPipeR, tempRecR);
+				
+		} else {		
+			cout << "Relations not fit in memory, perform external Block nested loop join" << endl; 
+			InFileJoin(leftFile, inPipeR, tempRecR);
 		}		
 	}			
 	//clean up temporary allocation and file
 	delete[] attsToKeep;
 	leftFile.Close();
-	rightFile.Close();
 	remove(lfname);
-	remove(rfname);
-}
-
-//write in memory records to file
-void Join::WriteToFile (vector<Record> &run, DBFile &file) {
-	for (auto it = run.begin(); it != run.end(); ++it) {
-		file.Add(*it);
-	}
-}
-
-//join function for left relation as outter loop
-void Join::JoinRecordLR (Record &left, Record &right) {
-	Record joinRec;
-	if(comp.Compare(&left, &right, literal, selOp)){
-		joinRec.MergeRecords (&left, &right, numAttsLeft, numAttsRight, attsToKeep, numAttsToKeep, numAttsLeft);
-		outPipe->Insert(&joinRec);
-	}	
-}
-
-//join function for right relation as outter loop
-void Join::JoinRecordRL (Record &right, Record &left) {
-	Record joinRec;
-	if(comp.Compare(&left, &right, literal, selOp)){
-		joinRec.MergeRecords (&left, &right, numAttsLeft, numAttsRight, attsToKeep, numAttsToKeep, numAttsLeft);
-		outPipe->Insert(&joinRec);
-	}	
 }
 
 // nested loop scan the relation and join records
-void Join::FitInMemoryJoin (vector<Record> &leftRecords, vector<Record> &rightRecords, int smaller) {
-	// pointer-to-member-function, typedef right after class Join
-	JoinRecFn JoinRec;
-	// check which relation is smaller, use corresponding join function
-	if (LEFT == smaller) {
-		JoinRec = &Join::JoinRecordLR;
-	}else {
-		JoinRec = &Join::JoinRecordRL;
-	}
+void Join::InMemoryJoin (vector<Record> &leftRecords, Pipe *inPipeR, Record &tempRecR) {
+	JoinRecInMemory(leftRecords, tempRecR);
+	Record right;
 	// nested loop scan
-	for (auto itL = leftRecords.begin(); itL != leftRecords.end(); ++itL) {
-		for (auto itR = rightRecords.begin(); itR != rightRecords.end(); ++itR) {
-			(this->*JoinRec)(*itL, *itR);
-		}
+	while(inPipeR->Remove(&right)) {
+		JoinRecInMemory(leftRecords, right);
 	}	
 }
 
-void Join::JoinRecInFile (DBFile &outter, DBFile &inner, int smaller) {
-	Record tempRecL, tempRecR;
-	outter.MoveFirst();
-	inner.MoveFirst();
-	JoinRecFn JoinRec;
-	// check which relation is smaller, use corresponding join function
-	if (LEFT == smaller) {
-		JoinRec = &Join::JoinRecordLR;
-	}else {
-		JoinRec = &Join::JoinRecordRL;
+void Join::JoinRecInMemory(vector<Record> &leftRecords, Record &right) {
+	Record joinRec;	
+	for (auto &left : leftRecords) {
+		if(comp.Compare(&left, &right, literal, selOp)){
+			joinRec.MergeRecords (&left, &right, numAttsLeft, numAttsRight, attsToKeep, numAttsToKeep, numAttsLeft);
+			outPipe->Insert(&joinRec);
+		}	
 	}
-	while (outter.GetNext(tempRecL)) {
-		while (inner.GetNext(tempRecR)) {
-			(this->*JoinRec)(tempRecL, tempRecR);
-		}
-		inner.MoveFirst();
-	}
+}
 
+void Join::InFileJoin (DBFile &file, Pipe *inPipeR, Record &tempRecR) {
+	Record left, right;
+	JoinRecInFile(file, tempRecR);
+	// nested loop scan
+	while (inPipeR->Remove(&right)) {
+		JoinRecInFile(file, right);
+	}
+}
+
+void Join::JoinRecInFile (DBFile &file, Record &right) {
+	Record left;
+	Record joinRec;
+	file.MoveFirst();
+	while (file.GetNext(left)) {
+		if (comp.Compare(&left, &right, literal, selOp)) {
+			joinRec.MergeRecords (&left, &right, numAttsLeft, numAttsRight, attsToKeep, numAttsToKeep, numAttsLeft);
+			outPipe->Insert(&joinRec);
+		}	
+	}	
 }
 
 //sort-merge join algorithm
@@ -332,8 +235,8 @@ void Join::SortMergeJoin (OrderMaker &sortorderL, OrderMaker &sortorderR) {
 	Record tempRecL, tempRecR;
 	Pipe outputL(buffsz);
 	Pipe outputR(buffsz);
-	BigQ bqL(*inPipeL, outputL, sortorderL, runlen);
-	BigQ bqR(*inPipeR, outputR, sortorderR, runlen);
+	BigQ bqL(*inPipeL, outputL, sortorderL, runlen/2);
+	BigQ bqR(*inPipeR, outputR, sortorderR, runlen/2);
 	//if both the output pipes have at least one record
 	if (outputL.Remove(&tempRecL) && outputR.Remove(&tempRecR)) {
 		//initial parameters for MergeRecord
@@ -384,25 +287,23 @@ int Join::OutputTuple (Record &left, Record &right, Pipe &outputL, Pipe &outputR
 	Record tempRecL, tempRecR, joinRec;
 	vector<Record> leftRecords;
 	vector<Record> rightRecords;
-	leftRecords.reserve(1024);
-	rightRecords.reserve(1024);
-	leftRecords.push_back(left);
-	rightRecords.push_back(right);
+	leftRecords.push_back(std::move(left));
+	rightRecords.push_back(std::move(right));
 	int isLeftEnd, isRightEnd;
 	//collect all equal records in left pipe
 	while (isLeftEnd = outputL.Remove(&tempRecL)){
-		if (0 == comp.Compare(&tempRecL, &sortorderL, &right, &sortorderR)) {
+		if (0 == comp.Compare(&tempRecL, &sortorderL, &rightRecords[0], &sortorderR)) {
 			//push records in vector until not match origin right record
-			leftRecords.push_back(tempRecL);
+			leftRecords.push_back(std::move(tempRecL));
 		}else{
 			break;
 		}
 	}
 	//collect all equal records in right pipe
 	while (isRightEnd = outputR.Remove(&tempRecR)) {
-		if (0 == comp.Compare(&left, &sortorderL, &tempRecR, &sortorderR)) {
+		if (0 == comp.Compare(&leftRecords[0], &sortorderL, &tempRecR, &sortorderR)) {
 			//push records in vector until not match origin left record
-			rightRecords.push_back(tempRecR);
+			rightRecords.push_back(std::move(tempRecR));
 		} else {
 			break;
 		}
@@ -410,7 +311,6 @@ int Join::OutputTuple (Record &left, Record &right, Pipe &outputL, Pipe &outputR
 	//merge all matched records
 	for (auto itL = leftRecords.begin(); itL != leftRecords.end(); ++itL) {
 		for (auto itR = rightRecords.begin(); itR != rightRecords.end(); ++itR) {
-			// cout << "join "  << numAttsToKeep << endl;
 			joinRec.MergeRecords (&(*itL), &(*itR), numAttsLeft, numAttsRight, attsToKeep, numAttsToKeep, numAttsLeft);
 			outPipe->Insert(&joinRec);
 		}
@@ -419,8 +319,8 @@ int Join::OutputTuple (Record &left, Record &right, Pipe &outputL, Pipe &outputR
 	//if both relations do not reach the end
 	if (isEnd) {
 		// assign the first unequal record for next round comparison	
-		left.Copy(&tempRecL);
-		right.Copy(&tempRecR);
+		left.Consume(&tempRecL);
+		right.Consume(&tempRecR);
 	}
 	return isEnd;
 }
@@ -435,14 +335,6 @@ void DuplicateRemoval::Run (Pipe &inPipe, Pipe &outPipe, Schema &mySchema) {
 	this->outPipe = &outPipe;
 	this->mySchema = &mySchema; 
 	StartInternalThread();
-}
-
-void DuplicateRemoval::WaitUntilDone () {
-	WaitForInternalThreadToExit();
-}
-
-void DuplicateRemoval::Use_n_Pages (int n) {
-	runlen = n;
 }
 
 // DuplicateRemoval takes an input pipe, an output pipe, as well as the schema for the
@@ -467,7 +359,6 @@ void* DuplicateRemoval::InternalThreadEntry () {
 		if (0 != comp.Compare(&tempRec, &lastRec, &DRorder)) {
 			//pipe Insert will consume tempRec, have to save it before Insert
 			lastRec = tempRec;
-			// cout << "duplicte" << endl;
 			outPipe->Insert(&tempRec);
 		}					
 	}
@@ -485,14 +376,6 @@ void Sum::Run (Pipe &inPipe, Pipe &outPipe, Function &computeMe) {
 	this->outPipe = &outPipe;
 	this->computeMe = &computeMe; 
 	StartInternalThread();
-}
-
-void Sum::WaitUntilDone () {
-	WaitForInternalThreadToExit();
-}
-
-void Sum::Use_n_Pages (int n) {
-	//do nothing, only need memory for 1 record
 }
 
 // Sum computes the SUM SQL aggregate function over the input pipe, and puts a single tuple
@@ -522,9 +405,7 @@ void* Sum::InternalThreadEntry () {
 		//ComposeRecord use terminate symbol '|' to calculate attribute length
 		result.append("|");
 		tempRec.ComposeRecord (&sumSchema, result.c_str());
-		// cout << "sum" << endl;
 		outPipe->Insert(&tempRec);	
-		
 	}
 	//shut down output pipe
 	outPipe->ShutDown();	
@@ -564,14 +445,6 @@ void GroupBy::Run (Pipe &inPipe, Pipe &outPipe, OrderMaker &groupAtts, Function 
 	this->groupAtts = &groupAtts;
 	this->computeMe = &computeMe;
 	StartInternalThread();
-}
-
-void GroupBy::WaitUntilDone () {
-	WaitForInternalThreadToExit();
-}
-
-void GroupBy::Use_n_Pages (int n) {
-	runlen = n;
 }
 
 // GroupBy is a lot like Sum, except that it does grouping, and then puts one sum into the
@@ -638,7 +511,6 @@ void GroupBy::GroupInt (Pipe &output, Record &lastRec, int numAtts, int numGroup
 			sumnRecord.ComposeRecord (&sumSchema, result.c_str());
 			//compose record				
 			groupRec.MergeRecords (&sumnRecord, &lastRec, 1, numAtts, attsToKeep, numGroupAtts + 1, 1);
-			// cout << "group" << endl;
 			outPipe->Insert(&groupRec);		
 			computeMe->Apply(tempRec, intSum, dummy);	
 			lastRec.Consume(&tempRec);
@@ -672,7 +544,6 @@ void GroupBy::GroupDouble (Pipe &output, Record &lastRec, int numAtts, int numGr
 			sumnRecord.ComposeRecord (&sumSchema, result.c_str());
 			//compose record				
 			groupRec.MergeRecords (&sumnRecord, &lastRec, 1, numAtts, attsToKeep, numGroupAtts + 1, 1);
-			// cout << "group" << endl;
 			outPipe->Insert(&groupRec);		
 			computeMe->Apply(tempRec, dummy, doubleSum);	
 			lastRec.Consume(&tempRec);
@@ -707,14 +578,6 @@ void WriteOut::Run (Pipe &inPipe, FILE *outFile, Schema &mySchema, int outputMod
 	StartInternalThread();
 }
 
-void WriteOut::WaitUntilDone () {
-	WaitForInternalThreadToExit();
-}
-
-void WriteOut::Use_n_Pages (int n) {
-	//do nothing, only need memory for 1 record
-}
-
 // WriteOut accepts an input pipe, a schema, and a FILE*, and uses the schema to write
 // text version of the output records to the file.
 void* WriteOut::InternalThreadEntry() {
@@ -727,37 +590,25 @@ void* WriteOut::InternalThreadEntry() {
 		int n = mySchema->GetNumAtts();
 		Attribute *atts = mySchema->GetAtts();
 		while (inPipe->Remove(&tempRec)) {
-			// cout << "write" << endl;
+			cout << "write" << endl;
 			// loop through all of the attributes
 			for (int i = 0; i < n; i++) {
 				// print the attribute name
-				//*fprintf(outFile, "%s: [", atts[i].name);
-				// use the i^th slot at the head of the record to get the
-				// offset to the correct attribute in the record
 				int pointer = ((int *) tempRec.bits)[i + 1];
-				// here we determine the type, which given in the schema;
-				// depending on the type we then print out the contents
-				// first is integer
+				// print out the contents depend on the type
 				if (atts[i].myType == Int) {
 					int *myInt = (int *) &(tempRec.bits[pointer]);
 					fprintf(outFile, "%d", *myInt);
 					fprintf(outFile, "|");
-				// then is a double
 				} else if (atts[i].myType == Double) {
 					double *myDouble = (double *) &(tempRec.bits[pointer]);
 					fprintf(outFile, "%f", *myDouble);
 					fprintf(outFile, "|");
-				// then is a character string
 				} else if (atts[i].myType == String) {
 					char *myString = (char *) &(tempRec.bits[pointer]);
 					fprintf(outFile, "%s", myString);
 					fprintf(outFile, "|");
 				} 
-				// *fprintf(outFile, "]");
-				// *print out a comma as needed to make things pretty
-				// *if (i != n - 1) {
-				// *	fprintf(outFile, ", ");
-				// *}
 			}
 			fprintf(outFile, "\n");	
 		}
