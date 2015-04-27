@@ -83,8 +83,6 @@ private:
 	EstimateInfo EstimateJoin(const struct AndList *pAnd, std::vector<std::string> &relname);
 	// simulate the operation in the parseTree and return estimate result
 	EstimateInfo Simulate (const struct AndList *parseTree, char **relNames, int numToJoin, std::vector<std::string> &repOfSet);
-	// find if a attribute appears in the attribute list of relName list
-	int	FindAtts(char **relName, std::string &AttsName, int relToJoin) const;
 	// give a joined relation a new name and delete all the old names
 	void ClearRel(std::string &newName, std::vector<char*> &relNames);
 	// clear the join result and all the old names

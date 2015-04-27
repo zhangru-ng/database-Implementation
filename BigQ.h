@@ -69,7 +69,6 @@ private:
 
 public:
     BigQ (Pipe &in, Pipe &out, OrderMaker &sortorder, int runlen);
-    ~BigQ();
 };
 
 class Run{

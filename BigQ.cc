@@ -10,10 +10,6 @@ BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortor
 	}
 }
 
-BigQ::~BigQ () {
-	WaitForInternalThreadToExit();
-}
-
 //two phase multiway merge sort
 void *BigQ::InternalThreadEntry () {
 	char dir[80] = "dbfile/temp/BigQtemp_XXXXXX";
@@ -33,13 +29,13 @@ void *BigQ::InternalThreadEntry () {
 	SecondPhase(runs);
 	// end = clock();
 	// cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-	// cout << "sort spent " << cpu_time_used << " seconds cpu time" << endl;	
-	runsFile.Close();
-	if (remove(runsFileName.c_str())) {
-	 	cerr << "can't delete" << runsFileName;
+	// cout << "sort spent " << cpu_time_used << " seconds cpu time" << endl;
+	runsFile.Close();	
+	if(0 != remove(runsFileName.c_str())){
+		cerr << "Can't delete BigQ temp file: " << runsFileName << endl;
 	}
 	out.ShutDown ();
-	//cout << "TPMMS spent totally " << cpu_time_used << " senconds cpu time" << endl;		
+	//cout << "TPMMS spent totally " << cpu_time_used << " senconds cpu time" << endl;	
 }
 
 void BigQ::SortInRun (vector<Record> &oneRunRecords) {

@@ -20,6 +20,7 @@ PlanTree::~PlanTree() {
 
 int PlanTree::BuildTableList() {
 	struct TableList *p = tables;
+	int optimzie_flag = OPTIMIZED_ON;
 	while (p) {		
 		if(NOTFOUND == CheckRels(p->tableName)) {
 			cerr << "Table is no exist in Database currently!\n";
@@ -31,27 +32,34 @@ int PlanTree::BuildTableList() {
 			stat.ClearRel(relNames);
 			return DISCARD;
 		}
-		if (NOTFOUND == stat.CheckRels(p->tableName)) {
-			cerr << "Current statistics does not contain " << p->tableName << ". " 
-				 << "Can not perform query optimization." << endl;
-			while(true) {
-				cout << "Do you still want to run this query? (y or n) ";
-				char key;
-				cin >> key;
-				if (key == 'y') {
-					return OPTIMIZED_OFF;
-				} else if (key == 'n'){
-					return DISCARD;
-				} 
-			}	
+		if (OPTIMIZED_ON == optimzie_flag && NOTFOUND == stat.CheckRels(p->tableName)) {
+			// cerr << "Current statistics does not contain " << p->tableName << ". " 
+			// 	 << "Can not perform query optimization." << endl;
+				stat.ClearRel(relNames);					
+				optimzie_flag = OPTIMIZED_OFF;
+			// while(true) {
+			// 	cout << "Do you still want to run this query? (y or n) ";
+			// 	char key;
+			// 	cin >> key;
+			// 	if (key == 'y') {
+			// 		stat.ClearRel(relNames);					
+			// 		optimzie_flag = OPTIMIZED_OFF;
+			// 		break;
+			// 	} else if (key == 'n'){
+			// 		stat.ClearRel(relNames);
+			// 		return DISCARD;
+			// 	} 
+			// }	
 		} 
 		tableList.emplace(p->aliasAs, p->tableName);
 		relNames.push_back(p->aliasAs);
-		stat.CopyRel(p->tableName, p->aliasAs);	
+		if (OPTIMIZED_ON == optimzie_flag) {
+			stat.CopyRel(p->tableName, p->aliasAs);	
+		}		
 		++numOfRels;
 		p = p->next;
-	}
-	return OPTIMIZED_ON;
+	}	
+	return optimzie_flag;
 }
 
 int PlanTree::CheckRels(const char* relName) {
@@ -88,9 +96,10 @@ int PlanTree::SeparatePredicate() {
 				std::string lname(pCom->left->value);				
 				std::string rname(pCom->right->value);				
 				//find relation ID of left and right attribute
-				left = stat.FindAtts(&relNames[0], lname, numOfRels);
-				right = stat.FindAtts(&relNames[0], rname, numOfRels);
+				left = FindAtts(relNames, lname);				
+				right = FindAtts(relNames, rname);				
 				if(NOTFOUND == left || NOTFOUND == right) {
+					cerr << "ERROR: Query attribute dose not exist in table list!\n";
 					return DISCARD;
 				}
 				crossRelNo[left] = 1;
@@ -118,8 +127,9 @@ int PlanTree::SeparatePredicate() {
 				}
 				std::string name = stat.InitAttsName(pCom);
 				// cout << name << endl;
-				int i = stat.FindAtts(&relNames[0], name, numOfRels);
+				int i = FindAtts(relNames, name);
 				if(NOTFOUND == i) {
+					cerr << "ERROR: Query attribute dose not exist in table list!\n";
 					return DISCARD;
 				}
 				containSelect = true;
@@ -153,6 +163,18 @@ int PlanTree::SeparatePredicate() {
 		boolean = boolean->rightAnd;
 		p->rightAnd = nullptr;
 	}
+}
+
+int PlanTree::FindAtts(std::vector<char*> relNames, std::string &name) {
+	int size = relNames.size();
+	int pos = name.find(".");		
+	string relName = name.substr(0, pos);
+	for(int i = 0; i < size; ++i) {
+		if(!relName.compare(relNames[i])) {
+			return i;
+		}
+	}
+	return NOTFOUND;
 }
 
 // check if a cross relation predicate exist in the input andlist
@@ -199,7 +221,9 @@ int PlanTree::GetPlanTree() {
 	if(DISCARD == CheckSumPredicate(finalFunction, groupingAtts, attsToSelect)) {
 		return DISCARD;
 	}
-	SeparatePredicate();
+	if(DISCARD == SeparatePredicate()) {
+		return DISCARD;
+	}
 	if (numOfRels > joinList.size() + 1) {
 		char ch;
 		while (true) {
@@ -212,7 +236,7 @@ int PlanTree::GetPlanTree() {
 		}
 	}
 	// store the all select file nodes
-	GrowSelectFileNode();
+	GrowSelectFileNode(optimzie_flag);
 	if (1 == numOfRels) {
 		buildedNodes.push_back(selectFileList[0]);
 		buildedNodes[0]->outPipeID = 0;
@@ -228,16 +252,16 @@ int PlanTree::GetPlanTree() {
 		// remaining not joined relations
 		std::vector<int> remainList;
 		//use greedy algorithm, find the minimum cost join and apply
-		GrowRowJoinNode(joinedTable, minList, remainList, optimzie_flag);
+		GrowRawJoinNode(joinedTable, minList, remainList, optimzie_flag);
 		// find if any cross selection can be performed
-		GrowSelectPipeNode(joinedTable, minList, numToJoin);
+		GrowSelectPipeNode(joinedTable, minList, numToJoin, optimzie_flag);
 		// stat.Print();
 		++numToJoin;
 		// keep finding minimum cost join and apply while joinList is not empty 
 		while(numToJoin <= numOfRels) {		
 			GrowCookedJoinNode(joinedTable, minList, remainList, numToJoin, optimzie_flag);
 			// find if any cross selection can be performed
-			GrowSelectPipeNode(joinedTable, minList, numToJoin);		
+			GrowSelectPipeNode(joinedTable, minList, numToJoin, optimzie_flag);		
 			// stat.Print();
 			// increment number of relations
 			++numToJoin;
@@ -352,7 +376,7 @@ void PlanTree::StoreResult() {
 	table.Store(resultName, *(root->outSch));
 }
 
-void PlanTree::GrowSelectFileNode() {
+void PlanTree::GrowSelectFileNode(int optimzie_flag) {
 	for (int i = 0; i < numOfRels; ++i) {
 		TableInfo &ti = table.tableInfo.at(tableList.at(relNames[i]));
 		Record *rec = new Record();		
@@ -362,8 +386,11 @@ void PlanTree::GrowSelectFileNode() {
 		if( it != selectList.end()) {
 			char *rels[] = { (char*) it->first.c_str() };
 			struct AndList *p = it->second;
-			double result = stat.Estimate(p, rels , 1);	
-			stat.Apply(p, rels , 1);
+			double result = UNKNOWN;
+			if (OPTIMIZED_ON == optimzie_flag) {
+				result = stat.Estimate(p, rels , 1);	
+				stat.Apply(p, rels , 1);
+			}			
 			CNF *cnf = new CNF();
 			RemovePrefix(p);
 			cnf->GrowFromParseTree (p, &ti.sch, *rec);
@@ -373,7 +400,9 @@ void PlanTree::GrowSelectFileNode() {
 			// otherwise grow cnf using default predicate (R.a = R.a) 
 			CNF *initCNF = new CNF(ti.sch);			
 			treeNode = new SelectFileNode(&ti.dbf, initCNF, rec);
-			treeNode->numTuples = stat.GetNumTuples(tableList.at(relNames[i]));
+			if (OPTIMIZED_ON == optimzie_flag) {
+				treeNode->numTuples = stat.GetNumTuples(tableList.at(relNames[i]));
+			} 	
 		}
 		treeNode->outSch = &ti.sch;
 		treeNode->type = Unary;
@@ -382,12 +411,15 @@ void PlanTree::GrowSelectFileNode() {
 	}
 }
 
-void PlanTree::GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, int numToJoin) {
+void PlanTree::GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, int numToJoin, int optimzie_flag) {
 	int predNo;
 	// check if any cross selection predicate can be apply
 	while ( (predNo = CheckCrossSelect(crossSelectList, joinedTable)) != -1) {
-		double result = stat.Estimate(crossSelectList[predNo].p, &minList[0] , numToJoin);
-		stat.Apply(crossSelectList[predNo].p, &minList[0] , numToJoin);
+		double result = UNKNOWN;
+		if (OPTIMIZED_ON == optimzie_flag) {
+			result = stat.Estimate(crossSelectList[predNo].p, &minList[0] , numToJoin);
+			stat.Apply(crossSelectList[predNo].p, &minList[0] , numToJoin);
+		}
 		Record *rec = new Record();
 		CNF *cnf = new CNF();	
 		int current = buildedNodes.size() - 1;
@@ -421,7 +453,7 @@ int PlanTree::CheckCrossSelect(std::vector<CrossSelectInfo> &csl, std::vector<in
 	return -1;
 }
 
-void PlanTree::GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<int> &remainList, int optimzie_flag) {
+void PlanTree::GrowRawJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<int> &remainList, int optimzie_flag) {
 	double min = std::numeric_limits<double>::max();
 	// initialize the remaining relation list
 	for(int i = 0; i < numOfRels; i++) {
@@ -455,43 +487,55 @@ void PlanTree::GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*>
 			}
 		}	
 	} else {
-		cerr << "Not yet implemented\n";
-		exit(1);
-	}	
-	// update joined relation name list
-	minList = { relNames[mini], relNames[minj] };
+		min = UNKNOWN;
+		// Pick the first predicate in join list
+		if (!joinList.empty()) {
+			minIt = joinList.begin();
+			mini = minIt->left < minIt->right ? minIt->left : minIt->right;
+			minj = minIt->left > minIt->right ? minIt->left : minIt->right;
+		}
+		else {
+			mini = 0;
+			minj = 1;
+		}
+	}
 	// update remaining list
 	remainList.erase(remainList.begin() + minj);
 	remainList.erase(remainList.begin() + mini);
 	// update joined table
 	joinedTable[mini] = 1;
 	joinedTable[minj] = 1;
-	Record *rec = new Record();	
+
+	// double leftNumTuples = stat.GetNumTuples(tableList.at(relNames[mini]));
+	// double rightNumTuples = stat.GetNumTuples(tableList.at(relNames[minj]));
+	// int smaller = leftNumTuples > rightNumTuples;
+	// update joined relation name list
+	minList = { relNames[mini], relNames[minj] };	
 	TableInfo &lti = table.tableInfo.at(tableList.at(relNames[mini]));
-	TableInfo &rti = table.tableInfo.at(tableList.at(relNames[minj]));
-	CNF *cnf = nullptr;
+	TableInfo &rti = table.tableInfo.at(tableList.at(relNames[minj]));	
+	Predicate minPred = nullptr;
 	if (minIt != joinList.end()) {
-		// apply the join predicate and erase the predicate in join list
-		stat.Apply(minIt->p, &minList[0] , 2);
+		minPred = minIt->p;
+	}
+	// apply the join predicate, must be applied before remove prefix
+	if(OPTIMIZED_ON == optimzie_flag) {
+		stat.Apply(minPred, &minList[0] , 2);
+	}
+	CNF *cnf = nullptr;
+	Record *rec = new Record();	
+	if(minPred)	{
 		cnf = new CNF();
 		RemovePrefix(minIt->p);
 		cnf->GrowFromParseTree (minIt->p, &lti.sch, &rti.sch, *rec);
 		joinList.erase(minIt);
-	}  else {
-		stat.Apply(nullptr, &minList[0] , 2);
-	}
-
+	} 
 	JoinNode *treeNode = new JoinNode(cnf, rec);
 	treeNode->outSch = new Schema(lti.sch, rti.sch);
 	treeNode->numTuples = min;
-	//****put the smaller relation on the left, use array to eliminate branch****
-	double leftNumTuples = stat.GetNumTuples(tableList.at(relNames[mini]));
-	double rightNumTuples = stat.GetNumTuples(tableList.at(relNames[minj]));
-	int smaller = leftNumTuples > rightNumTuples;
 	// initial first 2 output pipe
 	selectFileList[mini]->outPipeID = 0;
 	selectFileList[minj]->outPipeID = 1;
-	BuildBinaryNode(selectFileList[mini], selectFileList[minj], treeNode, 2, smaller);
+	BuildBinaryNode(selectFileList[mini], selectFileList[minj], treeNode, 2);
 	buildedNodes.push_back(treeNode);	
 }
 
@@ -524,44 +568,61 @@ void PlanTree::GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<cha
 			rels.pop_back();
 		}
 	} else {
-		cerr << "Not yet implemented\n";
-		exit(1);
+		min = UNKNOWN;
+		int flag = NOTFOUND;
+		for(auto it = remainList.begin(); it != remainList.end() && NOTFOUND == flag; ++it) {
+			for (auto itj = joinList.begin(); itj < joinList.end(); ++itj) {		
+				if ((itj->left == *it && 1 == joinedTable[itj->right]) || (1 == joinedTable[itj->left] && itj->right == *it)) {
+					minIt = itj;
+					minItR = it;
+					minId = *it;
+					flag = FOUND;
+					break;
+				}
+			}
+		}
+		if (NOTFOUND == flag) {
+			minItR = remainList.begin();
+			minId = *minItR;
+		}
 	}	
 	// update joined table, remaining list and min list
 	joinedTable[minId] = 1;
 	remainList.erase(minItR);
 	minList.push_back(relNames[minId]);
-	// build join node member
-	Record *rec = new Record();
+	// build join node member	
 	int current = buildedNodes.size() - 1;
 	TableInfo &rti = table.tableInfo.at(tableList.at(relNames[minId]));
-	CNF *cnf = nullptr;
+	Predicate minPred = nullptr;	
 	if (minIt != joinList.end()) {
-		// apply the join predicate 
+		minPred = minIt->p;
+	}
+	// apply the join predicate, must be applied before remove prefix
+	if (OPTIMIZED_ON == optimzie_flag) {
 		stat.Apply(minIt->p, &minList[0] , numToJoin);
+	}
+	CNF *cnf = nullptr;
+	Record *rec = new Record();
+	if (minPred) {
 		cnf = new CNF();
 		RemovePrefix(minIt->p);
 		cnf->GrowFromParseTree (minIt->p, buildedNodes[current]->outSch, &rti.sch, *rec);
 		// erase the predicate in join list
 		joinList.erase(minIt);
-	} else {
-		stat.Apply(nullptr, &minList[0] , numToJoin);
-	}
+	}	
 	JoinNode *treeNode = new JoinNode(cnf, rec);
 	treeNode->outSch =  new Schema(*(buildedNodes[current]->outSch), rti.sch);
 	treeNode->numTuples = min;
 	selectFileList[minId]->outPipeID = buildedNodes[current]->outPipeID + 1;
-	//*****put the smaller relation on the left, use array to eliminate branch*****
-	// PlanNode *minNodes[] = { buildedNodes[current], selectFileList[minId] };
-	double leftNumTuples = buildedNodes[current]->numTuples;
-	double rightNumTuples = selectFileList[minId]->numTuples;
-	int smaller = leftNumTuples > rightNumTuples;
-	// PlanNode *lchild = minNodes[leftNumTuples > rightNumTuples];
-	// PlanNode *rchild = minNodes[leftNumTuples <= rightNumTuples];
+
+	// double leftNumTuples = buildedNodes[current]->numTuples;
+	// double rightNumTuples = selectFileList[minId]->numTuples;
+	// int smaller = leftNumTuples > rightNumTuples;
+
 	PlanNode *lchild = buildedNodes[current];
 	PlanNode *rchild = selectFileList[minId];
 
-	BuildBinaryNode (lchild, rchild, treeNode, buildedNodes[current]->outPipeID + 2, smaller);
+	BuildBinaryNode (lchild, rchild, treeNode, buildedNodes[current]->outPipeID + 2);
 	buildedNodes.push_back(treeNode);
 }
 
@@ -718,25 +779,22 @@ void PlanTree::BuildUnaryNode(PlanNode *child, PlanNode *parent) {
 	child->parent = parent;
 	parent->inPipeID = child->outPipeID;
 	parent->outPipeID = child->outPipeID + 1;
-	if(parent->numTuples < 1) {
+	if(parent->numTuples != UNKNOWN && parent->numTuples < 1) {
 		parent->numTuples = 1;
 	}
 }
 
 // consturct family for binary node
-void PlanTree::BuildBinaryNode (PlanNode *lchild, PlanNode *rchild, JoinNode *parent, int outID, int smaller) {
+void PlanTree::BuildBinaryNode (PlanNode *lchild, PlanNode *rchild, JoinNode *parent, int outID) {
 	parent->type = Binary;
 	parent->child = lchild;
 	parent->rchild = rchild;
 	lchild->parent = parent;
 	rchild->parent = parent;
-
-	int inPipes[] = { lchild->outPipeID, rchild->outPipeID };	
-	parent->inPipeID = inPipes[smaller];
-	parent->rightInPipeID = inPipes[!smaller];
-	
+	parent->inPipeID = lchild->outPipeID;
+	parent->rightInPipeID = rchild->outPipeID;	
 	parent->outPipeID = outID;
-	if(parent->numTuples < 1) {
+	if(parent->numTuples != UNKNOWN && parent->numTuples < 1) {
 		parent->numTuples = 1;
 	}
 }
@@ -782,7 +840,12 @@ void PrintVisitor::VisitSelectFileNode(SelectFileNode *node) {
 	node->outSch->Print();	
 	cout << "Select File CNF: " << endl;
 	node->selOp->Print();
-	cout << "Estimate number of tuples: " << node->numTuples << endl;
+	cout << "Estimate number of tuples: ";
+	if (UNKNOWN == node->numTuples) {
+		cout << "UNKNOWN" << endl;
+	} else {
+		cout << node->numTuples << endl;
+	}	
 	cout << "********************************\n" <<endl;
 }
 
@@ -815,7 +878,12 @@ void PrintVisitor::VisitSelectPipeNode(SelectPipeNode *node) {
 	node->outSch->Print();	
 	cout << "Select Pipe CNF: " << endl;
 	node->selOp->Print();
-	cout << "Estimate number of tuples: " << node->numTuples << endl;
+	cout << "Estimate number of tuples: ";
+	if (UNKNOWN == node->numTuples) {
+		cout << "UNKNOWN" << endl;
+	} else {
+		cout << node->numTuples << endl;
+	}	
 	cout << "********************************\n" <<endl;
 }
 
@@ -851,7 +919,12 @@ void PrintVisitor::VisitProjectNode(ProjectNode *node) {
 		cout << node->keepMe[i] << " ";
 	}
 	cout << "}\n";
-	cout << "Estimate number of tuples: " << node->numTuples << endl;
+	cout << "Estimate number of tuples: ";
+	if (UNKNOWN == node->numTuples) {
+		cout << "UNKNOWN" << endl;
+	} else {
+		cout << node->numTuples << endl;
+	}	
 	cout << "********************************\n" <<endl;
 }
 	
@@ -893,7 +966,12 @@ void PrintVisitor::VisitJoinNode(JoinNode *node) {
 	} else {
 		cout << "Cross product" << endl;
 	}	
-	cout << "Estimate number of tuples: " << node->numTuples << endl;
+	cout << "Estimate number of tuples: ";
+	if (UNKNOWN == node->numTuples) {
+		cout << "UNKNOWN" << endl;
+	} else {
+		cout << node->numTuples << endl;
+	}	
 	cout << "********************************\n" <<endl;
 }
 
@@ -922,7 +1000,12 @@ void PrintVisitor::VisitDuplicateRemovalNode(DuplicateRemovalNode *node) {
 	cout << "Output pipe ID " << node->outPipeID << endl;
 	cout << "Output Schema:" << endl;
 	node->outSch->Print();
-	cout << "Estimate number of tuples: " << node->numTuples << endl;
+	cout << "Estimate number of tuples: ";
+	if (UNKNOWN == node->numTuples) {
+		cout << "UNKNOWN" << endl;
+	} else {
+		cout << node->numTuples << endl;
+	}	
 	cout << "********************************\n" <<endl;
 }
 
@@ -955,7 +1038,12 @@ void PrintVisitor::VisitSumNode(SumNode *node) {
 	node->outSch->Print();	
 	cout << "Sum Function:" << endl;
 	node->computeMe->Print();
-	cout << "Estimate number of tuples: " << node->numTuples << endl;
+	cout << "Estimate number of tuples: ";
+	if (UNKNOWN == node->numTuples) {
+		cout << "UNKNOWN" << endl;
+	} else {
+		cout << node->numTuples << endl;
+	}	
 	cout << "********************************\n" <<endl;
 }
 
@@ -990,7 +1078,12 @@ void PrintVisitor::VisitGroupByNode(GroupByNode *node) {
 	node->groupAtts->Print();
 	cout << "GroupBy Function:" << endl;
 	node->computeMe->Print();
-	cout << "Estimate number of tuples: " << node->numTuples << endl;
+	cout << "Estimate number of tuples: ";
+	if (UNKNOWN == node->numTuples) {
+		cout << "UNKNOWN" << endl;
+	} else {
+		cout << node->numTuples << endl;
+	}	
 	cout << "********************************\n" <<endl;
 }
 
@@ -1023,7 +1116,12 @@ void PrintVisitor::VisitWriteOutNode(WriteOutNode *node) {
 	cout << "Output file name: " << node->filename << endl;
 	cout << "Output Schema:" << endl;
 	node->outSch->Print();
-	cout << "Estimate number of tuples: " << node->numTuples << endl;
+	cout << "Estimate number of tuples: ";
+	if (UNKNOWN == node->numTuples) {
+		cout << "UNKNOWN" << endl;
+	} else {
+		cout << node->numTuples << endl;
+	}	
 	cout << "********************************\n" << endl;
 }
 
@@ -1040,7 +1138,7 @@ void WaitVisitor::VisitWriteOutNode(WriteOutNode *node) {
 	node->wo.WaitUntilDone ();
 }
 
-PlanNode::PlanNode() : type(Unary), parent(nullptr), child(nullptr), inPipeID(-1), outPipeID(-1), outSch(nullptr), numTuples(-1) { }
+PlanNode::PlanNode() : type(Unary), parent(nullptr), child(nullptr), inPipeID(-1), outPipeID(-1), outSch(nullptr), numTuples(UNKNOWN) { }
 
 PlanNode::~PlanNode() {
 	if(child) {

@@ -455,7 +455,7 @@ std::pair<double, double> Statistics::GetAttsDistinct(std::string &lname, std::s
 
 int Statistics::GetNumTuples (const std::string &relName) const {
 	if(relations.find(relName) == relations.end()) {
-		cerr << "ERROR: Relation does not appear in Statistics!" << endl;
+		cerr << "ERROR: Can't get number of tuples, Relation does not appear in Statistics!" << endl;
 		exit(1);
 	}
 	return relations.at(relName)->numTuples;
@@ -467,12 +467,20 @@ void Statistics::Print () const {
 		// avoid visit relations belong to the same subset twice
 		if (names.end() == names.find(rel.first)) {
 			names.insert(rel.first);
-			cout <<  "Relation name: " << rel.first << " | num of tuples: " << rel.second->numTuples << endl;
+			cout <<  "Relation name: " << rel.first << " | num of tuples: ";
+			if (rel.second->numTuples == -1)
+				cout << "UNKNOWN" << endl;
+			else
+				cout << rel.second->numTuples << endl;			
 			cout << "Attribute list: " << endl;
 			cout << "{" <<  endl;
 			// print attribute list
 			for (auto const &att : rel.second->atts) {
-				cout << "\t" << att.first << " " << att.second << endl;
+				cout << "\t" << att.first << " ";
+				if (att.second == -1)
+					cout << "UNKNOWN" << endl;
+				else 
+					cout << att.second << endl;
 			}
 			cout << "}" <<endl;			
 			if (rel.second->hasJoined) {
@@ -491,17 +499,6 @@ void Statistics::Print () const {
 		cout << endl;
 	}	
 	cout << endl;
-}
-
-int	Statistics::FindAtts(char **relNames, std::string &AttsName, int numToJoin) const {
-	for (int i = 0; i < numToJoin; ++i) {
-		AttInfo &atts = relations.at(relNames[i])->atts;
-		if(atts.find(AttsName) != atts.end()){
-			return i;
-		}
-	}
-	cerr << "ERROR: attribute " << AttsName << " is non-exist in statistics!";
-	return NOTFOUND;
 }
 
 int Statistics::CheckRels(const char* relName) const {	

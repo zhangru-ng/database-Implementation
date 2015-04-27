@@ -12,6 +12,7 @@
 
 #define OPTIMIZED_ON 1
 #define OPTIMIZED_OFF 0
+#define UNKNOWN -1
 
 struct JoinRelInfo{
 	int left;	// left relation index,
@@ -35,7 +36,7 @@ class PlanNode {
 public:
 	static std::vector<Pipe *> pipePool;
 	constexpr static int pipesz = 100;
-	constexpr static int pagenum = 100;
+	constexpr static int pagenum = 50;
 	NodeType type;	
 	PlanNode *parent;	
 	PlanNode *child;
@@ -218,6 +219,9 @@ private:
 
 	// separate select, join and cross select predicate
 	int SeparatePredicate();
+
+	int FindAtts(std::vector<char*> relNames, std::string &name);
+
 	// print the result of SeparatePredicate
 	void PrintSeparateResult();
 	// check if a cross relation predicate exist in the input andlist
@@ -231,10 +235,10 @@ private:
 	// ask whether to store the result of query or not
 	void StoreResult();
 
-	void GrowSelectFileNode();
-	void GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, int numOfRels);
+	void GrowSelectFileNode(int optimzie_flag);
+	void GrowSelectPipeNode(std::vector<int> &joinedTable, std::vector<char*> &minList, int numOfRels, int optimzie_flag);
 	// Grow first join node, which join two select file node
-	void GrowRowJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<int> &remainList, int optimzie_flag);
+	void GrowRawJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<int> &remainList, int optimzie_flag);
 	// Grow the cooked join node, which join one select file node and a (join node | select pipe node)
 	void GrowCookedJoinNode(std::vector<int> &joinedTable, std::vector<char*> &minList, std::vector<int> &remainList, int numOfRels, int optimzie_flag);
 	void GrowProjectNode (struct NameList *attsToSelect);
@@ -244,7 +248,7 @@ private:
 	void GrowWriteOutNode(const char* filename, int outputMode);
 
 	void BuildUnaryNode(PlanNode *child, PlanNode *parent);
-	void BuildBinaryNode (PlanNode *lchild, PlanNode *rchild, JoinNode *parent, int outID, int smaller);
+	void BuildBinaryNode (PlanNode *lchild, PlanNode *rchild, JoinNode *parent, int outID);
 	void VisitNode(PlanNode *root, PlanNodeVisitor &v);
 
 public:
