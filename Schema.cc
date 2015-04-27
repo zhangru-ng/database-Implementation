@@ -150,6 +150,32 @@ Schema :: Schema (const char *fpath, int num_atts, Attribute *atts) {
 	}
 }
 
+void Schema :: Write(std::string filename, std::string relName) {
+	ofstream outfile(filename, std::ofstream::out | std::ofstream::app);
+	if (!outfile.is_open()) {
+		cerr << "ERROR: Can't open catalog file in schema Write!\n";
+		exit(1);
+	}
+	outfile << endl;
+	outfile << "BEGIN" << endl;
+	outfile << relName << endl;
+	outfile << relName << ".tbl" << endl;
+	for (int i = 0; i < numAtts; i++ ) {
+		outfile << myAtts[i].name << " ";
+		if (myAtts[i].myType == Int) {
+			outfile << "Int";
+		}
+		else if (myAtts[i].myType == Double) {
+			outfile << "Double";
+		}
+		else if (myAtts[i].myType == String) {
+			outfile << "String";
+		} 
+		outfile << endl;
+	}
+	outfile << "END\n" << endl;
+}
+
 Schema :: Schema (const char *fName, const char *relName) {
 
 	FILE *foo = fopen (fName, "r");

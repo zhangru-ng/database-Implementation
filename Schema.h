@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
+#include <fstream>
 #include "Record.h"
 #include "Schema.h"
 #include "File.h"
@@ -78,6 +79,9 @@ public:
 
 	// move assignment
 	Schema& operator = (Schema &&rhs);
+
+	// write schema of a relation to file
+	void Write(std::string filename, std::string relName);
 
 	~Schema ();
 

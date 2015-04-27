@@ -1,17 +1,17 @@
 #include "Tables.h"
 
-std::string Tables::tblPrefix_ = "/cise/tmp/dbi_sp11/DATA/1G/";
-std::string Tables::dbfPrefix_ = "dbfile/";
-std::string Tables::tblName_[8] = {"region", "nation", "customer", "part", "partsupp", "supplier", "orders", "lineitem"};
-std::string Tables::catalogPath_ = "catalog";
-
-
-
 TableInfo::TableInfo(TableInfo &&rhs) {
 	loaded = rhs.loaded;
 	dbf = std::move(rhs.dbf);
 	dbf_path = std::move(rhs.dbf_path);
 	sch = std::move(rhs.sch);
+}
+
+Tables::Tables() {
+	tblPrefix_ = "/cise/tmp/dbi_sp11/DATA/1G/";
+	dbfPrefix_ = "dbfile/";
+	tblName_ = {"region", "nation", "customer", "part", "partsupp", "supplier", "orders", "lineitem"};
+	catalogPath_ = "catalog";
 }
 
 void Tables::Create(const char* tableName, struct AttList *attsList) {
@@ -38,19 +38,41 @@ void Tables::Create(const char *tableName, struct AttList *attsList, struct Name
 }
 
 void Tables::CreateAll() {
-	for(int i = 0; i< 8; ++i) {
+	for(auto &tn : tblName_) {
+		if(tableInfo.find(tn) != tableInfo.end()) {
+			continue;
+		}
 		TableInfo tblInfo;
-		tblInfo.sch = std::move(Schema(catalogPath_.c_str(), tblName_[i].c_str()));
-		tblInfo.dbf_path = dbfPrefix_ + tblName_[i] + ".bin";
-		tblInfo.dbf.Create(tblInfo.dbf_path.c_str(), heap, 0);	
-		tblInfo.dbf.Close();
-		tableInfo.emplace(tblName_[i], std::move(tblInfo));
+		tblInfo.sch = std::move(Schema(catalogPath_.c_str(), tn.c_str()));
+		tblInfo.dbf_path = dbfPrefix_ + tn + ".bin";
+
+		tblInfo.loaded = true;
+		// tblInfo.dbf.Create(tblInfo.dbf_path.c_str(), heap, 0);	
+		// tblInfo.dbf.Close();
+		tableInfo.emplace(tn, std::move(tblInfo));
 	}
 }
 
 void Tables::Load(const char *tableName, std::string fileName) {
-	cout << "Loading table " << tableName << " from " << fileName << endl;
+	if(tableInfo.find(tableName) == tableInfo.end()) {
+		cerr << "ERROR: Attempt to load to non-exist table!\n";
+		return;
+	}
 	TableInfo &tblInfo = tableInfo.at(tableName);
+	char ch;
+	if (tblInfo.loaded) {
+		while (true) {
+			cout << tableName << " has been loaded, do you want to load it again? (y or n)" << endl;
+			cin >> ch;
+			if('y' == ch) {				
+				break;
+			} else if ('n' == ch) {
+				return;
+			} 
+		}	
+		
+	}
+	cout << "Loading table " << tableName << " from " << fileName << endl;
 	tblInfo.dbf.Open(tblInfo.dbf_path.c_str());
 	string load_path(tblPrefix_ + std::string(tableName) + ".tbl");
 	tblInfo.dbf.Load (tblInfo.sch, load_path.c_str());
@@ -59,10 +81,13 @@ void Tables::Load(const char *tableName, std::string fileName) {
 }
 
 void Tables::LoadAll() {
-	for(int i = 0; i< 8; ++i) {
-		TableInfo &tblInfo = tableInfo.at(tblName_[i]);
+	for(auto &tn : tblName_) {
+		TableInfo &tblInfo = tableInfo.at(tn);
+		if(tblInfo.loaded) {
+			continue;
+		}
 		tblInfo.dbf.Open(tblInfo.dbf_path.c_str());
-		string load_path(tblPrefix_ + tblName_[i] + ".tbl");
+		string load_path(tblPrefix_ + tn + ".tbl");		
 		tblInfo.dbf.Load (tblInfo.sch, load_path.c_str());
 		tblInfo.dbf.Close();
 		tblInfo.loaded = true;
@@ -70,7 +95,7 @@ void Tables::LoadAll() {
 }
 
 void Tables::Drop(const char *tableName) {
-	char ch;				
+	char ch;
 	while (true) {
 		cout << "Are you sure to delete table " << tableName << "? (y or n)" << endl;
 		cin >> ch;
@@ -79,7 +104,7 @@ void Tables::Drop(const char *tableName) {
 			tableInfo.erase(tableName);
 			break;
 		} else if ('n' == ch) {
-			break;
+			return;
 		} 
 	}	
 }
@@ -94,6 +119,55 @@ void Tables::Store(std::string resultName, Schema &schema) {
 
 void Tables::UpdateStats(const char *tableName, Statistics &stat) {
 
+}
+
+void Tables::AppendSchema(const char *tableName) {
+	if(tableInfo.find(tableName) == tableInfo.end()) {
+		cerr << "ERROR: Attempt to write schema of non-exist table!\n";
+		return;
+	}
+	tableInfo.at(tableName).sch.Write(catalogPath_, tableName);
+}
+
+void Tables::RenewSchema() {
+	ofstream outfile(catalogPath_,  ofstream::trunc);
+	for (auto &rel : tableInfo) {
+		rel.second.sch.Write(catalogPath_, rel.first);
+	}
+}
+
+void Tables::Read(std::string filename) {
+	ifstream infile(filename);
+	if(!infile.is_open()) {
+		cerr << "ERROR: Can't open table log file!\n";
+		exit(1);
+	}
+	std::string tableName;
+	while (true) {
+		if(!(infile >> tableName)) {
+			break;
+		}
+		TableInfo tblInfo;
+		infile >> tblInfo.loaded;
+		infile >> tblInfo.dbf_path;
+		if(!ifstream(tblInfo.dbf_path).good()) {
+			cerr << "Database file " << tableName << " has been deleted from disk, please create it again.\n";
+			continue;
+		}				
+		tblInfo.sch = std::move(Schema(catalogPath_.c_str(), tableName.c_str()));	
+		tableInfo.emplace(tableName, std::move(tblInfo));
+	}
+
+}
+
+void Tables::Write(std::string filename) {
+	ofstream outfile(filename);
+	for(auto &tbl : tableInfo) {
+		outfile << tbl.first << endl;
+		outfile << tbl.second.loaded << endl;
+		outfile << tbl.second.dbf_path << "\n" << endl;
+	}
+	
 }
 
 void Tables::Print() const {
@@ -112,8 +186,8 @@ void Tables::Print() const {
 
 void Tables::Clear() {
 	for (auto &t : tableInfo) {
-		t.second.dbf.Close();
-		remove(t.first.c_str());
+		// t.second.dbf.Close();
+		// remove(t.first.c_str());
 	}
 	tableInfo.clear();
 }
