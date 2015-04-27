@@ -117,21 +117,20 @@ void Join::Run (Pipe &inPipeL, Pipe &inPipeR, Pipe &outPipe, CNF &selOp, Record 
 void* Join::InternalThreadEntry() {
 	OrderMaker sortorderL, sortorderR;
 	if (nullptr == selOp) {
-		NestedLoopJoin(); 
+		NestedLoopJoin(PRODUCT);
 	} else {
 		if(!selOp->GetSortOrders (sortorderL, sortorderR)) {
-			cerr << "ERROR: Can't not generate join ordermaker!\n";
-			exit(1);
-		}
-	 	SortMergeJoin(sortorderL, sortorderR);
+			NestedLoopJoin(JOIN);
+		} else {
+			SortMergeJoin(sortorderL, sortorderR);
+		}	 	
 	}	
 	outPipe->ShutDown();
 }
 
-void Join::NestedLoopJoin() {
+void Join::NestedLoopJoin(int flag) {
 	Record tempRecL, tempRecR, joinRec;
-	vector<Record> leftRecords;
-	leftRecords.reserve(1024);
+	vector<Record> leftRecords;	
 	bool fitInMemory = true;
 	//create the temporary file for external block nested join
 	char lfname[80] = "dbfile/temp/JLtemp_XXXXXX";
@@ -157,6 +156,7 @@ void Join::NestedLoopJoin() {
 		}
 		//maximum internal memory join can use
 		long maxSize = (2 * runlen * PAGE_SIZE) / tempRecL.Size();
+		leftRecords.reserve(maxSize);
 		int curSize = 1;
 		leftRecords.push_back(std::move(tempRecL));
 			
@@ -175,12 +175,11 @@ void Join::NestedLoopJoin() {
 			}			
 		}	
 		if (true == fitInMemory) {
-			cout << "Relations not fit in memory, perform in Memory Block nested loop join" << endl; 
-			InMemoryJoin(leftRecords, inPipeR, tempRecR);
-				
+			cout << "Relations not fit in memory, perform in Memory join" << endl; 
+			InMemoryJoin(leftRecords, inPipeR, tempRecR, flag);					
 		} else {		
-			cout << "Relations not fit in memory, perform external Block nested loop join" << endl; 
-			InFileJoin(leftFile, inPipeR, tempRecR);
+			cout << "Relations not fit in memory, perform external join" << endl; 
+			InFileJoin(leftFile, inPipeR, tempRecR, flag);
 		}		
 	}			
 	//clean up temporary allocation and file
@@ -190,40 +189,40 @@ void Join::NestedLoopJoin() {
 }
 
 // nested loop scan the relation and join records
-void Join::InMemoryJoin (vector<Record> &leftRecords, Pipe *inPipeR, Record &tempRecR) {
-	JoinRecInMemory(leftRecords, tempRecR);
+void Join::InMemoryJoin (vector<Record> &leftRecords, Pipe *inPipeR, Record &tempRecR, int flag) {
+	JoinRecInMemory(leftRecords, tempRecR, flag);
 	Record right;
 	// nested loop scan
 	while(inPipeR->Remove(&right)) {
-		JoinRecInMemory(leftRecords, right);
+		JoinRecInMemory(leftRecords, right, flag);
 	}	
 }
 
-void Join::JoinRecInMemory(vector<Record> &leftRecords, Record &right) {
-	Record joinRec;	
+void Join::JoinRecInMemory(vector<Record> &leftRecords, Record &right, int flag) {
+	Record joinRec;		
 	for (auto &left : leftRecords) {
-		if(comp.Compare(&left, &right, literal, selOp)){
+		if(PRODUCT == flag || comp.Compare(&left, &right, literal, selOp)){
 			joinRec.MergeRecords (&left, &right, numAttsLeft, numAttsRight, attsToKeep, numAttsToKeep, numAttsLeft);
 			outPipe->Insert(&joinRec);
 		}	
 	}
 }
 
-void Join::InFileJoin (DBFile &file, Pipe *inPipeR, Record &tempRecR) {
+void Join::InFileJoin (DBFile &file, Pipe *inPipeR, Record &tempRecR, int flag) {
 	Record left, right;
-	JoinRecInFile(file, tempRecR);
+	JoinRecInFile(file, tempRecR, flag);
 	// nested loop scan
 	while (inPipeR->Remove(&right)) {
-		JoinRecInFile(file, right);
+		JoinRecInFile(file, right, flag);
 	}
 }
 
-void Join::JoinRecInFile (DBFile &file, Record &right) {
+void Join::JoinRecInFile (DBFile &file, Record &right, int flag) {
 	Record left;
 	Record joinRec;
 	file.MoveFirst();
 	while (file.GetNext(left)) {
-		if (comp.Compare(&left, &right, literal, selOp)) {
+		if (PRODUCT == flag || comp.Compare(&left, &right, literal, selOp)) {
 			joinRec.MergeRecords (&left, &right, numAttsLeft, numAttsRight, attsToKeep, numAttsToKeep, numAttsLeft);
 			outPipe->Insert(&joinRec);
 		}	

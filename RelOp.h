@@ -14,6 +14,8 @@ using namespace std;
 //marco for compare which relation is smaller in block-nested Join
 #define LEFT 0
 #define RIGHT 1
+#define JOIN 2
+#define PRODUCT 3
 
 class RelationalOp : public Thread {
 protected:
@@ -83,13 +85,13 @@ private:
 	int *attsToKeep;	// array that store subscript of which attributes to keep	
 	ComparisonEngine comp;	// ComparionEngine instance used in most member function
 	//block-nested loop join algorithm
-	void NestedLoopJoin();
+	void NestedLoopJoin(int flag);
 	// internal nested loop join
-	void InMemoryJoin (vector<Record> &leftRecords, Pipe *inPipeR, Record &tempRecR);	
-	void JoinRecInMemory(vector<Record> &leftRecords, Record &right);
+	void InMemoryJoin (vector<Record> &leftRecords, Pipe *inPipeR, Record &tempRecR, int flag);	
+	void JoinRecInMemory(vector<Record> &leftRecords, Record &right, int flag);
 	// external nested loop join
-	void InFileJoin (DBFile &file, Pipe *inPipeR, Record &tempRecR);
-	void JoinRecInFile (DBFile &file, Record &right);
+	void InFileJoin (DBFile &file, Pipe *inPipeR, Record &tempRecR, int flag);
+	void JoinRecInFile (DBFile &file, Record &right, int flag);
 	// sort-merge join algorithm
 	void SortMergeJoin(OrderMaker &sortorderL, OrderMaker &sortorderR);
 	// output all possible joinable tuples start from where the sort-merge join find matched tuples
