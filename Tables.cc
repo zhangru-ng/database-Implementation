@@ -118,7 +118,30 @@ void Tables::Store(std::string resultName, Schema &schema) {
 }
 
 void Tables::UpdateStats(const char *tableName, Statistics &stat) {
-
+	double numTuples = stat.GetNumTuples(tableName);
+	char ch;
+	if(numTuples > 100000) {
+		cout << "Original statistics indicates " << tableName << " is large. Update may take a long time." << endl;
+		while (true) {		
+			cout << "Do you still want to update this table? (y or n)" << endl;
+			cin >> ch;
+			if('y' == ch) {
+				break;
+			} else if ('n' == ch) {
+				return;
+			} 
+		}	
+	}
+	if(tableInfo.find(tableName) == tableInfo.end()) {
+		cerr << "ERROR: Attempt to update non-exist table!\n";
+		return;
+	}
+	TableInfo &tbi = tableInfo.at(tableName);
+	if(!tbi.loaded) {
+		cerr << "ERROR: Table " << tableName << "is not loaded, can not Update Statistics!\n";
+		return;
+	}
+	stat.Upadte(tbi.sch, tableName, tbi.dbf_path);
 }
 
 void Tables::AppendSchema(const char *tableName) {

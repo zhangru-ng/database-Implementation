@@ -195,7 +195,7 @@ void OrderMaker :: Print () {
 }
 
 
-CNF :: CNF(Schema &schema) {
+CNF :: CNF(const Schema &schema) {
 	orList[0][0].operand1 = Left;
 	orList[0][0].whichAtt1 = 0;	
 	orList[0][0].op = Equals;	

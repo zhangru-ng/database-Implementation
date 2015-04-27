@@ -455,8 +455,7 @@ std::pair<double, double> Statistics::GetAttsDistinct(std::string &lname, std::s
 
 int Statistics::GetNumTuples (const std::string &relName) const {
 	if(relations.find(relName) == relations.end()) {
-		cerr << "ERROR: Can't get number of tuples, Relation does not appear in Statistics!" << endl;
-		exit(1);
+		return NOTFOUND;
 	}
 	return relations.at(relName)->numTuples;
 }
@@ -522,4 +521,65 @@ void Statistics::ClearRel(std::vector<char*> &relNames) {
 	for (auto &rn : relNames) {
 		relations.erase(rn);
 	}
+}
+
+void Statistics::Upadte(const Schema &mySchema, std::string tableName, std::string dbfPath) {
+	CNF cnf(mySchema);	
+	Attribute *atts = mySchema.GetAtts();
+	int numAtts = mySchema.GetNumAtts();
+	DBFile dbf;
+	Record literal;
+	int pipesz = 100;
+	int pagenum = 100;
+	// calculate number of tuples in the relation
+	{
+		if(!dbf.Open(dbfPath.c_str())) {
+			cerr << "ERROR: Can't open dbfile for upadting statistics!\n";
+			return;
+		}
+		SelectFile SF;
+		Pipe SFout(pipesz);
+		SF.Run (dbf, SFout, cnf, literal);
+		double num = CalculateNumRec(SFout);
+		SF.WaitUntilDone ();
+		AddRel((char*)tableName.c_str(), num);
+	}
+	for(int i = 0; i < numAtts; i++) {		
+		dbf.Open(dbfPath.c_str());
+		SelectFile SF;
+		Pipe SFout(pipesz);
+		
+		Project P;
+		Pipe Pout (pipesz);
+		int keepMe[] = {i};
+		int numAttsIn = numAtts;
+		int numAttsOut = 1;
+		P.Use_n_Pages (pagenum);
+
+		DuplicateRemoval D;
+			Attribute att = {"att", atts[i].myType};
+			Pipe out (pipesz);
+			Schema sch ("atts", 1, &att);	
+		D.Use_n_Pages(pagenum);
+
+		SF.Run (dbf, SFout, cnf, literal);
+		P.Run (SFout, Pout, keepMe, numAttsIn, numAttsOut);
+		D.Run (Pout, out, sch);
+
+		double num = CalculateNumRec(out);
+
+		SF.WaitUntilDone ();
+		P.WaitUntilDone ();
+		D.WaitUntilDone ();
+		AddAtt((char*)tableName.c_str(), (char*)atts[i].name.c_str(), num);		
+	}
+}
+
+double Statistics::CalculateNumRec (Pipe &in_pipe) {
+	Record rec;
+	double cnt = 0;
+	while (in_pipe.Remove (&rec)) {
+		cnt++;
+	}
+	return cnt;
 }

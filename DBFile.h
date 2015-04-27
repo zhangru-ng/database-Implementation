@@ -20,16 +20,16 @@ FRIEND_TEST(SortedFileTest, AddRecord);
 FRIEND_TEST(SortedFileTest, MoveFirst);
 
 private:
-	unique_ptr<GenericDBFile> myInternalPoniter;
+	unique_ptr<GenericDBFile> myInternalPointer;
 	//check if the internal pointer is initialize
 	bool AssertInit();
 public:
 	DBFile (); 
 	DBFile(DBFile &&rhs) {
-		myInternalPoniter = std::move(rhs.myInternalPoniter);
+		myInternalPointer = std::move(rhs.myInternalPointer);
 	}
 	DBFile& operator =(DBFile &&rhs) {
-		myInternalPoniter = std::move(rhs.myInternalPoniter);
+		myInternalPointer = std::move(rhs.myInternalPointer);
 		return *this;
 	}
 	int Create (const char *fpath, fType file_type, void *startup);

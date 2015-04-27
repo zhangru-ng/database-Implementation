@@ -1,6 +1,9 @@
 #ifndef STATISTICS_
 #define STATISTICS_
 #include "ParseTree.h"
+#include "Schema.h"
+#include "RelOp.h"
+#include "Pipe.h"
 #include <cstdlib>
 #include <iostream>
 #include <fstream>
@@ -87,10 +90,11 @@ private:
 	void ClearRel(std::string &newName, std::vector<char*> &relNames);
 	// clear the join result and all the old names
 	void ClearRel(std::vector<char*> &relNames);
-	
+	// calculate number of tuples in update
+	double CalculateNumRec (Pipe &in_pipe);	
 public:
 	Statistics();
-	Statistics(Statistics const &copyMe);	 // Performs deep copy
+	Statistics(const Statistics &copyMe);	 // Performs deep copy
 	// add a relation to the statistics
 	void AddRel(char *relName, long numTuples);
 	// add an attribute to the statistics
@@ -111,6 +115,8 @@ public:
 	int GetNumTuples(const std::string &relName) const;
 	// check if the statistics contain a relation
 	int CheckRels(const char* relName) const;
+	// update statistics of a table
+	void Upadte(const Schema &mySchema, std::string tableName, std::string dbfPath);
 };
 
 #endif

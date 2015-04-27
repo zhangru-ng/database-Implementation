@@ -58,7 +58,7 @@ public:
 
 	// create an OrderMaker that can be used to sort records
 	// based upon ALL of their attributes
-	OrderMaker(Schema *schema);
+	explicit OrderMaker(Schema *schema);
 
 	// construct order maker using input name list
 	OrderMaker(struct NameList *sortAtts, Schema &schema);
@@ -107,7 +107,7 @@ public:
 	CNF() = default;
 
 	// initial default select file cnf
-	CNF(Schema &schema);
+	explicit CNF(const Schema &schema);
 	// this returns an instance of the OrderMaker class that
 	// allows the CNF to be implemented using a sort-based
 	// algorithm such as a sort-merge join.  Returns a 0 if and

@@ -27,7 +27,7 @@ Type Schema :: FindType (char *attName) {
 	return Int;
 }
 
-Type Schema :: GetType (int index) {
+Type Schema :: GetType (int index) const{
 	if (index >= numAtts) {
 		cerr << "ERROR: Index out of bound!\n";
 		exit(1);
@@ -35,11 +35,11 @@ Type Schema :: GetType (int index) {
 	return myAtts[index].myType;
 }
 
-int Schema :: GetNumAtts () {
+int Schema :: GetNumAtts () const{
 	return numAtts;
 }
 
-Attribute *Schema :: GetAtts () {
+Attribute *Schema :: GetAtts () const{
 	return myAtts;
 }
 

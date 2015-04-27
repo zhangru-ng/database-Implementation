@@ -38,10 +38,10 @@ public:
 
 	// gets the set of attributes, but be careful with this, since it leads
 	// to aliasing!!!
-	Attribute *GetAtts ();
+	Attribute *GetAtts () const;
 
 	// returns the number of attributes
-	int GetNumAtts ();
+	int GetNumAtts () const;
 
 	// this finds the position of the specified attribute in the schema
 	// returns a -1 if the attribute is not present in the schema
@@ -51,7 +51,7 @@ public:
 	Type FindType (char *attName);
 
 	// finds the type of the given index
-	Type GetType (int index);
+	Type GetType (int index) const;
 
 	// this reads the specification for the schema in from a file
 	Schema (const char *fName, const char *relName);
@@ -60,7 +60,7 @@ public:
 	Schema (const char *fName, int num_atts, Attribute *atts);
 
 	// compose a schema using input attribute list in CREATE TABLE
-	Schema (struct AttList *attsList);
+	explicit Schema (struct AttList *attsList);
 
 	// this constructs a sort order structure that can be used to
 	// place a lexicographic ordering on the records using this type of schema
