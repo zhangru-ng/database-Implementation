@@ -94,8 +94,6 @@ private:
 	void JoinRecInFile (DBFile &file, Record &right, int flag);
 	// sort-merge join algorithm
 	void SortMergeJoin(OrderMaker &sortorderL, OrderMaker &sortorderR);
-	// output all possible joinable tuples start from where the sort-merge join find matched tuples
-	int OutputTuple(Record &left, Record &right, Pipe &outputL, Pipe &outputR, OrderMaker &sortorderL, OrderMaker &sortorderR);
 	void* InternalThreadEntry();
 public:
 	Join();

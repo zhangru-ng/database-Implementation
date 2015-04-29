@@ -1,12 +1,18 @@
 #include "BigQ.h"
 #include <utility>
 
-BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl), runsFileName(), runsFile(), runNum(0), workthread() {
+BigQ::BigQ (Pipe &i, Pipe &o, OrderMaker &sorder, int rl): in(i), out(o), sortorder(sorder), runlen(rl), runsFileName(), runsFile(), runNum(0) {
 	if (runlen > 0) {
 		StartInternalThread();
  	} else {
 		cerr << "ERROR in BigQ: run length should greater than 0!";
 		exit(1);
+	}
+}
+
+BigQ::~BigQ() {
+	if(0 != remove(runsFileName.c_str())){
+		cerr << "Can't delete BigQ temp file: " << runsFileName << endl;
 	}
 }
 
@@ -31,9 +37,6 @@ void *BigQ::InternalThreadEntry () {
 	// cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 	// cout << "sort spent " << cpu_time_used << " seconds cpu time" << endl;
 	runsFile.Close();	
-	if(0 != remove(runsFileName.c_str())){
-		cerr << "Can't delete BigQ temp file: " << runsFileName << endl;
-	}
 	out.ShutDown ();
 	//cout << "TPMMS spent totally " << cpu_time_used << " senconds cpu time" << endl;	
 }

@@ -52,7 +52,6 @@ private:
     string runsFileName;
     File runsFile;
     int runNum;
-    pthread_t workthread;
    // static void* workerthread_wrapper (void* arg);
     void *InternalThreadEntry();
     //sort one run record in first phase
@@ -69,6 +68,7 @@ private:
 
 public:
     BigQ (Pipe &in, Pipe &out, OrderMaker &sortorder, int runlen);
+    ~BigQ();
 };
 
 class Run{

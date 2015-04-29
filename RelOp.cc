@@ -232,96 +232,75 @@ void Join::JoinRecInFile (DBFile &file, Record &right, int flag) {
 //sort-merge join algorithm
 void Join::SortMergeJoin (OrderMaker &sortorderL, OrderMaker &sortorderR) {
 	Record tempRecL, tempRecR;
-	Pipe outputL(buffsz);
-	Pipe outputR(buffsz);
-	BigQ bqL(*inPipeL, outputL, sortorderL, runlen/2);
-	BigQ bqR(*inPipeR, outputR, sortorderR, runlen/2);
+	Pipe *outputL = new Pipe(buffsz);
+	Pipe *outputR = new Pipe(buffsz);
+	BigQ *bqL = new BigQ(*inPipeL, *outputL, sortorderL, runlen/2);
+	BigQ *bqR = new BigQ(*inPipeR, *outputR, sortorderR, runlen/2);
 	//if both the output pipes have at least one record
-	if (outputL.Remove(&tempRecL) && outputR.Remove(&tempRecR)) {
-		//initial parameters for MergeRecord
-		{
-			numAttsLeft = tempRecL.GetNumAtts();
-			numAttsRight = tempRecR.GetNumAtts();
-			numAttsToKeep = numAttsLeft + numAttsRight;
-			attsToKeep = new int[numAttsToKeep];
-			for (int i = 0; i < numAttsToKeep; ++i) {
-				if (i >= numAttsLeft) {
-					attsToKeep[i] = i - numAttsLeft;
-					continue;
-				}
-				attsToKeep[i] = i;
+	if (outputL->Remove(&tempRecL) && outputR->Remove(&tempRecR)) {
+		numAttsLeft = tempRecL.GetNumAtts();
+		numAttsRight = tempRecR.GetNumAtts();
+		numAttsToKeep = numAttsLeft + numAttsRight;
+		attsToKeep = new int[numAttsToKeep];
+		for (int i = 0; i < numAttsToKeep; ++i) {
+			if (i >= numAttsLeft) {
+				attsToKeep[i] = i - numAttsLeft;
+				continue;
 			}
+			attsToKeep[i] = i;
 		}
-
-		while(1) {
+		bool leftNotEnd = true;
+		bool rightNotEnd = true;
+		Record joinRec;
+		while(leftNotEnd && rightNotEnd) {
 			// if the left record is less than right record
 			if (comp.Compare(&tempRecL, &sortorderL, &tempRecR, &sortorderR) < 0) {
 				//get next record in left output pipe for next comparion, if no record left then break
-				if (0 == outputL.Remove(&tempRecL)) {				
-					break;
-				}
+				leftNotEnd = outputL->Remove(&tempRecL);
 			}
 			// if the left record is greater than right record
 			else if (comp.Compare(&tempRecL, &sortorderL, &tempRecR, &sortorderR) > 0) {
 				//get next record in right output pipe for next comparion, if no record left then break
-				if (0 == outputR.Remove(&tempRecR)) {					
-					break;
-				}
+				rightNotEnd = outputR->Remove(&tempRecR);
 			}
 			// if left record equal to right record
 			else {
-				int isEnd = OutputTuple(tempRecL, tempRecR, outputL, outputR, sortorderL, sortorderR);				
-				//get next right record  for next comparion, if no record left then break
-				if (0 == isEnd) {					
-					break;
+				vector<Record> leftRecords;
+				vector<Record> rightRecords;
+				leftRecords.push_back(std::move(tempRecL));
+				rightRecords.push_back(std::move(tempRecR));
+				//collect all equal records in left pipe
+				leftNotEnd = outputL->Remove(&tempRecL);
+				while (leftNotEnd && 0 == comp.Compare(&tempRecL, &sortorderL, &rightRecords[0], &sortorderR)){
+					leftRecords.push_back(std::move(tempRecL));
+					leftNotEnd = outputL->Remove(&tempRecL);
+				}
+				//collect all equal records in right pipe
+				rightNotEnd = outputR->Remove(&tempRecR);
+				while (rightNotEnd && 0 == comp.Compare(&leftRecords[0], &sortorderL, &tempRecR, &sortorderR)) {
+					rightRecords.push_back(std::move(tempRecR));
+					rightNotEnd = outputR->Remove(&tempRecR);
+				}
+				//merge all matched records
+				for (auto itL = leftRecords.begin(); itL != leftRecords.end(); ++itL) {
+					for (auto itR = rightRecords.begin(); itR != rightRecords.end(); ++itR) {
+						joinRec.MergeRecords (&(*itL), &(*itR), numAttsLeft, numAttsRight, attsToKeep, numAttsToKeep, numAttsLeft);
+						outPipe->Insert(&joinRec);
+					}
 				}
 			}
-		}		
+		}
+		// while(outputL->Remove(&tempRecL));
+		// while(outputR->Remove(&tempRecR));
 	}
+	// don't need to spend time taking out the unmatched record?
+	outputL->ShutDown();
+	outputR->ShutDown();
+	delete bqL;
+	delete bqR;
+	delete outputL;
+	delete outputR;
 	delete[] attsToKeep;
-}
-
-// output all possible joinable tuples start from where the sort-merge join find matched tuples
-int Join::OutputTuple (Record &left, Record &right, Pipe &outputL, Pipe &outputR, OrderMaker &sortorderL, OrderMaker &sortorderR) {
-	Record tempRecL, tempRecR, joinRec;
-	vector<Record> leftRecords;
-	vector<Record> rightRecords;
-	leftRecords.push_back(std::move(left));
-	rightRecords.push_back(std::move(right));
-	int isLeftEnd, isRightEnd;
-	//collect all equal records in left pipe
-	while (isLeftEnd = outputL.Remove(&tempRecL)){
-		if (0 == comp.Compare(&tempRecL, &sortorderL, &rightRecords[0], &sortorderR)) {
-			//push records in vector until not match origin right record
-			leftRecords.push_back(std::move(tempRecL));
-		}else{
-			break;
-		}
-	}
-	//collect all equal records in right pipe
-	while (isRightEnd = outputR.Remove(&tempRecR)) {
-		if (0 == comp.Compare(&leftRecords[0], &sortorderL, &tempRecR, &sortorderR)) {
-			//push records in vector until not match origin left record
-			rightRecords.push_back(std::move(tempRecR));
-		} else {
-			break;
-		}
-	}
-	//merge all matched records
-	for (auto itL = leftRecords.begin(); itL != leftRecords.end(); ++itL) {
-		for (auto itR = rightRecords.begin(); itR != rightRecords.end(); ++itR) {
-			joinRec.MergeRecords (&(*itL), &(*itR), numAttsLeft, numAttsRight, attsToKeep, numAttsToKeep, numAttsLeft);
-			outPipe->Insert(&joinRec);
-		}
-	}	
-	int isEnd = isLeftEnd && isRightEnd;
-	//if both relations do not reach the end
-	if (isEnd) {
-		// assign the first unequal record for next round comparison	
-		left.Consume(&tempRecL);
-		right.Consume(&tempRecR);
-	}
-	return isEnd;
 }
 /***************************************Join*************************************************/
 
