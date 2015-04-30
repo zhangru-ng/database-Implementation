@@ -5,6 +5,7 @@
 #include "BigQ.h"
 #include "RelOp.h"
 #include "Statistics.h"
+#include "PlanTree.h"
 #include "ParseTree.h"
 #include "gtest/gtest.h"
 
@@ -16,6 +17,8 @@ string testFile_path[2] = { "dbfile/testFile1.bin", "dbfile/testFile2.bin" };
 string headFile_path[2] = { "dbfile/testFile1.bin.header", "dbfile/testFile2.bin" };
 
 extern "C" {
+	struct YY_BUFFER_STATE *yy_scan_string(const char*);
+	int yyparse(void);   // defined in y.tab.c
 	int yycnfparse (void);   // defined in y.tab.c
 	int yycnfparse(void);	// defined in yycnf.tab.c
 	int yyfuncparse (void);   // defined in yyfunc.tab.c
@@ -1549,6 +1552,179 @@ TEST(StatisticsDeathTest, JoinIncompleteSubset) {
 	EXPECT_DEATH( s1.Estimate(final, relName2, 2), "ERROR: Attempt to join incomplete subset members");
 }
 
+
+class PlanTreeTest : public ::testing::Test {
+protected:
+	virtual void SetUp() {		
+		table.CreateAll();
+		s.Read("STATS.txt");
+		tree = new PlanTree(s, table, STDOUT_);
+	}
+
+	virtual void TearDown() {
+		delete tree;
+	}
+	
+public:
+	Tables table;
+	Statistics s;
+	PlanTree *tree;
+};
+
+TEST_F(PlanTreeTest, PlanTest1) {
+	char *cnf = "SELECT SUM (ps.ps_supplycost), s.s_suppkey " 
+				"FROM part AS p, supplier AS s, partsupp AS ps " 
+				"WHERE (p.p_partkey = ps.ps_partkey) AND (s.s_suppkey = ps.ps_suppkey) AND (s.s_acctbal > 2500.0) "
+				"GROUP BY s.s_suppkey";
+	yy_scan_string(cnf);
+	yyparse();
+	tree->GetPlanTree();
+	EXPECT_EQ(1, tree->selectList.size());
+	EXPECT_EQ(4, tree->buildedNodes.size());
+	EXPECT_EQ(3, tree->selectFileList.size());
+}
+
+TEST_F(PlanTreeTest, PlanTest2) {
+	char *cnf = "SELECT l.l_orderkey, l.l_partkey, l.l_suppkey "
+				"FROM lineitem AS l "
+				"WHERE (l.l_returnflag = 'R') AND (l.l_discount < 0.04 OR l.l_shipmode = 'MAIL')";
+	yy_scan_string(cnf);
+	yyparse();
+	tree->GetPlanTree();
+	EXPECT_EQ(1, tree->selectList.size());
+	EXPECT_EQ(3, tree->buildedNodes.size());
+	EXPECT_EQ(1, tree->selectFileList.size());
+}
+
+TEST_F(PlanTreeTest, PlanTest3) {
+	char *cnf = "SELECT DISTINCT c1.c_name, c1.c_address, c1.c_acctbal "
+				"FROM customer AS c1, customer AS c2 "
+				"WHERE (c1.c_nationkey = c2.c_nationkey) AND (c1.c_name ='Customer#000070919')";
+	yy_scan_string(cnf);
+	yyparse();
+	tree->GetPlanTree();
+	EXPECT_EQ(1, tree->selectList.size());
+	EXPECT_EQ(4, tree->buildedNodes.size());
+	EXPECT_EQ(2, tree->selectFileList.size());
+}
+
+TEST_F(PlanTreeTest, PlanTest4) {
+	char *cnf = "SELECT l.l_discount "
+				"FROM lineitem AS l, orders AS o, customer AS c, nation AS n, region AS r "
+				"WHERE (l.l_orderkey = o.o_orderkey) AND (o.o_custkey = c.c_custkey) AND (c.c_nationkey = n.n_nationkey) AND "
+	  			"(n.n_regionkey = r.r_regionkey) AND (r.r_regionkey = 1) AND (o.o_orderkey < 10000)";
+	yy_scan_string(cnf);
+	yyparse();
+	tree->GetPlanTree();
+	EXPECT_EQ(2, tree->selectList.size());
+	EXPECT_EQ(6, tree->buildedNodes.size());
+	EXPECT_EQ(5, tree->selectFileList.size());
+}
+
+TEST_F(PlanTreeTest, PlanTest5) {
+	char *cnf = "SELECT SUM (l.l_discount) "
+				"FROM customer AS c, orders AS o, lineitem AS l "
+				"WHERE (c.c_custkey = o.o_custkey) AND (o.o_orderkey = l.l_orderkey) AND "
+	  			"(c.c_name = 'Customer#000070919') AND (l.l_quantity > 30.0) AND (l.l_discount < 0.03)";
+	yy_scan_string(cnf);
+	yyparse();
+	tree->GetPlanTree();
+	EXPECT_EQ(2, tree->selectList.size());
+	EXPECT_EQ(4, tree->buildedNodes.size());
+	EXPECT_EQ(3, tree->selectFileList.size());
+}
+
+TEST_F(PlanTreeTest, PlanTest6) {
+	char *cnf = "SELECT SUM (l.l_extendedprice * (1 - l.l_discount)), l.l_orderkey, o.o_orderdate, o.o_shippriority "
+				"FROM customer AS c, orders AS o, lineitem AS l "
+				"WHERE (c.c_mktsegment = 'BUILDING') AND (c.c_custkey = o.o_custkey) AND (l.l_orderkey = o.o_orderkey) "
+				"AND (l.l_orderkey < 100 OR o.o_orderkey < 100) "
+				"GROUP BY l.l_orderkey, o.o_orderdate, o.o_shippriority";
+	yy_scan_string(cnf);
+	yyparse();
+	tree->GetPlanTree();
+	EXPECT_EQ(1, tree->selectList.size());
+	EXPECT_EQ(5, tree->buildedNodes.size());
+	EXPECT_EQ(3, tree->selectFileList.size());
+}
+
+TEST_F(PlanTreeTest, PlanTest7) {
+	char *cnf = "SELECT l.l_orderkey "
+				"FROM lineitem AS l "
+				"WHERE (l.l_orderkey = l.l_orderkey)"
+				"GROUP BY l.l_orderkey";
+	yy_scan_string(cnf);
+	yyparse();
+	tree->GetPlanTree();
+	EXPECT_EQ(0, tree->selectList.size());
+	EXPECT_EQ(4, tree->buildedNodes.size());
+	EXPECT_EQ(1, tree->selectFileList.size());
+}
+
+TEST_F(PlanTreeTest, PlanTest8) {
+	char *cnf = "SELECT SUM DISTINCT (l.l_extendedprice * (1 - l.l_discount)), l.l_orderkey, o.o_orderdate, o.o_shippriority "
+				"FROM customer AS c, orders AS o, lineitem AS l "
+				"WHERE (c.c_mktsegment = 'BUILDING') AND (c.c_custkey = o.o_custkey) AND (l.l_orderkey = o.o_orderkey) "
+				"AND (l.l_orderkey < 100 OR o.o_orderkey < 100) "
+				"GROUP BY l.l_orderkey, o.o_orderdate, o.o_shippriority";
+	yy_scan_string(cnf);
+	yyparse();
+	tree->GetPlanTree();
+	EXPECT_EQ(1, tree->selectList.size());
+	EXPECT_EQ(7, tree->buildedNodes.size());
+	EXPECT_EQ(3, tree->selectFileList.size());
+}
+
+TEST_F(PlanTreeTest, PlanTest9) {
+	char *cnf = "SELECT SUM DISTINCT (l.l_extendedprice * (1 - l.l_discount))"
+				"FROM customer AS c, orders AS o, lineitem AS l "
+				"WHERE (c.c_mktsegment = 'BUILDING') AND (c.c_custkey = o.o_custkey) AND (l.l_orderkey = o.o_orderkey) "
+				"AND (l.l_orderkey < 100) AND (o.o_orderkey < 100) ";				
+	yy_scan_string(cnf);
+	yyparse();
+	tree->GetPlanTree();
+	EXPECT_EQ(3, tree->selectList.size());
+	EXPECT_EQ(6, tree->buildedNodes.size());
+	EXPECT_EQ(3, tree->selectFileList.size());
+}
+
+TEST_F(PlanTreeTest, PlanTest10) {
+	char *cnf = "SELECT SUM DISTINCT (l.l_extendedprice * (1 - l.l_discount)), l.l_orderkey "
+				"FROM orders AS o, lineitem AS l "
+				"WHERE (l.l_orderkey = o.o_orderkey) AND (l.l_orderkey < 100 OR o.o_orderkey < 100) "
+				"GROUP BY l.l_orderkey, o.o_orderdate, o.o_shippriority";
+	yy_scan_string(cnf);
+	yyparse();
+	tree->GetPlanTree();
+	EXPECT_EQ(0, tree->selectList.size());
+	EXPECT_EQ(7, tree->buildedNodes.size());
+	EXPECT_EQ(2, tree->selectFileList.size());
+}
+
+TEST_F(PlanTreeTest, PlanTest11) {
+	char *cnf = "SELECT l.l_discount "
+				"FROM lineitem AS l, orders AS o, customer AS c, nation AS n, region AS r "
+				"WHERE (l.l_orderkey = o.o_orderkey) AND (o.o_custkey = c.c_custkey) AND (c.c_nationkey = n.n_nationkey) AND "
+	  			"(n.n_regionkey = r.r_regionkey) AND (r.r_regionkey = 1 OR o.o_orderkey < 10000 OR l.l_orderkey = 2 OR c.c_custkey = 3)";
+	yy_scan_string(cnf);
+	yyparse();
+	tree->GetPlanTree();
+	EXPECT_EQ(0, tree->selectList.size());
+	EXPECT_EQ(7, tree->buildedNodes.size());
+	EXPECT_EQ(5, tree->selectFileList.size());
+}
+
+TEST_F(PlanTreeTest, PlanTest12) {
+	char *cnf = "SELECT n.n_nationkey "
+				"FROM nation AS n "
+				"WHERE (n.n_nationkey = 1)";
+	yy_scan_string(cnf);
+	yyparse();
+	tree->GetPlanTree();
+	EXPECT_EQ(1, tree->selectList.size());
+	EXPECT_EQ(3, tree->buildedNodes.size());
+	EXPECT_EQ(1, tree->selectFileList.size());
+}
 
 GTEST_API_ int main(int argc, char **argv) {
 	printf("Running main() from gtest_main.cc\n");
