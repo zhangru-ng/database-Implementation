@@ -22,6 +22,7 @@ void Tables::Create(const char* tableName, struct AttList *attsList) {
 	tblInfo.dbf.Create(tblInfo.dbf_path.c_str(), heap, 0);	
 	tblInfo.dbf.Close();
 	tableInfo.emplace(tableName, std::move(tblInfo));
+	cout << "\nSucceed.\n" << endl; 
 }
 
 
@@ -35,6 +36,7 @@ void Tables::Create(const char *tableName, struct AttList *attsList, struct Name
 	tblInfo.dbf.Create(tblInfo.dbf_path.c_str(), sorted, &si);	
 	tblInfo.dbf.Close();
 	tableInfo.emplace(tableName, std::move(tblInfo));
+	cout << "\nSucceed.\n" << endl; 
 }
 
 void Tables::CreateAll() {
@@ -45,12 +47,22 @@ void Tables::CreateAll() {
 		TableInfo tblInfo;
 		tblInfo.sch = std::move(Schema(catalogPath_.c_str(), tn.c_str()));
 		tblInfo.dbf_path = dbfPrefix_ + tn + ".bin";
-
-		tblInfo.loaded = true;
-		// tblInfo.dbf.Create(tblInfo.dbf_path.c_str(), heap, 0);	
-		// tblInfo.dbf.Close();
+		tblInfo.dbf.Create(tblInfo.dbf_path.c_str(), heap, 0);	
+		tblInfo.dbf.Close();
 		tableInfo.emplace(tn, std::move(tblInfo));
 	}
+	cout << "\nSucceed.\n" << endl; 
+}
+
+void Tables::CreateAllName() {
+	for(auto &tn : tblName_) {	
+		TableInfo tblInfo;
+		tblInfo.sch = std::move(Schema(catalogPath_.c_str(), tn.c_str()));
+		tblInfo.dbf_path = dbfPrefix_ + tn + ".bin";
+		tblInfo.loaded = true;
+		tableInfo.emplace(tn, std::move(tblInfo));
+	}
+	cout << "\nSucceed.\n" << endl; 
 }
 
 void Tables::Load(const char *tableName, std::string fileName) {
@@ -78,6 +90,7 @@ void Tables::Load(const char *tableName, std::string fileName) {
 	tblInfo.dbf.Load (tblInfo.sch, load_path.c_str());
 	tblInfo.dbf.Close();
 	tblInfo.loaded = true;
+	cout << "\nSucceed.\n" << endl; 
 }
 
 void Tables::LoadAll() {
@@ -92,6 +105,7 @@ void Tables::LoadAll() {
 		tblInfo.dbf.Close();
 		tblInfo.loaded = true;
 	}
+	cout << "\nSucceed.\n" << endl; 
 }
 
 void Tables::Drop(const char *tableName) {
@@ -106,7 +120,8 @@ void Tables::Drop(const char *tableName) {
 		} else if ('n' == ch) {
 			return;
 		} 
-	}	
+	}
+	cout << "\nSucceed.\n" << endl; 
 }
 
 void Tables::Store(std::string resultName, Schema &schema) {
@@ -115,6 +130,7 @@ void Tables::Store(std::string resultName, Schema &schema) {
 	tblInfo.dbf_path = dbfPrefix_ + resultName + ".bin";
 	tblInfo.dbf.Create(tblInfo.dbf_path.c_str(), heap, 0);	
 	tableInfo.emplace(resultName, std::move(tblInfo));
+	cout << "\nSucceed.\n" << endl; 
 }
 
 void Tables::UpdateStats(const char *tableName, Statistics &stat) {
@@ -142,6 +158,7 @@ void Tables::UpdateStats(const char *tableName, Statistics &stat) {
 		return;
 	}
 	stat.Upadte(tbi.sch, tableName, tbi.dbf_path);
+	cout << "\nSucceed.\n" << endl; 
 }
 
 void Tables::AppendSchema(const char *tableName) {
@@ -153,9 +170,16 @@ void Tables::AppendSchema(const char *tableName) {
 }
 
 void Tables::RenewSchema() {
-	ofstream outfile(catalogPath_,  ofstream::trunc);
+	ofstream outfile(catalogPath_, ofstream::trunc);
 	for (auto &rel : tableInfo) {
 		rel.second.sch.Write(catalogPath_, rel.first);
+	}
+}
+
+void Tables::WriteSchema(const char* fileName) {
+	ofstream outfile(fileName);
+	for (auto &rel : tableInfo) {
+		rel.second.sch.Write(fileName, rel.first);
 	}
 }
 
@@ -180,7 +204,7 @@ void Tables::Read(std::string filename) {
 		tblInfo.sch = std::move(Schema(catalogPath_.c_str(), tableName.c_str()));	
 		tableInfo.emplace(tableName, std::move(tblInfo));
 	}
-
+	cout << "\nSucceed.\n" << endl; 
 }
 
 void Tables::Write(std::string filename) {
@@ -190,7 +214,7 @@ void Tables::Write(std::string filename) {
 		outfile << tbl.second.loaded << endl;
 		outfile << tbl.second.dbf_path << "\n" << endl;
 	}
-	
+	cout << "\nSucceed.\n" << endl; 
 }
 
 void Tables::Print() const {
@@ -209,8 +233,8 @@ void Tables::Print() const {
 
 void Tables::Clear() {
 	for (auto &t : tableInfo) {
-		// t.second.dbf.Close();
-		// remove(t.first.c_str());
+		t.second.dbf.Close();
+		remove(t.first.c_str());
 	}
 	tableInfo.clear();
 }

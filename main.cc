@@ -15,7 +15,7 @@ extern "C" {
 
 extern int operationType;
 extern char* tableName;
-extern char* dbfileName;
+extern char* infileName;
 extern struct AttList *attsList;
 extern struct NameList *sortAtts;
 extern int outputMode;
@@ -28,23 +28,25 @@ int main () {
 	Statistics s;
 	s.Read("STATS.txt");
 	Tables table;
-	table.CreateAll();
-	table.LoadAll();	
-	int outMode = OUTFILE_;
+	int outMode = STDOUT_;
 	cout << "\n*********************************************************************" << endl;
 	cout << "                   Welcome to Rui's database                         " << endl;
 	cout << "*********************************************************************" << endl;
-	while(true) {		
+	while(true) {
 		cout << "\nPlease input instruction and press Ctrl + D to execute.\n" << endl;
 		cout << ">>> ";
 		if(yyparse() != 0) {
 			cerr << "Please give valid input" << endl;
 			continue;
+			return 1;
 		}
-
+		cout << endl;
 		switch (operationType) {
 			case EXIT_:
-				cout << "Thanks! Goodbye." << endl;
+				cout << "Thanks! Goodbye.\n" << endl;
+				table.WriteSchema("newSchema.txt");
+				table.Write("newTables.txt");
+				s.Write("newStat.txt");
 				exit(0);
 				break;
 			case CREATE_HEAP_:				
@@ -53,14 +55,27 @@ int main () {
 			case CREATE_SORTED_:				
 				table.Create(tableName, attsList, sortAtts);
 				break;
+			case CREATE_ALL_:
+				table.CreateAll();
+				break;
+			case CREATE_ALL_NAME_:
+				table.CreateAllName();
+				break;	
 			case INSERT_:				
-				table.Load(tableName, dbfileName);
+				table.Load(tableName, infileName);
+				break;
+			case LOAD_ALL_:
+				table.LoadAll();
 				break;
 			case DROP_:
 				table.Drop(tableName);
+				s.DropRel(tableName);
 				break;
 			case PRINT_TABLE_:
 				table.Print();
+				break;
+			case INSERT_TABLE_:
+				table.Read(infileName);
 				break;
 			case OUTPUT_:
 				SetOutput(outMode);
@@ -68,20 +83,21 @@ int main () {
 			case PRINT_STATS_:
 				s.Print();
 				break;
+			case INSERT_STATISTICS_:
+				s.Read(infileName);
+				break;
 			case UPDATE_:
-				cout << "Updating statistics for " << tableName << endl;
-				cout << "not yet implemented!" << endl;
+				table.UpdateStats(tableName, s);
 				break;
 			case QUERY_:				
 				PlanTree planTree(s, table, outMode);
 				if (DISCARD == planTree.GetPlanTree()) {
 					continue;
-				}
+				}		
 				planTree.Execute();
 				break;
-		}	
-		cout << "\nSucceed.\n" << endl; 
-	}
+		}		
+	}	
 }
 
 void SetOutput(int &outMode) {

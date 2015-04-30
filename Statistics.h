@@ -117,6 +117,8 @@ public:
 	int CheckRels(const char* relName) const;
 	// update statistics of a table
 	void Upadte(const Schema &mySchema, std::string tableName, std::string dbfPath);
+	// delete a relation from statistics
+	void DropRel(const char *tableName);
 };
 
 #endif

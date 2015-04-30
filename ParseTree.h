@@ -22,6 +22,11 @@
 #define PRINT_TABLE_ 18
 #define PRINT_STATS_ 19
 #define EXIT_ 20
+#define CREATE_ALL_ 21
+#define LOAD_ALL_ 22
+#define CREATE_ALL_NAME_ 23
+#define INSERT_TABLE_ 24
+#define INSERT_STATISTICS_ 25
 
 // used in computational (funcional) expressions
 struct FuncOperand {

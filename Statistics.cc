@@ -583,3 +583,7 @@ double Statistics::CalculateNumRec (Pipe &in_pipe) {
 	}
 	return cnt;
 }
+
+void Statistics::DropRel (const char *tableName) {
+	relations.erase(tableName);
+}

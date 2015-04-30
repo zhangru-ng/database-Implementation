@@ -71,8 +71,7 @@ int main(int argc, char *argv[]) {
 		Tables table;
 		int outMode = STDOUT_;
 		s.Read("STATS.txt");	
-		table.CreateAll();
-		// table.LoadAll();			
+		table.CreateAllName();	
 		yy_scan_string(cnf[qindx]);
 		yyparse();
 		PlanTree planTree(s, table, outMode);

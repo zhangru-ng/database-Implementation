@@ -2,7 +2,7 @@
 #define DEFS_H
 
 
-#define MAX_ANDS 20
+#define MAX_ANDS 40
 #define MAX_ORS 20
 
 #define PAGE_SIZE 131072
