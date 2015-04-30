@@ -35,8 +35,8 @@ class PlanNodeVisitor;
 class PlanNode {
 public:
 	static std::vector<Pipe *> pipePool;
-	constexpr static int pipesz = 100;
-	constexpr static int pagenum = 50;
+	static const int pipesz = 100;
+	static const int pagenum = 100;
 	NodeType type;	
 	PlanNode *parent;	
 	PlanNode *child;
@@ -203,6 +203,21 @@ public:
 
 
 class PlanTree {
+
+friend class PlanTreeTest;
+FRIEND_TEST(PlanTreeTest, PlanTest1);
+FRIEND_TEST(PlanTreeTest, PlanTest2);
+FRIEND_TEST(PlanTreeTest, PlanTest3);
+FRIEND_TEST(PlanTreeTest, PlanTest4);
+FRIEND_TEST(PlanTreeTest, PlanTest5);
+FRIEND_TEST(PlanTreeTest, PlanTest6);
+FRIEND_TEST(PlanTreeTest, PlanTest7);
+FRIEND_TEST(PlanTreeTest, PlanTest8);
+FRIEND_TEST(PlanTreeTest, PlanTest9);
+FRIEND_TEST(PlanTreeTest, PlanTest10);
+FRIEND_TEST(PlanTreeTest, PlanTest11);
+FRIEND_TEST(PlanTreeTest, PlanTest12);
+
 private:	
 	PlanNode *root;
 	int numOfRels;	// store number of relations in the tree	

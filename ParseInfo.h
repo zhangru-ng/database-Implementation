@@ -63,21 +63,21 @@ int CheckSumPredicate(struct FuncOperator *finalFunction, struct NameList *group
 int CheckGroupAndSelect(struct NameList *groupingAtts, struct NameList *attsToSelect);
 
 // check if the sum distinct attribute in grouping list
-int CheckDistinctFunc(struct FuncOperator *finalFunction, struct NameList *groupingAtts);
+struct NameList* GetDistinctName(struct FuncOperator *finalFunction, struct NameList *groupingAtts);
 
-int CheckFuncOperand (struct FuncOperand *fOperand, std::unordered_set<std::string> &names);
+void GetFuncOperand (struct FuncOperand *fOperand, std::unordered_set<std::string> &names);
 
-int CheckFuncOperator (struct FuncOperator *fOperator, std::unordered_set<std::string> &names);
+void GetFuncOperator (struct FuncOperator *fOperator, std::unordered_set<std::string> &names);
 
 // get the attribute list in SUM
 struct NameList* GetSumAtts(struct FuncOperator *fOperator);
 
-void GetSumOperandAtts (struct FuncOperand *fOperand, std::vector<char*> &sumAtts);
-
-void GetSumOperatorAtts(struct FuncOperator *fOperator, std::vector<char*> &sumAtts);
-
 struct NameList* BuildNameList(std::string name);
 
 void DestroyNameList(struct NameList *names);
+
+int CountGroupAndSelect(struct NameList *groupingAtts, struct NameList *attsToSelect);
+
+void BuildGroupSelect(struct NameList *attsToSelect);
 
 #endif

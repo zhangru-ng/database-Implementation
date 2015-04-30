@@ -33,23 +33,21 @@ int PlanTree::BuildTableList() {
 			return DISCARD;
 		}
 		if (OPTIMIZED_ON == optimzie_flag && NOTFOUND == stat.CheckRels(p->tableName)) {
-			// cerr << "Current statistics does not contain " << p->tableName << ". " 
-			// 	 << "Can not perform query optimization." << endl;
-				stat.ClearRel(relNames);					
-				optimzie_flag = OPTIMIZED_OFF;
-			// while(true) {
-			// 	cout << "Do you still want to run this query? (y or n) ";
-			// 	char key;
-			// 	cin >> key;
-			// 	if (key == 'y') {
-			// 		stat.ClearRel(relNames);					
-			// 		optimzie_flag = OPTIMIZED_OFF;
-			// 		break;
-			// 	} else if (key == 'n'){
-			// 		stat.ClearRel(relNames);
-			// 		return DISCARD;
-			// 	} 
-			// }	
+			cerr << "Current statistics does not contain " << p->tableName << ". " 
+				 << "Can not perform query optimization." << endl;
+			while(true) {
+				cout << "Do you still want to run this query? (y or n) ";
+				char key;
+				cin >> key;
+				if (key == 'y') {
+					stat.ClearRel(relNames);					
+					optimzie_flag = OPTIMIZED_OFF;
+					break;
+				} else if (key == 'n'){
+					stat.ClearRel(relNames);
+					return DISCARD;
+				} 
+			}	
 		} 
 		tableList.emplace(p->aliasAs, p->tableName);
 		relNames.push_back(p->aliasAs);
@@ -106,7 +104,7 @@ int PlanTree::SeparatePredicate() {
 				crossRelNo[right] = 1;
 				// deal with an attribute join with itself, namely select all tuples in that relation
 				if(left == right) {
-					containSelect = true;
+					// containSelect = true;
 					CheckCrossPred(oldname, left, containCrossPred);
 					pOr = pOr->rightOr;
 					continue;
@@ -150,7 +148,7 @@ int PlanTree::SeparatePredicate() {
 			joinList.push_back(std::move(JoinRelInfo{left,right,p}));
 		} 
 		// if contain pure selection
-		else {
+		else if (containSelect) {
 			auto ibp = selectList.emplace(oldname, p);
 			if(false == ibp.second) {
 				Predicate curList = selectList.at(oldname);
@@ -219,18 +217,22 @@ int PlanTree::GetPlanTree() {
 	}
 	// check if the sum predicate is legal
 	if(DISCARD == CheckSumPredicate(finalFunction, groupingAtts, attsToSelect)) {
+		stat.ClearRel(relNames);
 		return DISCARD;
 	}
 	if(DISCARD == SeparatePredicate()) {
+		stat.ClearRel(relNames);
 		return DISCARD;
 	}
 	if (numOfRels > joinList.size() + 1) {
 		char ch;
 		while (true) {
 			cerr << "Cross product is needed, Do you still want to perform this query? (y or n)\n";
+			cin >> ch;
 			if(ch == 'y') {
 				break;
 			} else if (ch == 'n') {
+				stat.ClearRel(relNames);
 				return DISCARD;
 			}
 		}
@@ -271,12 +273,11 @@ int PlanTree::GetPlanTree() {
 	if (groupingAtts && finalFunction) {
 		// if  DISTINCT on aggregation		
 		if (distinctFunc) {
-			// attributes in SUM must be also in GROUP BY
-			if(DISCARD == CheckDistinctFunc(finalFunction, groupingAtts)) {
-				return DISCARD;
-			}
-			// project on grouping attribute and remove duplicate before grouping
-			GrowProjectNode(groupingAtts);
+			// get the name contain group by attribute and sum attribute
+			struct NameList *disFuncAtts = GetDistinctName(finalFunction, groupingAtts);
+			// project on the attributes and remove duplicate before grouping
+			GrowProjectNode(disFuncAtts);
+			DestroyNameList(disFuncAtts);
 			GrowDuplicateRemovalNode();
 		}
 		GrowGroupByNode(finalFunction, groupingAtts);
@@ -284,7 +285,10 @@ int PlanTree::GetPlanTree() {
 			struct NameList *sum = BuildNameList("SUM");
 			GrowProjectNode(sum);
 			DestroyNameList(sum);
-		}		
+		} else if (CountGroupAndSelect(groupingAtts, attsToSelect)){
+			BuildGroupSelect(attsToSelect);
+			GrowProjectNode(attsToSelect);
+		}	
 	} 
 	// else if only SUM is on
 	else if (finalFunction) {
@@ -312,8 +316,10 @@ int PlanTree::GetPlanTree() {
 	}
 
 	// if SET output to file
-	if(STDOUT_ == outMode || OUTFILE_ == outMode) {
-		GrowWriteOutNode("outfileName", outMode);
+	if(STDOUT_ == outMode) {
+		GrowWriteOutNode("", outMode);
+	} else if (OUTFILE_ == outMode) {
+		GrowWriteOutNode(outfileName, outMode);
 	}
 	// set root pointer of the plan tree
 	int current = buildedNodes.size() - 1;

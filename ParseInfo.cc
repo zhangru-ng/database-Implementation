@@ -226,75 +226,62 @@ int CheckSumPredicate(struct FuncOperator *finalFunction, struct NameList *group
 	}
 }
 
-int CheckDistinctFunc(struct FuncOperator *finalFunction, struct NameList *groupingAtts) {
+struct NameList* GetDistinctName(struct FuncOperator *finalFunction, struct NameList *groupingAtts) {
 	std::unordered_set<string> names;
-	struct NameList *p = groupingAtts;
-	while (p) {
-		if (p->name) {
-			names.insert(p->name);
+	struct NameList *group = groupingAtts;
+	while (group) {
+		if (group->name) {
+			names.insert(group->name);
 		} 		
-		p = p->next;
+		group = group->next;
 	}
-	return CheckFuncOperator(finalFunction, names);
-}
-
-int CheckFuncOperand (struct FuncOperand *fOperand, std::unordered_set<string> &names) {
-	if (fOperand) {
-		auto ibp = names.insert(fOperand->value);
-		if(ibp.second) {
-			cerr << "SQL ERROR: SUM DISTINCT attributes dose not exist in GROUP BY" << endl;
-			return DISCARD;
-		}
-	}
-	return RESUME;
-}
-
-int CheckFuncOperator (struct FuncOperator *fOperator, std::unordered_set<string> &names) {	
-	if(fOperator) {
-		if (DISCARD == CheckFuncOperator(fOperator->leftOperator, names)){
-			return DISCARD;
-		}
-		if (DISCARD == CheckFuncOperand(fOperator->leftOperand, names)) {
-			return DISCARD;
-		}	
-		if (DISCARD == CheckFuncOperator(fOperator->right, names)) {
-			return DISCARD;
-		}
-	}
-	return RESUME;
-}
-
-void GetSumOperandAtts (struct FuncOperand *fOperand, std::vector<char*> &sumAtts) {
-	if (fOperand) {
-		sumAtts.push_back(fOperand->value);
-	}
-}
-
-void GetSumOperatorAtts(struct FuncOperator *fOperator, std::vector<char*> &sumAtts) {
-	if(fOperator) {
-		GetSumOperatorAtts(fOperator->leftOperator, sumAtts);
-		GetSumOperandAtts(fOperator->leftOperand, sumAtts);
-		GetSumOperatorAtts(fOperator->right, sumAtts);
-	}
-}
-
-struct NameList* GetSumAtts(struct FuncOperator *fOperator) {
-	std::vector<char*> sumAtts;
-	GetSumOperatorAtts(fOperator, sumAtts);	
-	if(sumAtts.empty()) {
-		return NULL;
-	}
-	struct NameList *p = (struct NameList *) malloc (sizeof(struct NameList));
-	for(auto it = sumAtts.begin(); it != sumAtts.end(); ++it) {	
-		p->name = strdup(*it);
-		if(it + 1 == sumAtts.end()) {
+	GetFuncOperator(finalFunction, names);		
+	struct NameList *name = (struct NameList *) malloc (sizeof(struct NameList));
+	struct NameList *p = name;
+	for(auto it = names.begin(); it != names.end(); ) {	
+		p->name = strdup(it->c_str());
+		if(++it == names.end()) {
 			p->next = NULL;
 		} else {
 			p->next = (struct NameList *) malloc (sizeof(struct NameList));
 			p = p->next;
 		}		
 	}
-	return p;
+	return name;
+}
+
+void GetFuncOperand (struct FuncOperand *fOperand, std::unordered_set<string> &names) {
+	if (fOperand && fOperand->code == NAME) {
+		names.insert(fOperand->value);
+	}
+}
+
+void GetFuncOperator (struct FuncOperator *fOperator, std::unordered_set<string> &names) {	
+	if(fOperator) {
+		GetFuncOperator(fOperator->leftOperator, names);
+		GetFuncOperand(fOperator->leftOperand, names);
+		GetFuncOperator(fOperator->right, names);
+	}
+}
+
+struct NameList* GetSumAtts(struct FuncOperator *fOperator) {
+	std::unordered_set<string> sumAtts;
+	GetFuncOperator(fOperator, sumAtts);	
+	if(sumAtts.empty()) {
+		return NULL;
+	}
+	struct NameList *name = (struct NameList *) malloc (sizeof(struct NameList));
+	struct NameList *p = name;
+	for(auto it = sumAtts.begin(); it != sumAtts.end(); ) {	
+		p->name = strdup(it->c_str());
+		if(++it == sumAtts.end()) {
+			p->next = NULL;
+		} else {
+			p->next = (struct NameList *) malloc (sizeof(struct NameList));
+			p = p->next;
+		}		
+	}
+	return name;
 }
 
 void DestroyNameList(struct NameList *names) {
@@ -314,3 +301,37 @@ struct NameList* BuildNameList(std::string name) {
 	return p;
 }
 
+int CountGroupAndSelect(struct NameList *groupingAtts, struct NameList *attsToSelect) {
+	std::unordered_set<string> names;
+	struct NameList *p = attsToSelect;
+	while (p) {
+		if (p->name) {
+			names.insert(p->name);
+		} 		
+		p = p->next;
+	}
+	p = groupingAtts;
+	while (p) {
+		if (p->name) {
+			auto ibp = names.insert(p->name);			
+			// if not all group by attribute in select list
+			if(ibp.second) {
+				return 1;
+			}
+		} 		
+		p = p->next;
+	}
+	return 0;
+}
+
+void BuildGroupSelect(struct NameList *attsToSelect) {
+	struct NameList *sum = BuildNameList("SUM");
+	struct NameList *p = attsToSelect;
+	struct NameList *y;
+	while(p) {
+		y = p;
+		p = p->next;
+	}
+	y->next = sum;
+}
+	
