@@ -13,7 +13,7 @@ GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
 GTEST_SRCS_ = $(GTEST_DIR)/src/*.cc # $(GTEST_DIR)/src/*.h $(GTEST_HEADERS)
 
-main: main.o Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o BigQ.o RelOp.o Statistics.o Function.o y.tab.o yyfunc.tab.o lex.yy.o lex.yyfunc.o PlanTree.o ParseInfo.o Tables.o
+main: main.o Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o BigQ.o RelOp.o Statistics.o Function.o PlanTree.o ParseInfo.o Tables.o y.tab.o yyfunc.tab.o lex.yy.o lex.yyfunc.o 
 	$(CXX) $(CXXFLAGS) -o $(BIN_DIR)/main  main.o Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o BigQ.o RelOp.o Statistics.o Function.o y.tab.o yyfunc.tab.o lex.yy.o lex.yyfunc.o PlanTree.o ParseInfo.o Tables.o -lfl
 
 a5test.out: a5test.o Record.o Comparison.o ComparisonEngine.o Schema.o File.o DBFile.o GenericDBFile.o HeapDBFile.o SortedDBFile.o Pipe.o BigQ.o RelOp.o Statistics.o Function.o y.tab.o yyfunc.tab.o lex.yy.o lex.yyfunc.o PlanTree.o ParseInfo.o Tables.o
